@@ -16,6 +16,7 @@ import {
   issueKey,
   issueReason,
   needsLabelActor,
+  runningIssues,
   parseAcceptRequest,
   parseFile,
   parseProjectDraft,
@@ -292,10 +293,10 @@ export class IssueWatcher {
       if (this.data.issues.some((r) => r.key === key) || this.linked.has(key)) continue
       const mine = viewer !== null && issue.assignees.some((a) => a.toLowerCase() === viewer)
       if (issue.assignees.length > 0 && !mine) continue
-      if (project.mode === 'all' && issue.createdAt <= enabledAt) continue
-      if (project.mode === 'members' && issue.createdAt <= enabledAt && !issue.labels.includes(project.label)) continue
+      // Older than the switch and without the label: nothing can make it new enough (no gh call needed).
+      if (issue.createdAt <= enabledAt && !issue.labels.includes(project.label)) continue
       const authorCanWrite = await this.deps.canWrite(repo, issue.author)
-      const labelAt = needsLabelActor(issue, project) && authorCanWrite !== true ? await this.deps.labelAt(repo, issue.number, project.label) : null
+      const labelAt = needsLabelActor(issue, project, authorCanWrite) ? await this.deps.labelAt(repo, issue.number, project.label) : null
       const decision = claimDecision({
         issue,
         settings: project,
@@ -339,21 +340,37 @@ export class IssueWatcher {
     this.fireQueued()
   }
 
-  /** 排队 records go to the window as soon as it is ready, oldest claim first. */
+  /**
+   * 排队 records go to the window while the project has room (每个项目同时处理), oldest created first. Records already
+   * handed to the page count as running until the window reports their session opened.
+   */
   private fireQueued(): void {
     if (!this.pageReady) return
-    const queued = this.data.issues.filter((r) => r.state === 'queued' && !this.handed.has(r.key)).sort((a, b) => a.claimedAt - b.claimedAt)
+    const queued = this.data.issues
+      .filter((r) => r.state === 'queued' && !this.handed.has(r.key))
+      .sort((a, b) => a.createdAt - b.createdAt || a.number - b.number)
     for (const record of queued) {
       const project = this.project(record.projectId)
       if (!project?.enabled) continue
+      if (this.runningFor(record.projectId) >= this.data.settings.concurrent) continue
       if (this.deps.fire({ record, project })) this.handed.add(record.key)
     }
+  }
+
+  /** The project's issues a session works on: 处理中 / 验收中 / 修复中, plus what was handed over and not yet opened. */
+  private runningFor(projectId: string): number {
+    const handed = [...this.handed].filter((key) => this.get(key)?.state === 'queued').length
+    return runningIssues(this.data.issues, projectId).length + handed
   }
 
   /** The window's report of a step: the record moves (a move that does not fit is ignored, not forced). */
   report(raw: unknown): IssueWatchState {
     const report = parseReport(raw)
-    if (report) this.apply(report)
+    if (report) {
+      this.apply(report)
+      // A report that takes the issue out of 处理中 / 验收中 / 修复中 makes room for the next 排队 one.
+      this.fireQueued()
+    }
     return this.state()
   }
 
@@ -432,6 +449,7 @@ export class IssueWatcher {
     const current = this.get(record.key) ?? record
     const move = afterAcceptance(current, acceptance)
     this.move(current, move.to, move.patch)
+    if (move.to === 'awaiting') this.fireQueued()
     return move.to === 'fixing'
       ? { ok: true, next: 'fix', acceptance, prompt: fixPrompt(record, command, run.output) }
       : { ok: true, next: 'awaiting', acceptance }

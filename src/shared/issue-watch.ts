@@ -232,9 +232,12 @@ export function claimDecision(input: ClaimInput): ClaimDecision {
   const enabledAt = settings.enabledAt
   if (enabledAt === null || !settings.enabled) return { claim: false, reason: 'before' }
   const labelledAfter = input.labelAt !== null && input.labelAt > enabledAt
-  if (settings.mode === 'all') return issue.createdAt > enabledAt || labelledAfter ? { claim: true } : { claim: false, reason: 'before' }
-  // members: the author's own write permission decides; an outsider's issue waits for a member's label.
-  if (input.authorCanWrite === true) return issue.createdAt > enabledAt ? { claim: true } : { claim: false, reason: 'before' }
+  // Created before the switch: only a label a member added after it makes the issue new enough, in either mode.
+  if (issue.createdAt <= enabledAt) return labelledAfter ? { claim: true } : { claim: false, reason: 'before' }
+  // 全部直接领: whoever wrote it.
+  if (settings.mode === 'all') return { claim: true }
+  // members: an author with write is claimed; anyone else's issue waits for a member's label.
+  if (input.authorCanWrite === true) return { claim: true }
   if (!issue.labels.includes(settings.label) || !labelledAfter) return { claim: false, reason: 'label' }
   return { claim: true }
 }
@@ -242,15 +245,20 @@ export function claimDecision(input: ClaimInput): ClaimDecision {
 /** Whether the author's write permission is needed: the members mode's rule for everyone it sees. */
 export const needsAuthorPermission = (settings: IssueWatchProjectSettings): boolean => settings.mode === 'members'
 
-/** Whether the label's actor has to be looked up: an outsider's issue that carries the configured label. */
-export const needsLabelActor = (issue: DiscoveredIssue, settings: IssueWatchProjectSettings): boolean =>
-  settings.mode === 'members' && issue.labels.includes(settings.label)
+/**
+ * Whether the label's actor has to be looked up from the timeline: an issue that carries the label and is either older
+ * than the switch (both modes: a member's label after it is what makes it new enough) or, in the members mode, written
+ * by someone without write. An issue created after the switch by a member needs no label at all.
+ */
+export const needsLabelActor = (issue: DiscoveredIssue, settings: IssueWatchProjectSettings, authorCanWrite: boolean | null): boolean =>
+  issue.labels.includes(settings.label) &&
+  ((settings.enabledAt !== null && issue.createdAt <= settings.enabledAt) || (settings.mode === 'members' && authorCanWrite !== true))
 
-/** The states that count against 每个项目同时处理: claimed and not yet reported. */
-const ACTIVE: ReadonlySet<IssueState> = new Set(['queued', 'working', 'accepting', 'fixing'])
+/** The states a session is at work in: they count against 每个项目同时处理, 排队 does not. */
+const RUNNING: ReadonlySet<IssueState> = new Set(['working', 'accepting', 'fixing'])
 
-/** Issues of a project in an active state (queued / 处理中 / 验收中 / 修复中). */
-export const activeIssues = (records: readonly IssueRecord[], projectId: string): IssueRecord[] => records.filter((r) => r.projectId === projectId && ACTIVE.has(r.state))
+/** Issues of a project a session is working on (处理中 / 验收中 / 修复中); 待批准 and 排队 are not running. */
+export const runningIssues = (records: readonly IssueRecord[], projectId: string): IssueRecord[] => records.filter((r) => r.projectId === projectId && RUNNING.has(r.state))
 
 /** The local day a claim counts against (设置's 每天上限 is local midnight to midnight). */
 export function localDay(t: number): string {
@@ -262,11 +270,12 @@ export function localDay(t: number): string {
 export const claimsToday = (records: readonly IssueRecord[], projectId: string, now: number): number =>
   records.filter((r) => r.projectId === projectId && localDay(r.claimedAt) === localDay(now)).length
 
-/** How many issues of a project may still be claimed now: what the concurrency and the day's cap leave. */
+/**
+ * How many issues of a project may still be claimed now: what the day's cap leaves. 每个项目同时处理 does not hold a
+ * claim back (PRD F26: 超过同时处理数的排队): a claimed issue is assigned and gets 👀 at once, and waits in 排队.
+ */
 export function claimBudget(records: readonly IssueRecord[], settings: IssueWatchSettings, projectId: string, now: number): number {
-  const free = settings.concurrent - activeIssues(records, projectId).length
-  const left = settings.daily - claimsToday(records, projectId, now)
-  return Math.max(0, Math.min(free, left))
+  return Math.max(0, settings.daily - claimsToday(records, projectId, now))
 }
 
 /** The day's cap is used up: the settings row says 今天已领 N 个，明天继续. */

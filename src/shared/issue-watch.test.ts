@@ -7,7 +7,7 @@ import {
   MAX_FIX_ROUNDS,
   MAX_ISSUES,
   ISSUE_STATES,
-  activeIssues,
+  runningIssues,
   afterAcceptance,
   agentCanReportTurn,
   agentEligible,
@@ -135,8 +135,18 @@ describe('claimDecision', () => {
     const input = claimInput({ settings: settings({ mode: 'all' }), authorCanWrite: false, issue: issue({ author: 'stranger' }) })
     expect(claimDecision(input)).toEqual({ claim: true })
     expect(claimDecision({ ...input, issue: issue({ createdAt: at(10, 8) }) })).toEqual({ claim: false, reason: 'before' })
-    // An old issue labelled after the switch is still new enough.
-    expect(claimDecision({ ...input, issue: issue({ createdAt: at(10, 8), labels: [DEFAULT_LABEL] }), labelAt: at(11, 1) })).toEqual({ claim: true })
+  })
+
+  it('claims an issue from before the switch once a member labelled it after, in both modes and for any author', () => {
+    const old = issue({ createdAt: at(10, 8), labels: [DEFAULT_LABEL] })
+    for (const mode of ['members', 'all'] as const) {
+      for (const authorCanWrite of [true, false]) {
+        const input = claimInput({ settings: settings({ mode }), authorCanWrite, issue: old })
+        expect(claimDecision(input), `${mode} / ${authorCanWrite}`).toEqual({ claim: false, reason: 'before' })
+        expect(claimDecision({ ...input, labelAt: at(10, 9) }), `${mode} / ${authorCanWrite} / before the switch`).toEqual({ claim: false, reason: 'before' })
+        expect(claimDecision({ ...input, labelAt: at(11, 1) }), `${mode} / ${authorCanWrite} / after the switch`).toEqual({ claim: true })
+      }
+    }
   })
 
   it('never claims an issue twice, one an open session has, or one assigned to someone else', () => {
@@ -162,15 +172,21 @@ describe('queue and the day’s cap', () => {
     record({ key: issueKey('github.com/acme/widget', 2), state: 'accepting' })
   ]
 
-  it('counts the issues claimed and not yet reported', () => {
-    expect(activeIssues(records, 'p1')).toHaveLength(2)
-    expect(activeIssues([...records, record({ key: issueKey('github.com/acme/widget', 3), state: 'awaiting' })], 'p1')).toHaveLength(2)
-    expect(activeIssues(records, 'p2')).toHaveLength(0)
+  it('counts the issues a session is working on, not the queued or awaiting ones', () => {
+    expect(runningIssues(records, 'p1')).toHaveLength(2)
+    const all = [
+      ...records,
+      record({ key: issueKey('github.com/acme/widget', 3), state: 'awaiting' }),
+      record({ key: issueKey('github.com/acme/widget', 4), state: 'queued' })
+    ]
+    expect(runningIssues(all, 'p1')).toHaveLength(2)
+    expect(runningIssues(all, 'p2')).toHaveLength(0)
   })
 
-  it('leaves what the concurrency and the day’s cap leave', () => {
-    expect(claimBudget(records, { intervalMinutes: 5, concurrent: 2, daily: 10 }, 'p1', at(11, 20))).toBe(0)
-    expect(claimBudget(records, { intervalMinutes: 5, concurrent: 3, daily: 10 }, 'p1', at(11, 20))).toBe(1)
+  it('claims up to the day’s cap and lets 排队 wait for its turn, whatever the concurrency', () => {
+    // The concurrency does not hold a claim back: it only decides how many queued ones start at once.
+    expect(claimBudget(records, { intervalMinutes: 5, concurrent: 2, daily: 10 }, 'p1', at(11, 20))).toBe(8)
+    expect(claimBudget(records, { intervalMinutes: 5, concurrent: 3, daily: 10 }, 'p1', at(11, 20))).toBe(8)
     // 10 claims today, all reported: the day is over for this project.
     const done = Array.from({ length: 10 }, (_, i) =>
       record({ key: issueKey('github.com/acme/widget', i + 1), number: i + 1, state: 'merged', claimedAt: at(11, 1) })
@@ -180,7 +196,7 @@ describe('queue and the day’s cap', () => {
     expect(claimBudget(done, { intervalMinutes: 5, concurrent: 2, daily: 10 }, 'p1', at(11, 20))).toBe(0)
     // Tomorrow the cap is fresh, same records.
     expect(claimsToday(done, 'p1', at(12, 0))).toBe(0)
-    expect(claimBudget(done, { intervalMinutes: 5, concurrent: 2, daily: 10 }, 'p1', at(12, 0))).toBe(2)
+    expect(claimBudget(done, { intervalMinutes: 5, concurrent: 2, daily: 10 }, 'p1', at(12, 0))).toBe(10)
   })
 
   it('counts the day by the local clock', () => {

@@ -316,6 +316,35 @@ describe('领取范围', () => {
     expect(t.fires).toHaveLength(0)
   })
 
+  it('claims an old issue once a member labelled it after the switch, in either mode', async () => {
+    // 全部直接领, author without write, created before the switch, label added by a member after it.
+    const all = setup({ mode: 'all' })
+    writePermission('bob', 'read')
+    writePermission('carol', 'write')
+    writeIssues(issue(1, { author: 'bob', labels: ['wavi'], createdAt: at(10, 8) }))
+    writeTimeline(1, [{ actor: 'carol', at: at(10, 20) }])
+    await all.enable()
+    expect(all.fires.map((f) => f.record.number)).toEqual([1])
+
+    // members, the author has write too — the label a member added after the switch is what makes it new enough.
+    const members = setup()
+    writePermission('alice', 'write')
+    writePermission('carol', 'maintain')
+    writeIssues(issue(1, { author: 'alice', labels: ['wavi'], createdAt: at(10, 8) }))
+    writeTimeline(1, [{ actor: 'carol', at: at(10, 20) }])
+    await members.enable()
+    expect(members.fires.map((f) => f.record.number)).toEqual([1])
+  })
+
+  it('does not claim an old issue whose label a read-only user added', async () => {
+    const t = setup({ mode: 'all' })
+    writePermission('bob', 'read')
+    writeIssues(issue(1, { author: 'bob', labels: ['wavi'], createdAt: at(10, 8) }))
+    writeTimeline(1, [{ actor: 'bob', at: at(10, 20) }])
+    await t.enable()
+    expect(t.fires).toHaveLength(0)
+  })
+
   it('waits for a window before handing a claimed issue over', async () => {
     const t = setup({ windowUp: false })
     writePermission('alice', 'write')
@@ -347,17 +376,21 @@ describe('领取范围', () => {
 })
 
 describe('排队和每天上限', () => {
-  it('handles only what the concurrency allows, oldest first, then the next', async () => {
-    const t = setup({ settings: { concurrent: 1, daily: 10 } })
+  it('claims every eligible issue at once and queues what the concurrency cannot start', async () => {
+    const t = setup({ settings: { concurrent: 2, daily: 10 } })
     writePermission('alice', 'write')
-    writeIssues(issue(1, { createdAt: at(10, 12) }), issue(2, { createdAt: at(10, 13) }))
+    writeIssues(issue(1, { createdAt: at(10, 12) }), issue(2, { createdAt: at(10, 13) }), issue(3, { createdAt: at(10, 14) }))
     await t.enable()
-    expect(t.fires.map((f) => f.record.number)).toEqual([1])
-    // 待批准 is done being processed: the next one may go.
+    // All three are claimed (assigned + 👀); the third waits in 排队.
+    expect(callsOf('issue', 'edit')).toHaveLength(3)
+    expect(callsOf('api', '-X')).toHaveLength(3)
+    expect(t.fires.map((f) => f.record.number)).toEqual([1, 2])
+    expect(t.watcher.state().issues.find((r) => r.number === 3)?.state).toBe('queued')
+    // #1 is done being processed: the queued third one starts.
     t.watcher.report({ key: t.key(1), type: 'opened', sessionId: 's1' })
     t.watcher.report({ key: t.key(1), type: 'awaiting', because: 'unchanged' })
-    await t.watcher.poll('p1')
-    expect(t.fires.map((f) => f.record.number)).toEqual([1, 2])
+    expect(t.fires.map((f) => f.record.number)).toEqual([1, 2, 3])
+    expect(t.watcher.state().issues.find((r) => r.number === 3)?.state).toBe('queued')
   })
 
   it('claims no more than the day allows, and the next day starts again', async () => {
