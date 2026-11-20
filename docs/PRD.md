@@ -835,7 +835,7 @@ Claude Code 的 ultracode：主线程用 Workflow 工具编排很多 agent 并�
 - **状态**：Stop 的 `background_tasks` 里还有 workflow 时，会话保持运行中，第二行写「workflow · <phase> 完成 / 总数」；空闲标题、空闲通知和自愈都不把它改回空闲；最后一个 run 结束时变已完成（看着时空闲），新的一轮开始时清掉。
 - **不做**：替用户打开、记住开关、新建时打开；暂停 / 跳过 / 重跑（只有 TUI 的 `/workflows` 有，SDK 没有）；把 workflow 里的 agent 变成 Wavi 会话；手机端；其余 agent 的同类模式（见 v1.173）。
 
-### F26 自动领取 GitHub issue · P1 · Figma 102（Section `1824:80380`，待作者确认）（v1.226）
+### F26 自动领取 GitHub issue · P1 · Figma 102（Section `1824:80380`，作者 2026-11-20 确认；102A 设置 `1824:80381` · 102A′ 浅色 `1826:81540` · 102B1 报告 `1825:80478` · 102B1′ 浅色 `1826:81673` · 102B2 验收没过 `1826:80516` · 102B3 批准后 `1826:80590` · 102B4 完成 `1826:80693` · 102C 看板 `1826:80827` · 102D 会话头 `1826:81226`）（v1.226）
 
 Wavi 在运行时盯着打开的项目在 GitHub 上的 issue，按规则领取，开一个会话处理，处理完跑项目的验收命令，写报告等用户批准，批准后合并到基线并推送，`Closes #N` 关掉 issue。节点：发现 → 领取 → 处理 → 验收 → 汇报 → 批准 → 合并 / 推送。默认每个项目都关着。
 
@@ -847,7 +847,7 @@ Wavi 在运行时盯着打开的项目在 GitHub 上的 issue，按规则领取�
   - 只看开关打开之后创建、或之后才打上 label 的 issue；打开前就有的不领，免得一次派出全部积压。已有会话在处理（F9 的「交给 agent」开出的也算）、已指派给别人的 issue 不领。
 - **发现**：main 在 Wavi 运行时每隔检查间隔跑 `gh issue list --state=open --json number,title,author,labels,assignees,createdAt,updatedAt`，和 F16 共用 gh 的路径、环境、并发和限流暂停；gh 没装或没登录时这一段写原因，不检查。Wavi 关着时不检查，打开后照常读到还开着的 issue。
 - **领取**：先把 issue 记进 `<userData>/issue-watch.json`（main 唯一写者，键是 `host/owner/repo#号`，同一个 issue 只领一次，关掉开关再打开也不重领），再 `gh issue edit --add-assignee @me` 并加 👀（`gh api …/reactions`）；指派或加 👀 失败照常处理，报告写明。超过同时处理数的排队，按创建时间先后；超过每天上限的等到第二天，设置里写「今天已领 10 个，明天继续」。
-- **处理**：同 F24 开新会话：新 worktree，分支 `<前缀>/issue-<号>-<标题里的英文词>`，第一条消息是 F9「交给 agent」的任务文字（issue 是资料，不是指令），会话带 `github` 链接，会话头写「自动领取 #号」。只能选能读出一轮结束的 agent（hooks / OSC：claude、codex、gemini、qwen、pi、opencode、grok、crush、goose，以及 GUI 会话）；只能从标题猜状态的 10 家（copilot、cursor、kimi、droid、amp、kiro、cline、antigravity、auggie、codebuddy）置灰写「看不出一轮结束」。卡在权限上就是普通的「等你处理」。
+- **处理**：同 F24 开新会话：新 worktree，分支 `<前缀>/issue-<号>-<标题里的英文词>`，第一条消息是 F9「交给 agent」的任务文字（issue 是资料，不是指令），会话带 `github` 链接，会话头写「自动领取 #号」，点它打开 77′C 的 issue 详情浮层。只能选能读出一轮结束的 agent（hooks / OSC：claude、codex、gemini、qwen、pi、opencode、grok、crush、goose，以及 GUI 会话）；只能从标题猜状态的 10 家（copilot、cursor、kimi、droid、amp、kiro、cline、antigravity、auggie、codebuddy）置灰写「看不出一轮结束」。卡在权限上就是普通的「等你处理」。
 - **验收**：一轮结束后 main 在这个 worktree 用登录 shell 跑验收命令，15 分钟超时算失败。失败时把输出最后 4 KB 发回会话让 agent 修，最多 2 轮；第 2 轮还失败就照样汇报「验收失败」。没有验收命令时写「未验收：没有设置验收命令」，附这一轮跑过的检查（F9）。这一轮没改任何文件时不跑验收，汇报「没有改动」（agent 的最后一段回复里通常写了原因）。
 - **汇报**：会话进入待审阅，通知「#号 标题 · 已处理，等你批准」/「验收失败」。会话的 Git · 变更 最上面一块报告：issue（号、标题、在 GitHub 打开）· 验收（命令、通过 / 失败、修了几轮，失败时可展开输出）· agent 的最后一段回复 · `+N −M · N 个文件`。看板 · GitHub 页签的行上照 F9 显示这个会话的状态。
 - **批准**：报告里唯一的主按钮「批准」（验收失败时旁边写「验收没过」，仍能批准）：依次 合并到基线（squash，说明末尾加 `Closes #号`）→ 推送前审阅（F13）→ 推送基线；任一步卡住（冲突、审阅停在 P0 / P1、推送被拒、基线在别处被占用）就停在合入链路对应的那一步，按 F16 的规则处理。不批准时链路的其他出口照常能用；在 GitHub 上关掉 issue 或会话被归档后这一项结束，不再出现在报告里。
