@@ -476,7 +476,7 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
 
 PRD F26 / v1.226。
 
-- [ ] Figma：设置 · 自动化「GitHub issue」一段（项目开关、领取范围、label、智能体 / 模型 / 权限、验收命令、间隔和上限）、Git · 变更 的报告块和「批准」、看板 · GitHub 行状态、会话头「自动领取 #号」、通知；两种主题
+- [ ] Figma（102，Section `1824:80380`，已出稿 102A–D、102A′ / 102B1′ 浅色，待作者看）：设置 · 自动化「GitHub issue」一段（项目开关、领取范围、label、智能体 / 模型 / 权限、验收命令、间隔和上限）、Git · 变更 的报告块和「批准」、看板 · GitHub 行状态、会话头「自动领取 #号」、通知；两种主题
 - [ ] `src/shared/issue-watch.ts`：领取资格（两档、label 由谁打）、状态机、排队和每天上限、报告文字、`Closes #号`
 - [ ] `src/main/issue-watch/`：轮询、写权限缓存、领取（指派 + 👀）、`issue-watch.json`、验收命令（和 F24 前置检查共用 shell 调用）、批准后的合并 → 审阅 → 推送
 - [ ] `src/renderer/issue-watch/`：开会话、等一轮结束、发回失败输出；报告块；设置一段
