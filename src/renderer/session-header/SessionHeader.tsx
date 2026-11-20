@@ -15,6 +15,9 @@ import { MAIN_WINDOW } from '@shared/window-layout'
 import { useSessionView, useWorkspace, windowEffects, type PanelView } from '../state/workspace'
 import { openSchedules } from '../schedules/store'
 import { LoopBadge } from '../schedules/LoopBadge'
+import { useRecordForSession } from '../issue-watch/store'
+import { useOverviewStore } from '../overview/store'
+import { openItem } from '../overview/github-store'
 import { useSidebarCollapsed, useWindowKey } from '../state/window-scope'
 import { StatusGlyph } from '../ui/StatusGlyph'
 import { IconButton } from '../ui/IconButton'
@@ -40,6 +43,8 @@ const M = defineMessages({
     dragTitle: '拖动到别的格或边上 · 双击重命名',
     scheduledBefore: '由定时任务「',
     scheduledAfter: '」开出',
+    autoClaimed: (n: number) => `自动领取 #${n}`,
+    autoClaimedTitle: '自动领取的 issue · 点击看详情',
     hooksTitle: 'hooks 不可用，状态只能按终端标题判断',
     hooks: '状态仅按标题判断',
     addFiles: '添加文件或文件夹',
@@ -65,6 +70,8 @@ const M = defineMessages({
     dragTitle: 'Drag to another pane or an edge · double-click to rename',
     scheduledBefore: 'Started by scheduled task “',
     scheduledAfter: '”',
+    autoClaimed: (n: number) => `Auto-claimed #${n}`,
+    autoClaimedTitle: 'The issue Wavi claimed for this session · click for its details',
     hooksTitle: "Hooks unavailable: status can only be read from the terminal's title",
     hooks: 'Status from title only',
     addFiles: 'Add files or folders',
@@ -226,6 +233,7 @@ export function SessionHeader({ sessionId, pane, part: asked = 'full' }: { sessi
               {m.scheduledAfter}
             </button>
           )}
+          {active.worktree && <AutoClaimed sessionId={active.session.id} projectId={active.worktree.projectId} />}
         </>
       )}
       {active && <span className={styles.spacer} />}
@@ -430,6 +438,31 @@ function DispatchedBy({ parentId }: { parentId: string }) {
       {m.dispatchedBefore}
       <span className={styles.dispatchedByName}>{title}</span>
       {m.dispatchedAfter}
+    </button>
+  )
+}
+
+
+/** 自动领取 #号 (PRD F26, Figma 102D): the issue this session was claimed for; a click opens its 77′C detail. */
+function AutoClaimed({ sessionId, projectId }: { sessionId: SessionId; projectId: string }) {
+  const m = useMessages(M)
+  const record = useRecordForSession(sessionId)
+  const root = useWorkspace((s) => s.projects.find((p) => p.id === projectId)?.rootPath ?? null)
+  const windowKey = useWindowKey()
+  if (!record) return null
+  const open = (): void => {
+    // The 看板 · GitHub tab is the main window's (as openOverview in the header).
+    if (windowKey !== MAIN_WINDOW) {
+      useWorkspace.getState().focusWindow(MAIN_WINDOW)
+      windowEffects.reveal(MAIN_WINDOW)
+    }
+    useWorkspace.getState().setMainView('overview')
+    useOverviewStore.getState().setTab('github')
+    if (root) openItem(projectId, root, 'issue', record.number)
+  }
+  return (
+    <button type="button" className={styles.dispatchedBy} onClick={open} title={m.autoClaimedTitle} data-testid="auto-claimed">
+      {m.autoClaimed(record.number)}
     </button>
   )
 }

@@ -8,6 +8,7 @@ import { defineMessages } from '@shared/i18n'
 import { useMessages } from '../ui/i18n'
 import { formatAccelerator } from '../ui/menu-model'
 import { openSchedules } from '../schedules/store'
+import { IssueSettings } from '../issue-watch/IssueSettings'
 import { Segmented } from '../ui/Segmented'
 import { Button, Row, Section, Toggle } from './controls'
 import styles from './AutomationPane.module.css'
@@ -258,6 +259,8 @@ export function AutomationPane({
             </Button>
           </Row>
         </Section>
+        {/* 自动领取 GitHub issue (PRD F26): its own section after 定时任务. */}
+        <IssueSettings />
       </div>
     </div>
   )

@@ -3,10 +3,11 @@
 // once its page said it is ready, and runs the project's acceptance command in the session's worktree through the same
 // login shell as 定时任务's 前置检查 (src/main/script-run.ts), stopped after ACCEPT_TIMEOUT_MS.
 import { join } from 'node:path'
-import { app, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { ISSUE_WATCH_IPC, type IssueWatchAcceptResult, type IssueWatchFire, type IssueWatchState } from '@shared/issue-watch'
 import { cancelCapturedScript, startCapturedScript } from '../script-run'
 import { getMainWindow } from '../windows'
+import { isAppWindow } from '../app-windows'
 import { isProjectRoot, isWorkspaceDir, projectRootOf } from '../workspace-store'
 import { githubCalls } from './github'
 import { IssueWatchFile, IssueWatcher, runAcceptanceCommand, type AcceptanceRun, type IssueWatchDeps } from './watcher'
@@ -36,9 +37,11 @@ function runAcceptance(key: string, cwd: string, script: string, timeoutMs: numb
   )
 }
 
+/** Every window: the settings dialog may be open in a secondary one, and the report block is wherever a session is. */
 function publish(state: IssueWatchState): void {
-  const page = getMainWindow()?.webContents
-  if (page && !page.isDestroyed()) page.send(ISSUE_WATCH_IPC.changed, state)
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(ISSUE_WATCH_IPC.changed, state)
+  }
 }
 
 function fire(payload: IssueWatchFire): boolean {
@@ -49,6 +52,11 @@ function fire(payload: IssueWatchFire): boolean {
 }
 
 const isMainPage = (event: IpcMainInvokeEvent | Electron.IpcMainEvent): boolean => event.sender === getMainWindow()?.webContents
+/** The settings dialog is drawn by every app window's page (a secondary window too), so a save may come from any of them. */
+const isAppPage = (event: IpcMainInvokeEvent): boolean => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  return window !== null && isAppWindow(window)
+}
 
 /** The watcher main runs, for anything else that needs the records (`wavi` tools may later). */
 export function issueWatcher(): IssueWatcher | null {
@@ -65,6 +73,7 @@ export function registerIssueWatchHandlers(): void {
     canWrite: githubCalls.canWrite,
     labelAt: githubCalls.labelActorAt,
     claim: githubCalls.claimIssue,
+    issueOpen: githubCalls.issueOpen,
     runAcceptance,
     fire,
     changed: publish
@@ -74,7 +83,7 @@ export function registerIssueWatchHandlers(): void {
 
   const handle = (channel: string, action: (...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args: unknown[]) => {
-      if (!isMainPage(event)) throw new Error('not the main window')
+      if (!isAppPage(event)) throw new Error('not an app window')
       return action(...args)
     })
   }
@@ -99,6 +108,8 @@ export function registerIssueWatchHandlers(): void {
       current.windowGone()
     })
     current.windowReady()
+    // A page that just loaded checks at once (each project still waits for its own interval after that).
+    void current.tick()
   })
 
   const timer = setInterval(() => void current.tick(), TICK_MS)

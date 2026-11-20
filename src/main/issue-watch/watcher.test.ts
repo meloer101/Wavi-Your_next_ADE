@@ -31,6 +31,7 @@ case "$1 $2" in
   "issue list")
     if [ -f "$d/signed-out" ]; then echo "You are not logged into any GitHub hosts. To log in, run: gh auth login" >&2; exit 1; fi
     cat "$d/issues.json" 2>/dev/null || echo '[]'; exit 0 ;;
+  "issue view") if [ -f "$d/issue-closed" ]; then echo '{"state":"CLOSED"}'; else echo '{"state":"OPEN"}'; fi; exit 0 ;;
   "issue edit") if [ -f "$d/assign-fail" ]; then echo "could not assign" >&2; exit 1; fi; exit 0 ;;
 esac
 if [ "$1" = "api" ]; then
@@ -77,7 +78,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd,
 const { startCapturedScript, cancelCapturedScript } = await import('../script-run')
 const { IssueWatchFile, IssueWatcher, runAcceptanceCommand } = await import('./watcher')
 type IssueWatchDeps = import('./watcher').IssueWatchDeps
-const { canWrite, claimIssue, labelActorAt, listIssues, viewerLogin } = await import('./github')
+const { canWrite, claimIssue, issueOpen, labelActorAt, listIssues, viewerLogin } = await import('./github')
 
 /** A project's repository: a commit on `main`, a GitHub remote (its fetch URL names the repo; nothing reaches the network). */
 function setupRepo(): { root: string; worktree: string; repo: string } {
@@ -133,6 +134,7 @@ function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: 
     canWrite,
     labelAt: labelActorAt,
     claim: claimIssue,
+    issueOpen,
     runAcceptance: (key, cwd, script, timeoutMs) =>
       runAcceptanceCommand(
         {
@@ -518,6 +520,16 @@ describe('状态机 through the window’s reports', () => {
     const result = await t.watcher.accept({ key: t.key(1), root: t.root, worktree: join(base, 'elsewhere') })
     expect(result).toMatchObject({ ok: false })
     expect(t.watcher.state().issues[0]?.state).toBe('working')
+  })
+
+  it('ends a 待批准 issue that was closed on GitHub', async () => {
+    const t = await claimed({ accept: 'true' })
+    t.watcher.report({ key: t.key(1), type: 'opened', sessionId: 's1' })
+    await t.watcher.accept({ key: t.key(1), root: t.root, worktree: t.worktree })
+    expect(t.watcher.state().issues[0]?.state).toBe('awaiting')
+    writeGh('issue-closed', '')
+    await t.watcher.poll('p1')
+    expect(t.watcher.state().issues[0]).toMatchObject({ state: 'dropped', reason: 'issue 在 GitHub 上已经关闭' })
   })
 
   it('ignores a move that does not fit the state machine', async () => {

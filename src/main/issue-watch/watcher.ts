@@ -49,6 +49,7 @@ const M = defineMessages({
     alreadyAccepting: '验收已经在跑',
     projectGone: '项目不在了',
     worktreeGone: 'worktree 不在了',
+    issueClosed: 'issue 在 GitHub 上已经关闭',
     acceptCrashed: (why: string) => `验收命令没能运行：${why}`
   },
   en: {
@@ -58,6 +59,7 @@ const M = defineMessages({
     alreadyAccepting: 'The acceptance is already running',
     projectGone: 'The project is gone',
     worktreeGone: 'The worktree is gone',
+    issueClosed: 'The issue was closed on GitHub',
     acceptCrashed: (why: string) => `The acceptance command could not run: ${why}`
   }
 })
@@ -102,6 +104,8 @@ export interface IssueWatchDeps {
   labelAt(repo: GitHubRepo, number: number, label: string): Promise<number | null>
   /** Assign + 👀; a note when one failed, null when both worked. */
   claim(repo: GitHubRepo, number: number): Promise<string | null>
+  /** Whether the issue is still open; null when gh could not tell. */
+  issueOpen(repo: GitHubRepo, number: number): Promise<boolean | null>
   /** Runs the acceptance command in `cwd`, stopped at `timeoutMs` (its promise resolves with cancelled: true then). */
   runAcceptance(key: string, cwd: string, script: string, timeoutMs: number): Promise<AcceptanceRun>
   /** The acceptance command's time (ACCEPT_TIMEOUT_MS unless a test says otherwise). */
@@ -224,7 +228,8 @@ export class IssueWatcher {
   /** The window's sessions that already work on an issue (`session.github`). */
   setLinked(raw: unknown): void {
     if (!Array.isArray(raw)) return
-    this.linked = new Set(raw.filter((k): k is string => typeof k === 'string' && k.length <= 400))
+    // Lower-cased: a remote URL's owner and name can differ in case from GitHub's.
+    this.linked = new Set(raw.filter((k): k is string => typeof k === 'string' && k.length <= 400).map((k) => k.toLowerCase()))
   }
 
   windowReady(): void {
@@ -276,6 +281,7 @@ export class IssueWatcher {
       this.setScan(projectId, scan.state === 'ok' ? { state: 'ok', repo: scan.repo, checkedAt: this.deps.now() } : scan)
       if (scan.state !== 'ok') return
       await this.consider(project, scan.repo, scan.issues)
+      await this.dropClosed(project, scan.repo)
     } catch (error) {
       console.error('[issue-watch] checking', projectId, 'failed', error)
       this.setScan(projectId, { state: 'error', message: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300) })
@@ -290,7 +296,7 @@ export class IssueWatcher {
       if (claimBudget(this.data.issues, this.data.settings, project.projectId, this.deps.now()) <= 0) return
       const key = issueKey(repoArg(repo), issue.number)
       // The cheap answers first: what is already handled or worked on needs no gh call.
-      if (this.data.issues.some((r) => r.key === key) || this.linked.has(key)) continue
+      if (this.data.issues.some((r) => r.key === key) || this.linked.has(key.toLowerCase())) continue
       const mine = viewer !== null && issue.assignees.some((a) => a.toLowerCase() === viewer)
       if (issue.assignees.length > 0 && !mine) continue
       // Older than the switch and without the label: nothing can make it new enough (no gh call needed).
@@ -301,13 +307,24 @@ export class IssueWatcher {
         issue,
         settings: project,
         handled: false,
-        linked: this.linked.has(key),
+        linked: this.linked.has(key.toLowerCase()),
         viewer,
         authorCanWrite,
         labelAt
       })
       if (!decision.claim) continue
       await this.claim(project, repo, issue, authorCanWrite)
+    }
+  }
+
+  /** A 待批准 issue whose issue was closed on GitHub ends here: its report has nothing left to approve (PRD F26). */
+  private async dropClosed(project: IssueWatchProjectSettings, repo: GitHubRepo): Promise<void> {
+    const awaiting = this.data.issues.filter(
+      (r) => r.projectId === project.projectId && r.state === 'awaiting' && r.repo.toLowerCase() === repoArg(repo).toLowerCase()
+    )
+    for (const record of awaiting) {
+      const open = await this.deps.issueOpen(repo, record.number)
+      if (open === false) this.move(record, 'dropped', { reason: pick(M).issueClosed })
     }
   }
 

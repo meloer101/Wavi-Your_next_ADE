@@ -524,6 +524,8 @@ export function parseProject(raw: unknown): IssueWatchProjectSettings | null {
 export function parseProjectDraft(raw: unknown): IssueWatchProjectDraft | null {
   const r = record(raw)
   if (!r || typeof r.enabled !== 'boolean' || !isMode(r.mode) || !isCliAgent(r.agent) || !isUi(r.ui)) return null
+  // 自动领取 waits for a turn to end: a CLI that only reports its title cannot be watched (PRD F26). A GUI session can.
+  if (r.ui === 'cli' && AGENT_SPECS[r.agent].status === 'title') return null
   const label = line(r.label, MAX_LABEL)
   const model = r.model === undefined || r.model === '' ? undefined : line(r.model, MAX_MODEL)
   const accept = r.accept === undefined || r.accept === '' ? undefined : line(r.accept, MAX_ACCEPT_COMMAND)

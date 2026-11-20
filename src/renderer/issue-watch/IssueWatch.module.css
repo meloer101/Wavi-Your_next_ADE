@@ -1,0 +1,178 @@
+/* 自动领取's report block at the top of Git · 变更 (PRD F26, Figma 102B): its own fill, inset 6 from the card's edges,
+   text on the rows' 14 / 16 lines, hairline rows, small radii, the primary the only filled button. */
+
+.block {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-6);
+  padding: var(--space-8) calc(var(--space-16) - var(--space-6)) var(--space-8) var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--bg-section);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 24px;
+}
+
+.number {
+  flex: none;
+  font: var(--text-mono-s-medium);
+  color: var(--text-secondary);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--text-body-strong);
+  color: var(--text-primary);
+}
+
+.state {
+  flex: none;
+  font: var(--text-caption);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.linkButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 22px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font: var(--text-caption);
+  white-space: nowrap;
+}
+
+.linkButton:hover {
+  color: var(--text-primary);
+}
+
+.linkButton:focus-visible,
+.primary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  margin: 0;
+  min-width: 0;
+  min-height: 20px;
+  font: var(--text-caption);
+}
+
+.label {
+  flex: none;
+  width: 44px;
+  color: var(--text-tertiary);
+}
+
+.value {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.value[data-tone='error'] {
+  color: var(--status-error);
+}
+
+.command {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--text-mono-s);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  color: var(--status-attention);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.output {
+  margin: var(--space-4) 0 0 52px;
+  padding: var(--space-6) var(--space-8);
+  max-height: 180px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  font: var(--text-mono-s);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-4);
+  min-height: 26px;
+}
+
+.error {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--status-error);
+  font: var(--text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary {
+  flex: none;
+  height: 24px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--fill-primary);
+  box-shadow: var(--primary-finish);
+  color: var(--text-inverse);
+  font: var(--text-caption-strong);
+}
+
+.primary:disabled {
+  opacity: 0.5;
+}

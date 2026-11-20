@@ -15,6 +15,10 @@ import { formatElapsed } from '../sidebar/format-elapsed'
 import { useWorkspace } from '../state/workspace'
 import { StatusGlyph } from '../ui/StatusGlyph'
 import { glyphStatus } from '../lifecycle/present'
+import { issueStateLabel } from '@shared/issue-watch'
+import { repoArg } from '@shared/pull-requests'
+import { recordFor } from '../issue-watch/model'
+import { useIssueWatch } from '../issue-watch/store'
 import { checksMark, ghProblem, linkedSessions, linkKey, linkOf, matchesFilter, orderProjects, prTags } from './github-model'
 import { openItem, refreshGitHub, setScope, useGitHubBoard } from './github-store'
 import { GitHubDetail } from './GitHubDetail'
@@ -167,6 +171,9 @@ function Column({ label, count, items, project, result }: { label: string; count
 function ItemRow({ item, project, result }: { item: BoardItem; project: Project; result: Extract<BoardProject, { state: 'ok' }> }) {
   const m = useMessages(M)
   const linked = useContext(Linked).get(linkKey(linkOf(result.repo, item))) ?? null
+  // 自动领取 (PRD F26, Figma 102C): a claimed issue waiting for its turn says 排队; once its session runs, that row is the
+  // session's status (LinkedSession).
+  const claimed = useIssueWatch((s) => (item.kind === 'issue' ? recordFor(s.state?.issues ?? [], repoArg(result.repo), item.number) : undefined))
   const selected = useGitHubBoard((g) => g.open?.root === project.rootPath && g.open.kind === item.kind && g.open.number === item.number)
   const pr = item.kind === 'pr' ? (item as BoardPr) : null
   const mark = pr ? checksMark(pr) : null
@@ -182,6 +189,11 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             {label}
           </span>
         ))}
+        {claimed?.state === 'queued' && !linked && (
+          <span className={styles.tag} data-testid="github-queued">
+            {issueStateLabel.queued}
+          </span>
+        )}
         {pr &&
           prTags(pr).map((tag) => (
             <span key={tag.text} className={styles.tag} data-tone={tag.tone}>

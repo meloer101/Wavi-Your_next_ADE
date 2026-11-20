@@ -8,7 +8,7 @@
 
 ## 当前位置
 
-- 2026-11-20：F26 自动领取 GitHub issue 定下（PRD v1.226）：方案和 Figma 102 已确认，交给 Pi 实现。共享逻辑和 main 侧已做完（`src/shared/issue-watch.ts`、`src/main/issue-watch/`：领取资格、状态机、排队和每天上限、写权限缓存、指派 + 👀、验收命令、`Closes #号`），界面和 e2e 还在做。见下面「F26」。
+- 2026-11-20：F26 自动领取 GitHub issue 做完（PRD v1.226，Figma 102）：共享逻辑、main（轮询、写权限缓存、指派 + 👀、验收命令）、界面（设置 · 自动化「GitHub issue」、Git · 变更 的报告块和「批准」、看板 · GitHub 的「排队」、会话头「自动领取 #号」）和 e2e（假 gh、本地 bare 远程）都有了。只剩在 `meloer101/wavi-pr-loop-test` 上真实走一遍（要作者的 gh 账号）。见下面「F26」。
 - 2026-11-20：官网分享封面换成新首屏的样子（Figma「官网·新风格探究‘」`OG · 分享封面 C · 英文` `1811:18007`：朱红底、`Run ALL coding agents on your Mac.`、协作句、GitHub「Open source · Totally free」、点阵翻花绳），导出成 `site/public/og-2.png`（2400×1260），删掉杂志封面 `og.png`；换文件名是为了让 X 等按图片地址缓存的卡片重新抓图，中英文两页仍是同一张。
 - 2026-11-19：官网从翻页杂志换成滚动落地页（PRD v1.224，Figma「官网·新风格探究‘」frame O `1794:15463`）：一页一语言（英文 `/`、中文 `/zh/`），静态 HTML + CSS，页头 → 朱红首屏（`Run ALL coding agents on your Mac.`）→ 19 家 agent 条 → 01 Agents → 02 Board → 03 GitHub → 04 Windows + Appearance → FAQ → 下载与页脚合成一块；`site/src/components/Home.astro` 加 `home/` 下每段一个组件，文案在 `i18n.ts`，字体换成 DM Sans / Source Serif 4 Italic / JetBrains Mono / Noto Sans SC 的自托管子集，翻页脚本、杂志组件和图片删掉。
 - 2026-11-19：手机的离线缓存和重连（PRD v1.220 ④，Figma 62B / 62F / 63B3，只做手机端）：`ios/Wavi/Store/Cache.swift` —— 会话列表带 Mac 发来的时刻、每个会话最近 200 条对话，写成 `Application Support/Wavi/Remote/<配对密钥摘要>/` 下的 JSON，首解锁后可读（后台唤醒还能连）、不进备份、1 s 防抖、写文件不在主线程；取消配对后整个目录删掉（Mac 说不认识这台手机时配对和缓存都留着，v1.223），Mac 的完整列表里没有的会话删掉它的对话。`AppModel` 冷启动先读它再连，连上后照旧用快照和 feed 替换，`watch` 打开会话时没连上就用缓存里的对话（62F），没有缓存时列表是 63B3。重连：`RemoteClient` 里新的 `Reconnect`（前台 1 秒、之后每 2 秒一次，连上并站住后从 1 开始；Mac 不认识这台手机、协议对不上或连开连断三次时 30 秒），网络变化和回到前台仍立即重连。测试 `WaviTests/CacheTests.swift`；截图 `test-results/offline/offline-{list,session}-{dark,light}.png`（`WaviTests/OfflineShots.swift`）
@@ -478,9 +478,10 @@ PRD F26 / v1.226。
 
 - [x] Figma（102，Section `1824:80380`，102A–D、102A′ / 102B1′ 浅色，作者 2026-11-20 确认）：设置 · 自动化「GitHub issue」一段（项目开关、领取范围、label、智能体 / 模型 / 权限、验收命令、间隔和上限）、Git · 变更 的报告块和「批准」、看板 · GitHub 行状态、会话头「自动领取 #号」、通知；两种主题
 - [x] `src/shared/issue-watch.ts`：领取资格（两档、label 由谁打）、状态机、排队和每天上限、报告文字、`Closes #号`
-- [ ] `src/main/issue-watch/`：轮询、写权限缓存、领取（指派 + 👀）、`issue-watch.json`、验收命令（和 F24 前置检查共用 shell 调用）——已完成；批准后的合并 → 审阅 → 推送还在做
-- [ ] `src/renderer/issue-watch/`：开会话、等一轮结束、发回失败输出；报告块；设置一段
-- [ ] e2e（假 gh、本地 bare 远程）全链路；`meloer101/wavi-pr-loop-test` 上真实走一遍
+- [x] `src/main/issue-watch/`：轮询、写权限缓存、领取（指派 + 👀）、`issue-watch.json`、验收命令（和 F24 前置检查共用 shell 调用）、批准后的合并 → 审阅 → 推送
+- [x] `src/renderer/issue-watch/`：开会话、等一轮结束、发回失败输出；报告块；设置一段
+- [x] e2e（假 gh、本地 bare 远程）全链路：`e2e/issue-watch.spec.ts`
+- [ ] `meloer101/wavi-pr-loop-test` 上真实走一遍（要作者的 gh 账号：被指派、加 👀、推送后 issue 被关闭）
 
 ## 进行中：F25 Ultracode（2026-11-11 定）
 

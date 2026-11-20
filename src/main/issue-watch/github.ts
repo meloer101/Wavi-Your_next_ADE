@@ -180,6 +180,25 @@ export async function labelActorAt(repo: GitHubRepo, number: number, label: stri
 }
 
 /**
+ * Whether the issue is still open (`gh issue view --json state`), or null when gh could not tell. Asked of a 待批准 issue
+ * only: once it is closed on GitHub its report ends (PRD F26 批准).
+ */
+export async function issueOpen(repo: GitHubRepo, number: number): Promise<boolean | null> {
+  if (paused()) return null
+  const ran = await gh(['issue', 'view', String(number), `--repo=${repoArg(repo)}`, '--json=state'])
+  if (ran.code !== 0) {
+    if (isRateLimited(`${ran.stderr}\n${ran.stdout}`)) pauseGhForRateLimit()
+    return null
+  }
+  try {
+    const json = JSON.parse(ran.stdout) as { state?: unknown }
+    return typeof json.state === 'string' ? json.state.toUpperCase() === 'OPEN' : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 领取: assign the issue to @me and add 👀. Neither is required to go on (PRD F26): a failure comes back as a note the
  * report shows, and the issue is handled anyway.
  */
@@ -195,6 +214,6 @@ export async function claimIssue(repo: GitHubRepo, number: number): Promise<stri
 }
 
 /** The real dependencies of the watcher's GitHub calls (tests pass their own, or a fake gh on the PATH). */
-export const githubCalls = { listIssues, canWrite, labelActorAt, claimIssue, viewerLogin }
+export const githubCalls = { listIssues, canWrite, labelActorAt, claimIssue, viewerLogin, issueOpen }
 
 export type { DiscoveredIssue }

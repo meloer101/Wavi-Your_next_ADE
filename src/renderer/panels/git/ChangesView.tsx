@@ -39,6 +39,7 @@ import { useSettings } from '../../settings/useSettings'
 import { useTurnCheckView } from '../../turn-checks/TurnChecksTag'
 import { registerPrimaryExit } from '../merge/store'
 import { useReviewComments, type CommentDraft } from '../../state/review-comments'
+import { IssueReport } from '../../issue-watch/IssueReport'
 import { agentLabel } from '../merge/model'
 import { changedFilesLabel, changeItems, endsOpenFile, preflightKey, runUnticked, tickable, tickState, itemHeight, rowAnchor, stickyFileIndex, type ChangeGroup, type ChangeItem, type DraftPlace, type SplitRow, type ViewMark } from './changes-model'
 import { CommentAddButton, CommentEditor, CommentRow } from './CommentRows'
@@ -242,6 +243,8 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
   return (
     <>
       <PrimaryExitShortcut worktreePath={worktree.path} run={shortcutExit} />
+      {/* 自动领取's report (PRD F26): the topmost block, above the review's. */}
+      <IssueReport worktree={worktree} sessionId={reviewer} />
       {reviewSession && <ReviewBlock sessionId={reviewSession} root={root} />}
       <div ref={scroller} className={styles.files} role="list" aria-label={changedFilesLabel()} data-layout={layout}>
         {stickyItem?.kind === 'file' && (
