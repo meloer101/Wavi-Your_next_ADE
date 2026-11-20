@@ -8,6 +8,7 @@ import { RADAR_IPC } from '@shared/conflict-radar'
 import { DISPATCH_IPC } from '@shared/dispatch'
 import { REMOTE_IPC } from '@shared/remote'
 import { SCHEDULE_IPC } from '@shared/schedule'
+import { ISSUE_WATCH_IPC } from '@shared/issue-watch'
 import { GUI_IPC, type GuiEvent } from '@shared/gui-chat'
 import { SIM_PORT_MESSAGE, SIMULATOR_IPC } from '@shared/simulator'
 import { IPC, type PtyExit, type TerminalSnapshot, type TrApi } from '@shared/ipc'
@@ -220,6 +221,18 @@ const api: TrApi = {
     ready: () => ipcRenderer.send(SCHEDULE_IPC.ready),
     onChanged: (listener) => listen(SCHEDULE_IPC.changed, listener),
     onFire: (listener) => listen(SCHEDULE_IPC.fire, listener)
+  },
+  issueWatch: {
+    get: () => ipcRenderer.invoke(ISSUE_WATCH_IPC.get),
+    saveProject: (projectId, draft) => ipcRenderer.invoke(ISSUE_WATCH_IPC.saveProject, projectId, draft),
+    saveSettings: (settings) => ipcRenderer.invoke(ISSUE_WATCH_IPC.saveSettings, settings),
+    checkNow: (projectId) => ipcRenderer.invoke(ISSUE_WATCH_IPC.checkNow, projectId),
+    report: (report) => ipcRenderer.invoke(ISSUE_WATCH_IPC.report, report),
+    accept: (request) => ipcRenderer.invoke(ISSUE_WATCH_IPC.accept, request),
+    linked: (keys) => ipcRenderer.send(ISSUE_WATCH_IPC.linked, keys),
+    ready: () => ipcRenderer.send(ISSUE_WATCH_IPC.ready),
+    onChanged: (listener) => listen(ISSUE_WATCH_IPC.changed, listener),
+    onFire: (listener) => listen(ISSUE_WATCH_IPC.fire, listener)
   },
   repoScripts: {
     get: (dir) => ipcRenderer.invoke(IPC.repoScriptsGet, dir),

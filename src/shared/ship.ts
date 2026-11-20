@@ -114,6 +114,9 @@ export interface ShipMainRequest extends PrTarget {
   push?: boolean
   /** The session's title: the squash commit's subject when `message` is ''. */
   title?: string
+  /** PRD F26: the issue this merge finishes. A squash merge's message ends with `Closes #n` unless a line already
+   *  closes it (the agent's own commit may have written it). */
+  closes?: number
   /** The branch tip the caller checked (the merge sheet's precheck and test): the merge refuses (`stale`) when the
    *  branch moved since. Absent: whatever the branch is at. */
   head?: string
