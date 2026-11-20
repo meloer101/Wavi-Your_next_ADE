@@ -77,18 +77,23 @@ function watchRun(worktree: string, startWaitMs = 30_000): Promise<'done' | 'sto
  * that stopped is left for the user (the block on the worktree says why) and reported as a note.
  */
 export async function approveIssue(record: IssueRecord, worktreePath: string, sessionId: SessionId): Promise<ApprovalResult> {
+  const fail = (message: string): ApprovalResult => {
+    // Said where the user clicked (the exit zone's notice line), as the chain does for its own refusals.
+    setPrNotice(worktreePath, { tone: 'error', text: message })
+    return { ok: false, message }
+  }
   const place = chainPlace(worktreePath)
-  if (!place) return { ok: false, message: pick(M).projectGone }
+  if (!place) return fail(pick(M).projectGone)
   const path = place.worktree.path
-  if (useShips.getState().byWorktree[path]) return { ok: false, message: pick(M).busy }
+  if (useShips.getState().byWorktree[path]) return fail(pick(M).busy)
   const root = place.project.rootPath
   window.tr.pr.refresh(path)
   const [changes, preflight] = await Promise.all([
     window.tr.git.changes(path, place.worktree.baseBranch ?? undefined).catch(() => null),
     loadPreflight({ root, worktree: path })
   ])
-  if (!changes) return { ok: false, message: pick(M).notGit }
-  if (!preflight?.ok) return { ok: false, message: preflight?.message ?? pick(M).checking }
+  if (!changes) return fail(pick(M).notGit)
+  if (!preflight?.ok) return fail(preflight?.message ?? pick(M).checking)
   const settings = await window.tr.settings.get()
   const pr = usePullRequests.getState().byWorktree[path]?.pr ?? null
   const checks = turnCheckView(useSessionMeta.getState().bySession[sessionId]?.checks)
@@ -103,13 +108,19 @@ export async function approveIssue(record: IssueRecord, worktreePath: string, se
     checksLine: checks ? checksText(checks) : null,
     settings: { review: settings.review, pr: settings.pr }
   })
+  const commits = preflight.ahead
+  const review = settings.review.beforePush
   const merged = watchRun(path)
   startShip({ ...ctx, paths: null }, 'main', CHAIN_LABEL.mergeTo(preflight.base), { head: preflight.head, closes: record.number })
-  if ((await merged) !== 'done') return { ok: false, message: pick(M).mergeStopped }
+  if ((await merged) !== 'done') return fail(pick(M).mergeStopped)
+  // The run moves the branch to the squash commit: the base's new tip, which 推送 sends too.
+  const after = await window.tr.ship.preflight({ root, worktree: path }).catch(() => null)
+  const tip = after?.ok ? after.head : null
+  if (tip) await window.tr.issueWatch.report({ key: record.key, type: 'approved', merge: tip, commits, review }).catch(() => {})
   // 推送 of the base: the chain's push node (pull first, the pre-push review, then the push), as if clicked by hand.
   const pushed = watchRun(path)
   await runChainCommand(path, 'push-base', sessionId)
-  if ((await pushed) !== 'done') return { ok: false, message: pick(M).pushStopped }
+  if ((await pushed) !== 'done') return fail(pick(M).pushStopped)
   await window.tr.issueWatch.report({ key: record.key, type: 'merged' }).catch(() => {})
   setPrNotice(path, { tone: 'muted', text: pick(M).merged })
   return { ok: true }

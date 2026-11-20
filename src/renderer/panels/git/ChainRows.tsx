@@ -53,7 +53,8 @@ export function ChainButtons({
   worktreePath,
   openIn,
   shortcut,
-  idle
+  idle,
+  approve = null
 }: {
   chain: ChainState
   worktreePath: string
@@ -62,6 +63,8 @@ export function ChainButtons({
   shortcut: boolean
   /** No run is open and no fix waits: the buttons act. */
   idle: boolean
+  /** PRD F26: an auto-claimed issue waiting for 批准 — it is the primary (⇧⌘M too); the chain's own moves stay in ⋯. */
+  approve?: { label: string; onClick: () => void } | null
 }) {
   const m = useMessages(M)
   const run = (command: ChainCommand) => void runChainCommand(worktreePath, command, openIn)
@@ -98,8 +101,17 @@ export function ChainButtons({
   const second = chain.second && chain.second.id !== 'abort' ? chain.second : null
   return (
     <>
-      {second && button(second, false)}
-      {chain.next && button(chain.next, true)}
+      {approve ? (
+        <button type="button" className={styles.primaryButton} disabled={!idle} data-move="approve" onClick={approve.onClick}>
+          {approve.label}
+          {shortcut && <span data-shortcut-hint className={styles.shortcut}>{formatAccelerator(SHORTCUTS['merge-worktree'])}</span>}
+        </button>
+      ) : (
+        <>
+          {second && button(second, false)}
+          {chain.next && button(chain.next, true)}
+        </>
+      )}
       <button
         type="button"
         ref={more}

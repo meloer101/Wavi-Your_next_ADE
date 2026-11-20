@@ -92,6 +92,16 @@
   flex-direction: column;
 }
 
+.indent {
+  padding-left: var(--space-12);
+}
+
+.projectEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
 .note {
   margin: 0 0 var(--space-8);
   padding-left: var(--space-16);

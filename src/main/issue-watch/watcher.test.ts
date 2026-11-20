@@ -30,6 +30,9 @@ case "$1 $2" in
   "api user") echo me; exit 0 ;;
   "issue list")
     if [ -f "$d/signed-out" ]; then echo "You are not logged into any GitHub hosts. To log in, run: gh auth login" >&2; exit 1; fi
+    labelled=""
+    for a in "$@"; do case "$a" in --label=*) labelled=1;; esac; done
+    if [ -n "$labelled" ]; then cat "$d/labelled-issues.json" 2>/dev/null || echo '[]'; exit 0; fi
     cat "$d/issues.json" 2>/dev/null || echo '[]'; exit 0 ;;
   "issue view") if [ -f "$d/issue-closed" ]; then echo '{"state":"CLOSED"}'; else echo '{"state":"OPEN"}'; fi; exit 0 ;;
   "issue edit") if [ -f "$d/assign-fail" ]; then echo "could not assign" >&2; exit 1; fi; exit 0 ;;
@@ -115,12 +118,14 @@ const at = (d: number, h: number, m = 0): number => new Date(2026, 10, d, h, m).
 /** The switch is turned on here; issues created (or labelled) later are the ones claimed. */
 const enabledAt = at(10, 10)
 
-function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: Partial<IssueWatchSettings>; windowUp?: boolean } = {}) {
+function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: Partial<IssueWatchSettings>; windowUp?: boolean; pageReady?: boolean } = {}) {
   const { root, worktree, repo } = setupRepo()
   const dir = mkdtempSync(join(tmpdir(), 'wavi-issue-watch-'))
   dirs.push(dir)
   const clock = { now: enabledAt }
   const fires: IssueWatchFire[] = []
+  const accepted: { cwd: string; script: string }[] = []
+  const state = { merged: false }
   const states: IssueWatchState[] = []
   let windowUp = options.windowUp ?? true
   const filePath = join(dir, 'issue-watch.json')
@@ -135,17 +140,20 @@ function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: 
     labelAt: labelActorAt,
     claim: claimIssue,
     issueOpen,
-    runAcceptance: (key, cwd, script, timeoutMs) =>
-      runAcceptanceCommand(
+    alreadyMerged: async () => state.merged,
+    runAcceptance: (key, cwd, script, timeoutMs) => {
+      accepted.push({ cwd, script })
+      return runAcceptanceCommand(
         {
           start: (jobKey, dirName, command) => startCapturedScript({ key: jobKey, cwd: dirName, script: command, baseEnv: process.env }),
           cancel: (jobKey) => cancelCapturedScript(jobKey)
         },
         key,
-        cwd,
-        script,
-        timeoutMs
-      ),
+          cwd,
+          script,
+          timeoutMs
+        )
+    },
     acceptTimeoutMs: () => 1500,
     fire: (fire) => {
       if (!windowUp) return false
@@ -155,7 +163,8 @@ function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: 
     changed: (state) => states.push(state)
   }
   const watcher = new IssueWatcher(file, deps)
-  watcher.windowReady()
+  // The page is ready (it can open sessions); `windowUp` is only whether it takes a fired one right now.
+  if (options.pageReady ?? true) watcher.windowReady()
   if (options.settings) watcher.saveSettings(options.settings)
   const draft: IssueWatchProjectDraft = {
     enabled: true,
@@ -173,6 +182,9 @@ function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: 
     key: (n: number) => issueKey(`github.com/${repo}`, n),
     clock,
     fires,
+    accepted,
+    deps,
+    state,
     states,
     file,
     watcher,
@@ -183,7 +195,9 @@ function setup(options: { mode?: 'members' | 'all'; accept?: string; settings?: 
       else watcher.windowGone()
     },
     /** Turns the watch on (the first save polls at once, so the caller need not tick). */
-    async enable() {
+    async enable(linked: string[] = []) {
+      // The runner sends the linked keys as it becomes ready; main claims nothing before that.
+      watcher.setLinked(linked)
       watcher.saveProject('p1', draft)
       await watcher.poll('p1')
       return watcher.state()
@@ -309,12 +323,64 @@ describe('领取范围', () => {
     expect(t.watcher.state().issues.filter((r) => r.number === 1)).toHaveLength(1)
   })
 
+  it('claims nothing before the window is ready and has sent its linked list', async () => {
+    const t = setup({ pageReady: false })
+    writePermission('alice', 'write')
+    writeIssues(issue(1))
+    t.watcher.saveProject('p1', t.draft)
+    await t.watcher.poll('p1')
+    expect(t.fires).toHaveLength(0)
+    expect(t.watcher.state().issues).toHaveLength(0)
+    // The page's ready and its first list are both needed (a session it already has must not be opened twice).
+    t.watcher.setLinked([])
+    await t.watcher.poll('p1')
+    expect(t.watcher.state().issues).toHaveLength(0)
+    t.watcher.windowReady()
+    await t.watcher.poll('p1')
+    expect(t.fires.map((f) => f.record.number)).toEqual([1])
+  })
+
+  it('does not claim an issue already assigned to the viewer that has no record', async () => {
+    // A key that fell out of issue-watch.json (or one handed over) must not be claimed again.
+    const t = setup({ mode: 'all' })
+    writeIssues(issue(1, { assignees: ['me'] }))
+    await t.enable()
+    expect(t.fires).toHaveLength(0)
+  })
+
+  it('sees a labelled issue beyond the first page through the second list', async () => {
+    const t = setup()
+    writePermission('alice', 'write')
+    writePermission('carol', 'write')
+    writeIssues()
+    // Older than the switch: only the label a member added after it makes it claimable.
+    writeGh('labelled-issues.json', JSON.stringify([issue(9, { labels: ['wavi'], createdAt: at(10, 8) })]))
+    writeTimeline(9, [{ actor: 'carol', at: at(10, 20) }])
+    await t.enable()
+    expect(t.fires.map((f) => f.record.number)).toEqual([9])
+    expect(calls().some((call) => call[0] === 'issue' && call[1] === 'list' && call.includes('--label=wavi'))).toBe(true)
+  })
+
+  it('asks the label’s timeline once while the issue does not change', async () => {
+    const t = setup()
+    writePermission('bob', 'read')
+    writePermission('carol', 'write')
+    writeIssues(issue(1, { author: 'bob', labels: ['wavi'] }))
+    writeTimeline(1, [{ actor: 'carol', at: at(10, 20) }])
+    await t.enable()
+    expect(t.fires.map((f) => f.record.number)).toEqual([1])
+    const timelines = () => calls().filter((call) => (call[1] ?? '').includes('/timeline')).length
+    expect(timelines()).toBe(1)
+    // The next check reuses it: the issue's updatedAt did not move.
+    await t.watcher.poll('p1')
+    expect(timelines()).toBe(1)
+  })
+
   it('does not claim an issue an open session already works on', async () => {
     const t = setup()
     writePermission('alice', 'write')
     writeIssues(issue(1))
-    t.watcher.setLinked([t.key(1)])
-    await t.enable()
+    await t.enable([t.key(1)])
     expect(t.fires).toHaveLength(0)
   })
 
@@ -530,6 +596,70 @@ describe('状态机 through the window’s reports', () => {
     writeGh('issue-closed', '')
     await t.watcher.poll('p1')
     expect(t.watcher.state().issues[0]).toMatchObject({ state: 'dropped', reason: 'issue 在 GitHub 上已经关闭' })
+  })
+
+  it('moves a 验收中 record left by a quit back to where it was', async () => {
+    const t = setup()
+    const base = {
+      key: t.key(1),
+      projectId: 'p1',
+      repo: `github.com/${t.repo}`,
+      number: 1,
+      title: 'Issue 1',
+      url: 'https://github.com/acme/widget/issues/1',
+      author: 'alice',
+      createdAt: at(10, 12),
+      claimedAt: at(10, 13),
+      state: 'accepting' as const,
+      rounds: 0
+    }
+    t.file.save({
+      settings: { intervalMinutes: 5, concurrent: 2, daily: 10 },
+      projects: [{ ...t.draft, projectId: 'p1', enabledAt }],
+      issues: [base, { ...base, key: t.key(2), number: 2, rounds: 1 }]
+    })
+    const resumed = new IssueWatcher(t.file, t.deps)
+    expect(resumed.state().issues.find((r) => r.number === 1)?.state).toBe('working')
+    expect(resumed.state().issues.find((r) => r.number === 2)?.state).toBe('fixing')
+  })
+
+  it('runs the acceptance in the worktree stored at opened, not the one a report names', async () => {
+    const t = await claimed({ accept: 'true' })
+    t.watcher.report({ key: t.key(1), type: 'opened', sessionId: 's1', worktree: t.worktree })
+    const result = await t.watcher.accept({ key: t.key(1), root: t.root, worktree: join(base, 'somewhere-else') })
+    expect(result).toMatchObject({ ok: true })
+    expect(t.accepted[0]?.cwd).toBe(t.worktree)
+  })
+
+  it('records the fix prompt and 批准’s merge, so a reload still knows them', async () => {
+    const t = await claimed({ accept: 'true' })
+    t.watcher.report({ key: t.key(1), type: 'opened', sessionId: 's1', worktree: t.worktree })
+    t.watcher.report({ key: t.key(1), type: 'fix-sent' })
+    expect(t.watcher.state().issues[0]?.fixSentAt).toBe(t.clock.now)
+    t.watcher.report({ key: t.key(1), type: 'approved', merge: 'a'.repeat(40), commits: 2, review: false })
+    expect(t.watcher.state().issues[0]?.approval).toMatchObject({ merge: 'a'.repeat(40), commits: 2, review: false })
+  })
+
+  it('turns a 待批准 issue seen closed into 已合并 when its branch is already in the base', async () => {
+    const t = await claimed({ accept: 'true' })
+    t.watcher.report({ key: t.key(1), type: 'opened', sessionId: 's1' })
+    await t.watcher.accept({ key: t.key(1), root: t.root, worktree: t.worktree })
+    expect(t.watcher.state().issues[0]?.state).toBe('awaiting')
+    t.state.merged = true
+    writeGh('issue-closed', '')
+    await t.watcher.poll('p1')
+    expect(t.watcher.state().issues[0]?.state).toBe('merged')
+  })
+
+  it('accepts a merged report for an issue it had seen closed', async () => {
+    const t = await claimed({ accept: 'true' })
+    t.watcher.report({ key: t.key(1), type: 'opened', sessionId: 's1' })
+    await t.watcher.accept({ key: t.key(1), root: t.root, worktree: t.worktree })
+    writeGh('issue-closed', '')
+    await t.watcher.poll('p1')
+    expect(t.watcher.state().issues[0]).toMatchObject({ state: 'dropped', droppedBy: 'issue-closed' })
+    t.watcher.report({ key: t.key(1), type: 'merged' })
+    expect(t.watcher.state().issues[0]?.state).toBe('merged')
   })
 
   it('ignores a move that does not fit the state machine', async () => {

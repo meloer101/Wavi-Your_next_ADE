@@ -189,11 +189,7 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             {label}
           </span>
         ))}
-        {claimed?.state === 'queued' && !linked && (
-          <span className={styles.tag} data-testid="github-queued">
-            {issueStateLabel.queued}
-          </span>
-        )}
+
         {pr &&
           prTags(pr).map((tag) => (
             <span key={tag.text} className={styles.tag} data-tone={tag.tone}>
@@ -207,7 +203,7 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             {mark?.state === 'failing' && <span>{mark.text}</span>}
           </span>
         )}
-        {!linked && (
+        {!linked && claimed?.state !== 'queued' && (
           <span className={styles.comments} aria-label={item.comments > 0 ? m.comments(item.comments) : undefined}>
             {item.comments > 0 && (
               <>
@@ -217,9 +213,16 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             )}
           </span>
         )}
-        {!linked && <span className={styles.time}>{item.updatedAt > 0 ? formatElapsed(now - item.updatedAt) : ''}</span>}
+        {!linked && claimed?.state !== 'queued' && <span className={styles.time}>{item.updatedAt > 0 ? formatElapsed(now - item.updatedAt) : ''}</span>}
       </button>
       {linked && <LinkedSession session={linked} />}
+      {/* 自动领取 (PRD F26, Figma 102C): claimed, waiting for a free slot — a hollow glyph and 排队 where the session goes. */}
+      {!linked && claimed?.state === 'queued' && (
+        <span className={styles.linked} data-testid="github-queued">
+          <Circle {...SMALL} />
+          <span>{issueStateLabel.queued}</span>
+        </span>
+      )}
     </div>
   )
 }

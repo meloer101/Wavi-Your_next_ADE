@@ -23,6 +23,8 @@ export type ReconcileStep =
   | { type: 'ignore' }
   /** Its session is gone, or its worktree was archived: this one ends. */
   | { type: 'drop'; reason: 'session-gone' | 'archived' }
+  /** 修复中 after a reload, and the fix prompt never went in: send it (once) instead of waiting forever. */
+  | { type: 'resend-fix' }
   /** No turn has ended since the record got where it is. */
   | { type: 'wait' }
   /** A turn ended (also while the window was away): no changes, the acceptance, or the next fix. */
@@ -35,7 +37,7 @@ export type ReconcileStep =
  * without treating the session's idle moment *before* its first turn as one.
  */
 export function reconcileStep(
-  record: Pick<IssueRecord, 'state' | 'claimedAt' | 'acceptance'>,
+  record: Pick<IssueRecord, 'state' | 'claimedAt' | 'acceptance' | 'fixSentAt'>,
   session: Pick<Session, 'status' | 'finishedAt'> | undefined,
   archived: boolean
 ): ReconcileStep {
@@ -45,8 +47,32 @@ export function reconcileStep(
   if (archived) return { type: 'drop', reason: 'archived' }
   if (!session) return { type: 'drop', reason: 'session-gone' }
   if (!TURN_ENDED.has(session.status)) return { type: 'wait' }
-  const since = record.state === 'fixing' ? (record.acceptance?.at ?? record.claimedAt) : record.claimedAt
-  return (session.finishedAt ?? 0) > since ? { type: 'run' } : { type: 'wait' }
+  if (record.state === 'working') return (session.finishedAt ?? 0) > record.claimedAt ? { type: 'run' } : { type: 'wait' }
+  // 修复中: the acceptance that asked for the fix is the line, and so is the fix prompt once it went in (a Stop that
+  // arrived while the prompt was being typed is not that turn's end). Without a prompt after the acceptance, the prompt
+  // itself is what got lost (a quit, a reload, a failed send), so it is sent once more.
+  const asked = record.acceptance?.at ?? record.claimedAt
+  const fixSent = record.fixSentAt ?? 0
+  const since = fixSent > 0 ? Math.max(asked, fixSent) : asked
+  if ((session.finishedAt ?? 0) > since) return { type: 'run' }
+  if (fixSent < asked) return { type: 'resend-fix' }
+  return { type: 'wait' }
+}
+
+/** The open session that already works on this issue (`session.github`; 交给 agent or an earlier fire), if any. */
+export function sessionForIssue(
+  sessions: readonly Session[],
+  worktrees: readonly Worktree[],
+  record: Pick<IssueRecord, 'repo' | 'number'>
+): Session | undefined {
+  const archived = new Set(worktrees.filter((w) => w.archived).map((w) => w.id))
+  return sessions.find(
+    (s) =>
+      s.github?.kind === 'issue' &&
+      s.github.number === record.number &&
+      s.github.repo.toLowerCase() === record.repo.toLowerCase() &&
+      !archived.has(s.worktreeId)
+  )
 }
 
 /** The worktree a session is in (its `worktreeId`); undefined once it is gone. */

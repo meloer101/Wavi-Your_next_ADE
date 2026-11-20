@@ -139,6 +139,17 @@ export interface IssueAcceptance {
   rounds: number
 }
 
+/** What 批准 did, kept so a reload still shows the three steps (Figma 102B3 / 102B4). */
+export interface IssueApproval {
+  /** The squash commit 合并到 main made (what 推送 sends too). */
+  merge: string
+  /** The branch's commits at that moment (`2 个提交`). */
+  commits: number
+  /** The push node had a pre-push review to run (设置 · 代码审阅 · 推送前审阅). */
+  review: boolean
+  at: number
+}
+
 /** One claimed issue, as issue-watch.json keeps it and the report shows it. `key` is `host/owner/repo#n`. */
 export interface IssueRecord {
   key: string
@@ -154,9 +165,17 @@ export interface IssueRecord {
   claimedAt: number
   state: IssueState
   sessionId?: string
+  /** The session's worktree, stored when it opened: 验收 runs there (a later report cannot point it elsewhere). */
+  worktree?: string
   /** Fix rounds sent back to the agent (0 – MAX_FIX_ROUNDS). */
   rounds: number
+  /** When the last fix prompt went into the session (null/absent: not sent since the last acceptance). */
+  fixSentAt?: number
   acceptance?: IssueAcceptance
+  /** 批准's run, once 合并到 main is in. */
+  approval?: IssueApproval
+  /** Abandoned because the issue was closed on GitHub (a later `merged` report may still come). */
+  droppedBy?: 'issue-closed'
   /** Why it is where it is (`没有改动`, `验收失败`), shown in the report as is. */
   reason?: string
   /** What the claim could not do (`指派失败：…`), shown in the report. */
@@ -281,6 +300,19 @@ export function claimBudget(records: readonly IssueRecord[], settings: IssueWatc
 /** The day's cap is used up: the settings row says 今天已领 N 个，明天继续. */
 export const dailyCapReached = (records: readonly IssueRecord[], settings: IssueWatchSettings, projectId: string, now: number): boolean =>
   claimsToday(records, projectId, now) >= settings.daily
+
+/**
+ * At most `max` records, and an unfinished one (or one waiting for 批准) is never dropped for a finished one: a key that
+ * fell out of the file could be claimed again. Finished records go oldest first.
+ */
+export function trimRecords(records: readonly IssueRecord[], max = MAX_ISSUES): IssueRecord[] {
+  if (records.length <= max) return [...records]
+  const live = records.filter((r) => !isFinished(r.state))
+  const done = records.filter((r) => isFinished(r.state))
+  // Live ones first, newest claim first; then as many finished ones as fit, oldest first out.
+  const room = Math.max(0, max - live.length)
+  return [...live, ...done.slice(0, room)]
+}
 
 /** The queue's order: the issue created first is claimed first. */
 export const byCreatedAt = (a: DiscoveredIssue, b: DiscoveredIssue): number => a.createdAt - b.createdAt || a.number - b.number
@@ -448,6 +480,8 @@ const names = (raw: unknown, key: 'name' | 'login' = 'name'): string[] =>
     : []
 const count = (raw: unknown, min: number, max: number): number | null =>
   typeof raw === 'number' && Number.isInteger(raw) && raw >= min && raw <= max ? raw : null
+/** An absolute path main will run something in (a worktree). */
+const absolutePath = (raw: unknown): string | null => (typeof raw === 'string' && raw.startsWith('/') && raw.length <= 4096 && !raw.includes('\0') ? raw : null)
 
 /** `host/owner/name` (a GitHub repository), as `repoArg` builds it. */
 const REPO = /^[A-Za-z0-9.-]{1,253}\/[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/
@@ -554,6 +588,15 @@ export function parseAcceptance(raw: unknown): IssueAcceptance | null {
   return { passed: r.passed, command, at, rounds, ...(output ? { output } : {}), ...(r.timedOut === true ? { timedOut: true } : {}) }
 }
 
+export function parseApproval(raw: unknown): IssueApproval | null {
+  const r = record(raw)
+  const merge = typeof r?.merge === 'string' && /^[0-9a-f]{7,64}$/i.test(r.merge) ? r.merge : null
+  const commits = count(r?.commits, 0, 100_000)
+  const at = time(r?.at)
+  if (!r || !merge || commits === null || at === null) return null
+  return { merge, commits, review: r.review === true, at }
+}
+
 export function parseIssueRecord(raw: unknown): IssueRecord | null {
   const r = record(raw)
   if (!r || !isIssueKey(r.key) || !isIssueRepo(r.repo)) return null
@@ -569,8 +612,14 @@ export function parseIssueRecord(raw: unknown): IssueRecord | null {
   if (!isState(r.state)) return null
   const sessionId = r.sessionId === undefined ? undefined : line(r.sessionId, 100)
   if (sessionId === null) return null
+  const worktree = r.worktree === undefined ? undefined : absolutePath(r.worktree)
+  if (worktree === null) return null
+  const fixSentAt = r.fixSentAt === undefined ? undefined : time(r.fixSentAt)
+  if (fixSentAt === null) return null
   const acceptance = r.acceptance === undefined ? undefined : parseAcceptance(r.acceptance)
   if (acceptance === null) return null
+  const approval = r.approval === undefined ? undefined : parseApproval(r.approval)
+  if (approval === null) return null
   const reason = r.reason === undefined ? undefined : line(r.reason, MAX_REASON)
   const note = r.note === undefined ? undefined : line(r.note, MAX_NOTE)
   if (reason === null || note === null) return null
@@ -587,9 +636,13 @@ export function parseIssueRecord(raw: unknown): IssueRecord | null {
     state: r.state,
     rounds,
     ...(sessionId ? { sessionId } : {}),
+    ...(worktree ? { worktree } : {}),
+    ...(fixSentAt !== undefined ? { fixSentAt } : {}),
     ...(acceptance ? { acceptance } : {}),
+    ...(approval ? { approval } : {}),
     ...(reason ? { reason } : {}),
     ...(note ? { note } : {}),
+    ...(r.droppedBy === 'issue-closed' ? { droppedBy: 'issue-closed' as const } : {}),
     ...(typeof r.authorCanWrite === 'boolean' ? { authorCanWrite: r.authorCanWrite } : {})
   }
 }
@@ -627,12 +680,16 @@ export interface IssueWatchFire {
 
 /** The window's report of a step in the chain; main moves the record and tells every window. */
 export type IssueWatchReport =
-  /** The session is open and working on the issue. */
-  | { key: string; type: 'opened'; sessionId: string }
+  /** The session is open and working on the issue (its worktree: where 验收 runs). */
+  | { key: string; type: 'opened'; sessionId: string; worktree?: string }
   /** Its turn ended with nothing changed, or there is no acceptance command: 待批准, no acceptance run. */
   | { key: string; type: 'awaiting'; because: 'unchanged' | 'no-acceptance' }
   /** The turn after a failed acceptance ended: run the acceptance again. */
   | { key: string; type: 'fix-done' }
+  /** The fix prompt went into the session (so a reload does not send it again). */
+  | { key: string; type: 'fix-sent' }
+  /** 批准's 合并 to the base is in: the three steps show it, and 推送 of the base follows. */
+  | { key: string; type: 'approved'; merge: string; commits: number; review: boolean }
   /** 批准's chain finished: merged into the base and pushed. */
   | { key: string; type: 'merged' }
   /** The issue was closed on GitHub, or the session was archived: this one ends. */
@@ -697,12 +754,22 @@ export function parseReport(raw: unknown): IssueWatchReport | null {
   switch (r.type) {
     case 'opened': {
       const sessionId = line(r.sessionId, 100)
-      return sessionId ? { key, type: 'opened', sessionId } : null
+      if (!sessionId) return null
+      const worktree = r.worktree === undefined ? undefined : absolutePath(r.worktree)
+      if (worktree === null) return null
+      return { key, type: 'opened', sessionId, ...(worktree ? { worktree } : {}) }
     }
     case 'awaiting':
       return r.because === 'unchanged' || r.because === 'no-acceptance' ? { key, type: 'awaiting', because: r.because } : null
     case 'fix-done':
       return { key, type: 'fix-done' }
+    case 'fix-sent':
+      return { key, type: 'fix-sent' }
+    case 'approved': {
+      if (typeof r.merge !== 'string' || !/^[0-9a-f]{7,64}$/i.test(r.merge)) return null
+      const commits = count(r.commits, 0, 100_000)
+      return commits === null ? null : { key, type: 'approved', merge: r.merge, commits, review: r.review === true }
+    }
     case 'merged':
       return { key, type: 'merged' }
     case 'dropped': {
@@ -717,8 +784,6 @@ export function parseReport(raw: unknown): IssueWatchReport | null {
       return null
   }
 }
-
-const absolutePath = (raw: unknown): string | null => (typeof raw === 'string' && raw.startsWith('/') && raw.length <= 4096 && !raw.includes('\0') ? raw : null)
 
 /** Validates 验收's request: the key, the project root and the session's worktree. */
 export function parseAcceptRequest(raw: unknown): IssueWatchAcceptRequest | null {

@@ -38,6 +38,7 @@ import {
   splitIssueKey,
   tailOutput,
   transition,
+  trimRecords,
   type ClaimInput,
   type DiscoveredIssue,
   type IssueAcceptance,
@@ -197,6 +198,15 @@ describe('queue and the day’s cap', () => {
     // Tomorrow the cap is fresh, same records.
     expect(claimsToday(done, 'p1', at(12, 0))).toBe(0)
     expect(claimBudget(done, { intervalMinutes: 5, concurrent: 2, daily: 10 }, 'p1', at(12, 0))).toBe(10)
+  })
+
+  it('never trims an unfinished or waiting record for a finished one', () => {
+    const live = record({ key: issueKey('github.com/acme/widget', 1), state: 'working' })
+    const waiting = record({ key: issueKey('github.com/acme/widget', 2), state: 'awaiting' })
+    const done = Array.from({ length: 5 }, (_, i) => record({ key: issueKey('github.com/acme/widget', i + 10), number: i + 10, state: 'merged' }))
+    expect(trimRecords([live, waiting, ...done], 3)).toEqual([live, waiting, done[0]])
+    expect(trimRecords(done, 2)).toHaveLength(2)
+    expect(trimRecords([live], 10)).toEqual([live])
   })
 
   it('counts the day by the local clock', () => {

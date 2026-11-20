@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Session, Worktree } from '@shared/types'
 import type { IssueRecord } from '@shared/issue-watch'
-import { issueLink, reconcileStep, recordFor, recordForSession, sessionOf, worktreeOfSession } from './model'
+import { issueLink, reconcileStep, recordFor, recordForSession, sessionForIssue, sessionOf, worktreeOfSession } from './model'
 
 const at = (m: number): number => new Date(2026, 10, 10, 10, m).getTime()
 
@@ -39,10 +39,28 @@ describe('reconcileStep', () => {
   })
 
   it('picks a turn that ended while the window was away up again', () => {
-    const fixing = record({ state: 'fixing', rounds: 1, acceptance: { passed: false, command: 'npm test', at: at(6), rounds: 0 } })
+    const fixing = record({
+      state: 'fixing',
+      rounds: 1,
+      acceptance: { passed: false, command: 'npm test', at: at(6), rounds: 0 },
+      fixSentAt: at(6)
+    })
     expect(reconcileStep(fixing, session({ status: 'idle', finishedAt: at(7) }), false)).toEqual({ type: 'run' })
-    // The acceptance ran after that turn: nothing new.
+    // The fix is in and its turn has not run: wait.
     expect(reconcileStep(fixing, session({ status: 'idle', finishedAt: at(5) }), false)).toEqual({ type: 'wait' })
+  })
+
+  it('sends the fix prompt again when it never went in (a quit or a reload during 验收)', () => {
+    const asked = { passed: false, command: 'npm test', at: at(6), rounds: 0 }
+    // Reload right after the acceptance failed: 修复中, no fix prompt recorded, no new turn.
+    const fixing = record({ state: 'fixing', rounds: 1, acceptance: asked })
+    expect(reconcileStep(fixing, session({ status: 'idle', finishedAt: at(5) }), false)).toEqual({ type: 'resend-fix' })
+    // The prompt is in (recorded after the acceptance): wait for its turn.
+    expect(reconcileStep({ ...fixing, fixSentAt: at(6) }, session({ status: 'idle', finishedAt: at(5) }), false)).toEqual({ type: 'wait' })
+    // An older fix (before this acceptance) is re-sent too: this acceptance has had no prompt since.
+    expect(reconcileStep({ ...fixing, fixSentAt: at(4) }, session({ status: 'idle', finishedAt: at(5) }), false)).toEqual({ type: 'resend-fix' })
+    // A turn that ended after the acceptance: run the acceptance again, never the prompt.
+    expect(reconcileStep({ ...fixing, fixSentAt: at(6) }, session({ status: 'idle', finishedAt: at(7) }), false)).toEqual({ type: 'run' })
   })
 
   it('leaves 验收中 to main and the finished states alone', () => {
@@ -67,6 +85,15 @@ describe('finding records', () => {
     expect(recordFor(records, 'github.com/acme/widget', 1)?.key).toBe(records[0]!.key)
     expect(recordFor(records, 'GitHub.com/Acme/Widget', 2)?.number).toBe(2)
     expect(recordFor(records, 'github.com/acme/other', 1)).toBeUndefined()
+  })
+
+  it('finds a session already working on the issue (a reload between fire and opened)', () => {
+    const worktrees = [{ id: 'w1', path: '/wt' }, { id: 'w2', archived: 1 }] as unknown as Worktree[]
+    const mine = { id: 's1', worktreeId: 'w1', github: { repo: 'GitHub.com/Acme/Widget', kind: 'issue', number: 9 } } as unknown as Session
+    const archived = { id: 's2', worktreeId: 'w2', github: { repo: 'github.com/acme/widget', kind: 'issue', number: 9 } } as unknown as Session
+    const other = { id: 's3', worktreeId: 'w1', github: { repo: 'github.com/acme/widget', kind: 'issue', number: 8 } } as unknown as Session
+    expect(sessionForIssue([archived, other, mine], worktrees, { repo: 'github.com/acme/widget', number: 9 })?.id).toBe('s1')
+    expect(sessionForIssue([other], worktrees, { repo: 'github.com/acme/widget', number: 9 })).toBeUndefined()
   })
 
   it('gives the issue link and the session’s worktree', () => {

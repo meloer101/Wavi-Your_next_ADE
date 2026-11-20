@@ -3,6 +3,8 @@
 // once its page said it is ready, and runs the project's acceptance command in the session's worktree through the same
 // login shell as 定时任务's 前置检查 (src/main/script-run.ts), stopped after ACCEPT_TIMEOUT_MS.
 import { join } from 'node:path'
+import type { IssueRecord } from '@shared/issue-watch'
+import { git, gitOut } from '../git/run'
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { ISSUE_WATCH_IPC, type IssueWatchAcceptResult, type IssueWatchFire, type IssueWatchState } from '@shared/issue-watch'
 import { cancelCapturedScript, startCapturedScript } from '../script-run'
@@ -21,6 +23,23 @@ let readyPage: WebContents | null = null
 let watcher: IssueWatcher | null = null
 
 const acceptKey = (key: string): string => `issue-accept:${key}`
+
+/**
+ * Whether the record's branch is already in its base: its HEAD is an ancestor of the base, or the base has a commit that
+ * closes the issue (a squash merged elsewhere, then pushed by hand). Used before a 待批准 issue seen closed is abandoned.
+ */
+async function alreadyMerged(record: IssueRecord): Promise<boolean> {
+  const worktree = record.worktree
+  if (!worktree) return false
+  const head = (await gitOut(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD'])).trim()
+  if (!head) return false
+  const branch = (await gitOut(worktree, ['symbolic-ref', '--short', 'HEAD'])).trim()
+  const configured = branch ? (await gitOut(worktree, ['config', `branch.${branch}.base`])).trim() : ''
+  const base = configured || 'main'
+  if ((await git(worktree, ['merge-base', '--is-ancestor', head, `refs/heads/${base}`])).code === 0) return true
+  const closing = await gitOut(worktree, ['log', '-n', '200', '--format=%H', `refs/heads/${base}`, '--grep', `Closes #${record.number}`])
+  return closing.trim() !== ''
+}
 
 /** The acceptance command in `cwd`; at `timeoutMs` it is stopped and comes back cancelled (a failed acceptance). */
 function runAcceptance(key: string, cwd: string, script: string, timeoutMs: number): Promise<AcceptanceRun> {
@@ -74,6 +93,7 @@ export function registerIssueWatchHandlers(): void {
     labelAt: githubCalls.labelActorAt,
     claim: githubCalls.claimIssue,
     issueOpen: githubCalls.issueOpen,
+    alreadyMerged,
     runAcceptance,
     fire,
     changed: publish

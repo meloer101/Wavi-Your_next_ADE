@@ -5,7 +5,7 @@
 // turn ended while the window was away, is picked up again; a record whose session is gone is reported 已放弃.
 import { AGENT_SPECS } from '@shared/agents'
 import { itemTitle, taskPrompt } from '@shared/github-board'
-import { cappedPermission, issueBranch, issueNotice, type IssueRecord, type IssueWatchFire, type IssueWatchProjectSettings } from '@shared/issue-watch'
+import { cappedPermission, fixPrompt, issueBranch, issueNotice, type IssueRecord, type IssueWatchFire, type IssueWatchProjectSettings } from '@shared/issue-watch'
 import { defineMessages, pick } from '@shared/i18n'
 import type { Session, Worktree } from '@shared/types'
 import { launchWorktreeSession } from '../new-session/launch'
@@ -13,7 +13,7 @@ import { binaryInstalled, branchProblemText, planCreate, uiRow } from '../new-se
 import { unchanged } from '../schedules/model'
 import { submitPrompt } from '../session-io'
 import { useWorkspace } from '../state/workspace'
-import { issueLink, reconcileStep, sessionOf } from './model'
+import { issueLink, reconcileStep, sessionForIssue, sessionOf, worktreeOfSession } from './model'
 import { followIssueWatch, useIssueWatch } from './store'
 
 const M = defineMessages({
@@ -76,6 +76,14 @@ async function openIssueSession(fire: IssueWatchFire): Promise<void> {
     const workspace = useWorkspace.getState()
     const found = workspace.projects.find((p) => p.id === project.projectId)
     if (!found) return void (await drop(pick(M).projectGone))
+    // A reload between the fire and the window's report leaves the session open but unrecorded here: adopt it instead
+    // of opening a second one.
+    const existing = sessionForIssue(workspace.sessions, workspace.worktrees, record)
+    if (existing) {
+      const worktree = worktreeOfSession(workspace.worktrees, existing)
+      await report({ key: record.key, type: 'opened', sessionId: existing.id, ...(worktree ? { worktree: worktree.path } : {}) })
+      return
+    }
     const root = found.rootPath
     const [installed, info, detail] = await Promise.all([
       window.tr.app.detectAgents(),
@@ -109,7 +117,7 @@ async function openIssueSession(fire: IssueWatchFire): Promise<void> {
       patch: { github: issueLink(record) }
     })
     if (!id) return void (await drop(pick(M).noSession))
-    await report({ key: record.key, type: 'opened', sessionId: id })
+    await report({ key: record.key, type: 'opened', sessionId: id, worktree: created.plan.path })
   } catch (error) {
     console.error('[issue-watch] opening the session failed', error)
     await drop(errorText(error))
@@ -158,8 +166,10 @@ async function finishTurn(
       return
     }
     if (result.next === 'fix') {
-      // The failed output goes back to the agent; the next turn ends here again (the record is 修复中).
+      // The failed output goes back to the agent; the next turn ends here again (the record is 修复中). Only a prompt that
+      // went in is recorded: a send that threw leaves it unrecorded, so a reload sends it again.
       await submitPrompt(session.id, result.prompt)
+      await report({ key: record.key, type: 'fix-sent' })
       return
     }
     // 待批准: main stored the result; the notice says 已处理 or 验收失败 from it.
@@ -169,6 +179,8 @@ async function finishTurn(
     await report({ key: record.key, type: 'note', note: errorText(error).slice(0, 300) })
   } finally {
     inFlight.delete(record.key)
+    // A change that arrived while this one was handled (another Stop, the record moving on) is looked at again.
+    queueMicrotask(reconcile)
   }
 }
 
@@ -185,15 +197,43 @@ function reconcile(): void {
       void report({ key: record.key, type: 'dropped', reason: step.reason === 'archived' ? pick(M).archived : pick(M).sessionGone })
       continue
     }
+    if (step.type === 'resend-fix' && session) {
+      inFlight.add(record.key)
+      void resendFix(record, session)
+      continue
+    }
     if (step.type !== 'run' || !session || !worktree) continue
     inFlight.add(record.key)
     void finishTurn(record, session, worktree, watch.projects.find((p) => p.projectId === record.projectId))
   }
 }
 
-/** The issues that already have sessions, so main claims none of them again. */
+/** The fix prompt a reload lost: 修复中, no new turn, no prompt recorded after the acceptance. Sent once, then recorded. */
+async function resendFix(record: IssueRecord, session: Session): Promise<void> {
+  try {
+    const acceptance = record.acceptance
+    if (!acceptance) return
+    await submitPrompt(session.id, fixPrompt(record, acceptance.command, acceptance.output ?? ''))
+    await report({ key: record.key, type: 'fix-sent' })
+  } catch (error) {
+    // Not recorded: the next change of the workspace (or this check) tries once more.
+    console.error('[issue-watch] resending the fix prompt failed', error)
+  } finally {
+    inFlight.delete(record.key)
+    queueMicrotask(reconcile)
+  }
+}
+
+/** The issues that already have sessions, so main claims none of them again; sent only when the list changed. */
+let lastLinked: string | null = null
 function reportLinked(): void {
-  const keys = useWorkspace.getState().sessions.flatMap((s) => (s.github?.kind === 'issue' ? [`${s.github.repo.toLowerCase()}#${s.github.number}`] : []))
+  const keys = useWorkspace
+    .getState()
+    .sessions.flatMap((s) => (s.github?.kind === 'issue' ? [`${s.github.repo.toLowerCase()}#${s.github.number}`] : []))
+    .sort()
+  const key = keys.join('\n')
+  if (key === lastLinked) return
+  lastLinked = key
   window.tr.issueWatch.linked(keys)
 }
 

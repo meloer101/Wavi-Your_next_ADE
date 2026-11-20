@@ -40,6 +40,9 @@ import { useTurnCheckView } from '../../turn-checks/TurnChecksTag'
 import { registerPrimaryExit } from '../merge/store'
 import { useReviewComments, type CommentDraft } from '../../state/review-comments'
 import { IssueReport } from '../../issue-watch/IssueReport'
+import { IssueApproval } from '../../issue-watch/IssueApproval'
+import { approveIssue } from '../../issue-watch/approve'
+import { useRecordForSession } from '../../issue-watch/store'
 import { agentLabel } from '../merge/model'
 import { changedFilesLabel, changeItems, endsOpenFile, preflightKey, runUnticked, tickable, tickState, itemHeight, rowAnchor, stickyFileIndex, type ChangeGroup, type ChangeItem, type DraftPlace, type SplitRow, type ViewMark } from './changes-model'
 import { CommentAddButton, CommentEditor, CommentRow } from './CommentRows'
@@ -73,6 +76,7 @@ const M = defineMessages({
     commitFile: (path: string) => `提交 ${path}`,
     openInEditor: '用默认编辑器打开',
     fold: (path: string) => `收起 ${path}`,
+    approve: '批准',
     untracked: '（未跟踪）',
     renamedFrom: (path: string) => ` · 原 ${path}`,
     comments: (n: number) => `${n} 条评论`,
@@ -97,6 +101,7 @@ const M = defineMessages({
     commitFile: (path: string) => `Commit ${path}`,
     openInEditor: 'Open in default editor',
     fold: (path: string) => `Collapse ${path}`,
+    approve: 'Approve',
     untracked: ' (untracked)',
     renamedFrom: (path: string) => ` · was ${path}`,
     comments: (n: number) => `${n} ${n === 1 ? 'comment' : 'comments'}`,
@@ -130,6 +135,7 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
   const active = useActiveSession()
   const projectRoot = useWorkspace((s) => s.projects.find((p) => p.id === worktree.projectId)?.rootPath ?? null)
   const reviewer = active && active.session.worktreeId === worktree.id ? active.session.id : null
+  const issueReport = useRecordForSession(reviewer ?? undefined)
   const scroller = useRef<HTMLDivElement>(null)
   const comments = useReviewComments((s) => s.byRoot[root])
   const draft = useReviewComments((s) => (s.draft?.root === root ? s.draft : null))
@@ -165,6 +171,7 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
   const { settings } = useSettings()
   const turnChecks = useTurnCheckView(target?.id)
   const shipping = useShips((s) => s.byWorktree[worktree.path] !== undefined)
+  const shipState = useShips((s) => s.byWorktree[worktree.path] ?? null)
   const reviewShown = useReviewShown(root)
   const stopped = useStoppedFix(worktree.path, prLive?.number ?? null)
   const fixAgent = agentName(useAgentOf(worktree.path))
@@ -227,6 +234,8 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
     if (scroller.current) scroller.current.scrollTop = offsets[index]!
   }
 
+  // 待批准: 批准 is the exit zone's primary (Figma 102B3); once the merge is recorded the chain's own moves return.
+  const awaitingApproval = issueReport?.state === 'awaiting' && issueReport.approval === undefined && reviewer !== null
   const reviewSession = target?.id ?? reviewer
   const baseName = preflight?.ok ? preflight.base : (changes.base ?? 'main')
   const headline = chain && idle ? zoneHeadline(chain) : null
@@ -238,13 +247,16 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
   // open, never the local merge sheet past the PR), nothing for another blocked primary; the merge sheet for a worktree
   // with no primary or a stuck one.
   const shortcut = zoneShortcut(chain, idle)
-  const shortcutExit = shortcut === null ? null : shortcut === 'nothing' ? () => undefined : () => void runChainCommand(worktree.path, shortcut, sessionId)
+  const approveShortcut = awaitingApproval && reviewer !== null ? (): void => void approveIssue(issueReport, worktree.path, reviewer) : null
+  const shortcutExit =
+    approveShortcut ?? (shortcut === null ? null : shortcut === 'nothing' ? () => undefined : () => void runChainCommand(worktree.path, shortcut, sessionId))
+  const approve = approveShortcut ? { label: m.approve, onClick: approveShortcut } : null
 
   return (
     <>
       <PrimaryExitShortcut worktreePath={worktree.path} run={shortcutExit} />
       {/* 自动领取's report (PRD F26): the topmost block, above the review's. */}
-      <IssueReport worktree={worktree} sessionId={reviewer} />
+      <IssueReport sessionId={reviewer} />
       {reviewSession && <ReviewBlock sessionId={reviewSession} root={root} />}
       <div ref={scroller} className={styles.files} role="list" aria-label={changedFilesLabel()} data-layout={layout}>
         {stickyItem?.kind === 'file' && (
@@ -270,7 +282,11 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
         />
         {prStatus && <PrAutomationRow worktreePath={worktree.path} status={prStatus} />}
         {shipping ? (
-          <ShipBlock worktree={worktree.path} base={baseName} />
+          issueReport && shipState?.error === null ? (
+            <IssueApproval record={issueReport} run={shipState} />
+          ) : (
+            <ShipBlock worktree={worktree.path} base={baseName} />
+          )
         ) : stopped ? (
           <FixStopFooter scope={stopped.scope} worktreePath={worktree.path} run={stopped.run} agent={fixAgent} note={stopped.note} attempts={stopped.attempts} />
         ) : (
@@ -313,10 +329,21 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
                 (!reviewShown || settings.review.mode === 'agent-command') && <ReviewButton sessionId={reviewer} className={styles.ghostButton} />
               )}
               <span className={styles.spacer} />
-              {chain && <ChainButtons chain={chain} worktreePath={worktree.path} openIn={sessionId} shortcut={chain ? zoneShortcutShown(chain) : false} idle={idle} />}
+              {chain && (
+                <ChainButtons
+                  chain={chain}
+                  worktreePath={worktree.path}
+                  openIn={sessionId}
+                  shortcut={approve ? true : chain ? zoneShortcutShown(chain) : false}
+                  idle={idle}
+                  approve={approve}
+                />
+              )}
             </div>
           )
         )}
+        {/* 批准's three steps stay in the exit zone after the runs finished (Figma 102B4). */}
+        {!shipping && issueReport?.approval && <IssueApproval record={issueReport} run={shipState} />}
       </div>
     </>
   )

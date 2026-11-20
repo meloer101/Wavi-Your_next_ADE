@@ -7,7 +7,6 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
   ACCEPT_TIMEOUT_MS,
-  MAX_ISSUES,
   afterAcceptance,
   byCreatedAt,
   claimBudget,
@@ -24,6 +23,7 @@ import {
   parseSettings,
   savedProject,
   tailOutput,
+  trimRecords,
   transition,
   type DiscoveredIssue,
   type IssueAcceptance,
@@ -97,15 +97,18 @@ export interface IssueWatchDeps {
   rootOf(projectId: string): string | undefined
   /** Whether the session's worktree belongs to the project (workspace folders, their worktrees). */
   workspaceOk(projectId: string, root: string, worktree: string): boolean
-  listIssues(root: string): Promise<ProjectScan>
+  /** The project's open issues; `label` is listed a second time so a labelled issue beyond the first page is seen. */
+  listIssues(root: string, label: string): Promise<ProjectScan>
   viewer(): Promise<string | null>
   canWrite(repo: GitHubRepo, login: string): Promise<boolean>
-  /** When a member applied the label; null when no member did (or it could not be read). */
-  labelAt(repo: GitHubRepo, number: number, label: string): Promise<number | null>
+  /** When a member applied the label; null when no member did (or it could not be read). Cached by the issue's `updatedAt`. */
+  labelAt(repo: GitHubRepo, number: number, label: string, updatedAt: number): Promise<number | null>
   /** Assign + 👀; a note when one failed, null when both worked. */
   claim(repo: GitHubRepo, number: number): Promise<string | null>
   /** Whether the issue is still open; null when gh could not tell. */
   issueOpen(repo: GitHubRepo, number: number): Promise<boolean | null>
+  /** Whether the record's branch is already in its base (a merge that happened before the issue was seen closed). */
+  alreadyMerged(record: IssueRecord): Promise<boolean>
   /** Runs the acceptance command in `cwd`, stopped at `timeoutMs` (its promise resolves with cancelled: true then). */
   runAcceptance(key: string, cwd: string, script: string, timeoutMs: number): Promise<AcceptanceRun>
   /** The acceptance command's time (ACCEPT_TIMEOUT_MS unless a test says otherwise). */
@@ -161,6 +164,8 @@ export class IssueWatcher {
   private readonly scans = new Map<string, IssueWatchScan>()
   /** Issues an open session already works on (the window's sessions with `session.github`). */
   private linked = new Set<string>()
+  /** The window sent its first list of those; nothing is claimed before that (it could open a second session). */
+  private linkedReceived = false
   /** Last check per project, and the checks in flight. */
   private readonly checkedAt = new Map<string, number>()
   /** A project's check in flight: a second ask waits for the one running. */
@@ -176,6 +181,16 @@ export class IssueWatcher {
     private readonly deps: IssueWatchDeps
   ) {
     this.data = file.load()
+    // A 验收中 record means the app quit while the command ran: nothing will report its result, so it goes back to the
+    // state before 验收 (修复中 after a fix round, else 处理中) and the window runs it again.
+    const stale = this.data.issues.filter((r) => r.state === 'accepting')
+    if (stale.length > 0) {
+      this.data = {
+        ...this.data,
+        issues: this.data.issues.map((r) => (r.state === 'accepting' ? { ...r, state: r.rounds > 0 ? 'fixing' : 'working' } : r))
+      }
+      this.file.save(this.data)
+    }
   }
 
   state(): IssueWatchState {
@@ -230,6 +245,9 @@ export class IssueWatcher {
     if (!Array.isArray(raw)) return
     // Lower-cased: a remote URL's owner and name can differ in case from GitHub's.
     this.linked = new Set(raw.filter((k): k is string => typeof k === 'string' && k.length <= 400).map((k) => k.toLowerCase()))
+    this.linkedReceived = true
+    // The first list may unblock a check that was waiting for it.
+    this.fireQueued()
   }
 
   windowReady(): void {
@@ -277,7 +295,7 @@ export class IssueWatcher {
     }
     this.checkedAt.set(projectId, this.deps.now())
     try {
-      const scan = await this.deps.listIssues(root)
+      const scan = await this.deps.listIssues(root, project.label)
       this.setScan(projectId, scan.state === 'ok' ? { state: 'ok', repo: scan.repo, checkedAt: this.deps.now() } : scan)
       if (scan.state !== 'ok') return
       await this.consider(project, scan.repo, scan.issues)
@@ -289,6 +307,8 @@ export class IssueWatcher {
   }
 
   private async consider(project: IssueWatchProjectSettings, repo: GitHubRepo, issues: readonly DiscoveredIssue[]): Promise<void> {
+    // Without the window's first list of worked-on issues a claim could open a second session for one.
+    if (!this.pageReady || !this.linkedReceived) return
     const viewer = await this.deps.viewer()
     const enabledAt = project.enabledAt
     if (enabledAt === null) return
@@ -299,10 +319,13 @@ export class IssueWatcher {
       if (this.data.issues.some((r) => r.key === key) || this.linked.has(key.toLowerCase())) continue
       const mine = viewer !== null && issue.assignees.some((a) => a.toLowerCase() === viewer)
       if (issue.assignees.length > 0 && !mine) continue
+      // Assigned to the viewer but no record: Wavi claimed it before its record was lost, or someone handed it over.
+      // A key that fell out of the file must not be claimed again (PRD F26: 同一个 issue 只领一次).
+      if (mine) continue
       // Older than the switch and without the label: nothing can make it new enough (no gh call needed).
       if (issue.createdAt <= enabledAt && !issue.labels.includes(project.label)) continue
       const authorCanWrite = await this.deps.canWrite(repo, issue.author)
-      const labelAt = needsLabelActor(issue, project, authorCanWrite) ? await this.deps.labelAt(repo, issue.number, project.label) : null
+      const labelAt = needsLabelActor(issue, project, authorCanWrite) ? await this.deps.labelAt(repo, issue.number, project.label, issue.updatedAt) : null
       const decision = claimDecision({
         issue,
         settings: project,
@@ -324,7 +347,14 @@ export class IssueWatcher {
     )
     for (const record of awaiting) {
       const open = await this.deps.issueOpen(repo, record.number)
-      if (open === false) this.move(record, 'dropped', { reason: pick(M).issueClosed })
+      if (open !== false) continue
+      // The issue closes when the push lands, so a closed issue with the branch already in the base was merged, not lost.
+      if (await this.deps.alreadyMerged(record)) {
+        this.move(record, 'merged')
+        continue
+      }
+      const next = transition(record, 'dropped', { reason: pick(M).issueClosed })
+      if (next) this.replace(record.key, { ...next, droppedBy: 'issue-closed' })
     }
   }
 
@@ -332,6 +362,8 @@ export class IssueWatcher {
   private async claim(project: IssueWatchProjectSettings, repo: GitHubRepo, issue: DiscoveredIssue, authorCanWrite: boolean): Promise<void> {
     const now = this.deps.now()
     const key = issueKey(repoArg(repo), issue.number)
+    // Two projects on the same repository (or two checks) can reach here with the same issue: only one claims it.
+    if (this.data.issues.some((r) => r.key === key)) return
     const record: IssueRecord = {
       key,
       projectId: project.projectId,
@@ -346,7 +378,7 @@ export class IssueWatcher {
       rounds: 0,
       authorCanWrite
     }
-    this.commit({ ...this.data, issues: [record, ...this.data.issues].slice(0, MAX_ISSUES) })
+    this.commit({ ...this.data, issues: trimRecords([record, ...this.data.issues]) })
     let note: string | null = null
     try {
       note = await this.deps.claim(repo, issue.number)
@@ -397,7 +429,7 @@ export class IssueWatcher {
     switch (report.type) {
       case 'opened': {
         this.handed.delete(record.key)
-        this.move(record, 'working', { sessionId: report.sessionId })
+        this.move(record, 'working', { sessionId: report.sessionId, ...(report.worktree ? { worktree: report.worktree } : {}) })
         return
       }
       case 'awaiting': {
@@ -408,7 +440,20 @@ export class IssueWatcher {
         // The acceptance that follows moves it to 验收中; until it runs the issue is still 修复中.
         return
       }
+      case 'fix-sent': {
+        this.replace(record.key, { fixSentAt: this.deps.now() })
+        return
+      }
+      case 'approved': {
+        this.replace(record.key, { approval: { merge: report.merge, commits: report.commits, review: report.review, at: this.deps.now() } })
+        return
+      }
       case 'merged': {
+        // After the issue was seen closed (a push the user made by hand, or a poll that came first), 已合并 still wins.
+        if (record.state === 'dropped' && record.droppedBy === 'issue-closed') {
+          this.replace(record.key, { state: 'merged' })
+          return
+        }
         this.move(record, 'merged')
         return
       }
@@ -438,7 +483,9 @@ export class IssueWatcher {
     if (record.state !== 'working' && record.state !== 'fixing') return { ok: false, message: pick(M).notWorking }
     const command = project.accept?.trim()
     if (!command) return { ok: true, next: 'none' }
-    if (this.deps.rootOf(record.projectId) !== request.root || !this.deps.workspaceOk(record.projectId, request.root, request.worktree)) {
+    // The worktree stored when the session opened: a later report cannot point the command somewhere else.
+    const worktree = record.worktree ?? request.worktree
+    if (this.deps.rootOf(record.projectId) !== request.root || !this.deps.workspaceOk(record.projectId, request.root, worktree)) {
       return { ok: false, message: pick(M).worktreeGone }
     }
     const running = transition(record, 'accepting')
@@ -447,7 +494,7 @@ export class IssueWatcher {
     this.accepting.add(record.key)
     let run: AcceptanceRun
     try {
-      run = await this.deps.runAcceptance(record.key, request.worktree, command, this.deps.acceptTimeoutMs?.() ?? ACCEPT_TIMEOUT_MS)
+      run = await this.deps.runAcceptance(record.key, worktree, command, this.deps.acceptTimeoutMs?.() ?? ACCEPT_TIMEOUT_MS)
     } catch (error) {
       this.replace(record.key, { state: record.state })
       return { ok: false, message: pick(M).acceptCrashed(error instanceof Error ? error.message : String(error)) }

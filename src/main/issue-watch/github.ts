@@ -49,6 +49,8 @@ const ISSUE_LIMIT = 100
 /** A write permission is kept this long per user and repository (PRD F26). */
 export const PERMISSION_TTL_MS = 60 * 60 * 1000
 const permissionCache = new Map<string, { canWrite: boolean; at: number }>()
+/** The label's actor per issue and label, valid while the issue's `updatedAt` is unchanged (it changes with a label). */
+const labelCache = new Map<string, { updatedAt: number; at: number | null }>()
 
 /** gh's words for a failed call, after noting a rate limit (every later gh call then waits, as F16's do). */
 function failure(ran: { code: number; stdout: string; stderr: string }): string {
@@ -89,30 +91,44 @@ async function repoOf(root: string): Promise<{ repo: GitHubRepo } | { scan: Proj
   return where ? { repo: where.repo } : { scan: { state: 'not-github' } }
 }
 
-/** `gh issue list` for one project: every open issue, newest first as gh sorted them. */
-export async function listIssues(root: string): Promise<ProjectScan> {
+/**
+ * `gh issue list` for one project: every open issue, newest first as gh sorted them. A second list asks for the labelled
+ * ones, so an issue a member labelled after the switch is seen even when the repository has more open issues than the
+ * first list holds; the two are merged by number.
+ */
+export async function listIssues(root: string, label: string): Promise<ProjectScan> {
   const found = await repoOf(root)
   if ('scan' in found) return found.scan
   const { repo } = found
   const wait = paused()
   if (wait) return { state: 'error', message: wait }
-  const ran = await gh([
+  const args = (filter: string[]): string[] => [
     'issue',
     'list',
     `--repo=${repoArg(repo)}`,
     '--state=open',
     `--limit=${ISSUE_LIMIT}`,
-    '--json=number,title,url,author,labels,assignees,createdAt,updatedAt'
-  ])
-  if (ran.code !== 0) return { state: 'error', message: failure(ran) }
+    '--json=number,title,url,author,labels,assignees,createdAt,updatedAt',
+    ...filter
+  ]
+  const [all, labelled] = await Promise.all([gh(args([])), label.trim() ? gh(args([`--label=${label.trim()}`])) : Promise.resolve(null)])
+  if (all.code !== 0) return { state: 'error', message: failure(all) }
   let json: unknown
   try {
-    json = JSON.parse(ran.stdout) as unknown
+    json = JSON.parse(all.stdout) as unknown
   } catch {
     return { state: 'error', message: pick(M).noJson }
   }
+  if (!Array.isArray(json)) return { state: 'error', message: pick(M).unreadable }
   const issues = parseDiscoveredIssues(json)
-  if (issues.length === 0 && !Array.isArray(json)) return { state: 'error', message: pick(M).unreadable }
+  if (labelled?.code === 0) {
+    try {
+      const seen = new Set(issues.map((i) => i.number))
+      for (const issue of parseDiscoveredIssues(JSON.parse(labelled.stdout) as unknown)) if (!seen.has(issue.number)) issues.push(issue)
+    } catch {
+      // The first list stands; the labelled one is looked at again on the next check.
+    }
+  }
   return { state: 'ok', repo, issues }
 }
 
@@ -150,7 +166,17 @@ export async function canWrite(repo: GitHubRepo, login: string): Promise<boolean
  * write permission, or null. The labels on the issue itself say nothing about who put them there (an issue-form template
  * adds one for a read-only author), so the timeline decides (PRD F26).
  */
-export async function labelActorAt(repo: GitHubRepo, number: number, label: string): Promise<number | null> {
+export async function labelActorAt(repo: GitHubRepo, number: number, label: string, updatedAt: number): Promise<number | null> {
+  const key = `${repoArg(repo).toLowerCase()}#${number}\n${label}`
+  const hit = labelCache.get(key)
+  if (hit && hit.updatedAt === updatedAt) return hit.at
+  const at = await readLabelActor(repo, number, label)
+  // Cached with the issue's updatedAt: a new label (or any change) makes the next check ask again.
+  labelCache.set(key, { updatedAt, at })
+  return at
+}
+
+async function readLabelActor(repo: GitHubRepo, number: number, label: string): Promise<number | null> {
   if (paused()) return null
   const ran = await gh(['api', `repos/${repo.owner}/${repo.name}/issues/${number}/timeline`, '--paginate', '--slurp', ...hostFlag(repo)])
   if (ran.code !== 0) {
