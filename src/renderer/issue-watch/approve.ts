@@ -22,8 +22,7 @@ const M = defineMessages({
     notGit: '读不到改动',
     checking: '还在检查这个 worktree',
     mergeStopped: '合并停在合入链路里',
-    pushStopped: '合并好了，推送停在合入链路里',
-    merged: '已合并并推送'
+    pushStopped: '合并好了，推送停在合入链路里'
   },
   en: {
     projectGone: 'This worktree is not in the workspace',
@@ -31,8 +30,7 @@ const M = defineMessages({
     notGit: "Couldn't read the changes",
     checking: 'Still checking this worktree',
     mergeStopped: 'The merge stopped in the chain',
-    pushStopped: 'Merged, but the push stopped in the chain',
-    merged: 'Merged and pushed'
+    pushStopped: 'Merged, but the push stopped in the chain'
   }
 })
 
@@ -122,6 +120,6 @@ export async function approveIssue(record: IssueRecord, worktreePath: string, se
   await runChainCommand(path, 'push-base', sessionId)
   if ((await pushed) !== 'done') return fail(pick(M).pushStopped)
   await window.tr.issueWatch.report({ key: record.key, type: 'merged' }).catch(() => {})
-  setPrNotice(path, { tone: 'muted', text: pick(M).merged })
+  // No notice: the three steps say what happened (Figma 102B4 keeps only them and 归档).
   return { ok: true }
 }

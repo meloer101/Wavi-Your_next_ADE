@@ -4,12 +4,11 @@
 // it is the exit zone's primary while the issue waits (Figma 102B3 / 102B4). A claim that could not assign or add 👀 says
 // so on the meta line.
 import { useState } from 'react'
-import { AlertCircle, ChevronDown, ChevronRight, CircleCheck, ExternalLink } from '../ui/icons'
-import { issueStateLabel, type IssueRecord } from '@shared/issue-watch'
+import { AlertCircle, ChevronDown, ChevronRight, CircleCheck, CircleDot, ExternalLink } from '../ui/icons'
+import { issueStateLabel } from '@shared/issue-watch'
 import { defineMessages } from '@shared/i18n'
-import type { SessionId, SessionStatus } from '@shared/types'
+import type { SessionId } from '@shared/types'
 import { useMessages } from '../ui/i18n'
-import { StatusGlyph } from '../ui/StatusGlyph'
 import { formatElapsed } from '../sidebar/format-elapsed'
 import { useNow } from '../schedules/store'
 import { useWorkspace } from '../state/workspace'
@@ -47,16 +46,6 @@ const M = defineMessages({
   }
 })
 
-/** The glyph for a record's state: the same shapes a session's status uses. */
-const GLYPH: Readonly<Record<Exclude<IssueRecord['state'], 'dropped'>, SessionStatus>> = {
-  queued: 'idle',
-  working: 'running',
-  accepting: 'running',
-  fixing: 'running',
-  awaiting: 'done_unread',
-  merged: 'idle'
-}
-
 const openOnGitHub = (url: string): void => {
   if (/^https:\/\//i.test(url)) window.open(url, '_blank')
 }
@@ -75,7 +64,8 @@ export function IssueReport({ sessionId }: { sessionId: SessionId | null }) {
   return (
     <section className={styles.report} data-testid="issue-report" data-state={record.state} aria-label={`#${record.number} ${stateWord}`}>
       <div className={styles.head}>
-        <StatusGlyph status={GLYPH[record.state]} />
+        {/* The issue's own state (Figma 102B1 / 102B4): open, or closed once the merge closed it — never the acceptance's. */}
+        {record.state === 'merged' ? <CircleCheck size={16} strokeWidth={1.75} aria-hidden className={styles.issueGlyph} /> : <CircleDot size={16} strokeWidth={1.75} aria-hidden className={styles.issueGlyph} />}
         <span className={styles.number}>#{record.number}</span>
         <span className={styles.title}>{record.title}</span>
         <span className={styles.spacer} />

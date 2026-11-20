@@ -18,6 +18,11 @@
   min-height: 22px;
 }
 
+.issueGlyph {
+  flex: none;
+  color: var(--text-secondary);
+}
+
 .number {
   flex: none;
   font: var(--text-mono-s-medium);
@@ -141,7 +146,8 @@
 .approval {
   display: flex;
   flex-direction: column;
-  margin: 0 var(--space-6) var(--space-6);
+  margin: 0 var(--space-6);
+  padding: var(--space-8) 0;
   gap: var(--space-2);
 }
 
@@ -149,7 +155,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  min-height: 22px;
+  min-height: 26px;
   padding: 0 var(--space-8);
   font: var(--text-caption);
   color: var(--text-secondary);
@@ -171,12 +177,26 @@
   white-space: nowrap;
 }
 
-.closed {
+.approvalFooter {
   display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  margin: var(--space-2) 0 0;
-  padding: 0 var(--space-8) 0 calc(var(--space-8) + 22px);
-  font: var(--text-caption);
-  color: var(--text-secondary);
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+  padding: 0 var(--space-8);
+}
+
+/* 102B4: 归档 below the steps, the only primary left once the issue is closed. */
+.archiveButton {
+  height: 26px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--fill-primary);
+  box-shadow: var(--primary-finish);
+  color: var(--text-inverse);
+  font: var(--text-caption-strong);
+}
+
+.archiveButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }

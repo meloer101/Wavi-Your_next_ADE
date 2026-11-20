@@ -29,7 +29,7 @@ import { Check } from '../ui/icons'
 import { useMessages } from '../ui/i18n'
 import { Segmented } from '../ui/Segmented'
 import { Row, Section, Toggle } from '../settings/controls'
-import { Field, SelectButton } from '../new-session/NewSessionSheet'
+import { SelectButton } from '../new-session/NewSessionSheet'
 import { SheetMenu, type SheetMenuSection } from '../new-session/SheetMenu'
 import { useWorkspace } from '../state/workspace'
 import { useNow } from '../schedules/store'
@@ -263,16 +263,17 @@ export function IssueSettings() {
         const capped = watch && dailyCapReached(watch.issues, watch.settings, project.id, now) ? claimsToday(watch.issues, project.id, now) : null
         return (
           <div key={project.id} className={styles.project} data-testid="issue-watch-project">
-            <Row label={project.name}>
-              <div className={styles.projectEnd}>
-                {scan?.state === 'ok' && <span className={styles.repo}>{m.repo(`${scan.repo.owner}/${scan.repo.name}`)}</span>}
-                {offGitHub ? (
-                  <span className={styles.count}>{m.notGitHub}</span>
-                ) : (
-                  <Toggle label={project.name} checked={projectSettings.enabled} onChange={(enabled) => saveProject(projectSettings, { enabled })} />
-                )}
-              </div>
-            </Row>
+            {/* 102A: the project's name and its repository on the left, the switch alone on the right. */}
+            <div className={styles.projectRow} role="group" aria-label={project.name}>
+              <span className={styles.projectName}>{project.name}</span>
+              {scan?.state === 'ok' && <span className={styles.repo}>{m.repo(`${scan.repo.owner}/${scan.repo.name}`)}</span>}
+              <span className={styles.spacer} />
+              {offGitHub ? (
+                <span className={styles.count}>{m.notGitHub}</span>
+              ) : (
+                <Toggle label={project.name} checked={projectSettings.enabled} onChange={(enabled) => saveProject(projectSettings, { enabled })} />
+              )}
+            </div>
             {reason && <p className={styles.note} data-tone="error">{reason}</p>}
             {capped !== null && <p className={styles.note}>{m.capReached(capped)}</p>}
             {projectSettings.enabled && !offGitHub && (
@@ -304,8 +305,8 @@ export function IssueSettings() {
                     label={m.interface}
                     value={projectSettings.ui}
                     options={[
-                      { value: 'cli', label: m.cli },
-                      { value: 'gui', label: m.gui }
+                      { value: 'gui', label: m.gui },
+                      { value: 'cli', label: m.cli }
                     ]}
                     onChange={(ui) => saveProject(projectSettings, { ui: ui as SessionUi })}
                   />
@@ -346,30 +347,37 @@ export function IssueSettings() {
         )
       })}
 
-      <Field label={m.interval}>
-        <SelectButton
-          label={m.interval}
-          value={m.everyMinutes(settings?.intervalMinutes ?? 5)}
-          expanded={menu?.kind === 'interval'}
-          onClick={(anchor) => toggleMenu('interval', anchor)}
-        />
-      </Field>
-      <Field label={m.concurrent}>
-        <SelectButton
-          label={m.concurrent}
-          value={m.perCount(settings?.concurrent ?? 2)}
-          expanded={menu?.kind === 'concurrent'}
-          onClick={(anchor) => toggleMenu('concurrent', anchor)}
-        />
-      </Field>
-      <Field label={m.daily}>
-        <SelectButton
-          label={m.daily}
-          value={m.perCount(settings?.daily ?? 10)}
-          expanded={menu?.kind === 'daily'}
-          onClick={(anchor) => toggleMenu('daily', anchor)}
-        />
-      </Field>
+      {/* The three bounds: one line each, the select compact and right-aligned (102A). */}
+      <Row label={m.interval}>
+        <span className={styles.compact}>
+          <SelectButton
+            label={m.interval}
+            value={m.everyMinutes(settings?.intervalMinutes ?? 5)}
+            expanded={menu?.kind === 'interval'}
+            onClick={(anchor) => toggleMenu('interval', anchor)}
+          />
+        </span>
+      </Row>
+      <Row label={m.concurrent}>
+        <span className={styles.compact}>
+          <SelectButton
+            label={m.concurrent}
+            value={m.perCount(settings?.concurrent ?? 2)}
+            expanded={menu?.kind === 'concurrent'}
+            onClick={(anchor) => toggleMenu('concurrent', anchor)}
+          />
+        </span>
+      </Row>
+      <Row label={m.daily}>
+        <span className={styles.compact}>
+          <SelectButton
+            label={m.daily}
+            value={m.perCount(settings?.daily ?? 10)}
+            expanded={menu?.kind === 'daily'}
+            onClick={(anchor) => toggleMenu('daily', anchor)}
+          />
+        </span>
+      </Row>
       {error && <p className={styles.error}>{error}</p>}
 
       {menu?.kind === 'agent' && (

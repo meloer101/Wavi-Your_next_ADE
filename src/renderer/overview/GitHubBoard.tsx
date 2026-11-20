@@ -41,7 +41,8 @@ const M = defineMessages({
     noReviews: '没有请你审阅的 PR',
     nothingOpen: '没有打开的 issue 和 PR',
     comments: (n: number) => `${n} 条评论`,
-    enter: '进入会话'
+    enter: '进入会话',
+    toReview: '待审阅'
   },
   en: {
     ghMissing: 'GitHub needs the GitHub CLI: install gh, then run gh auth login in a terminal',
@@ -56,7 +57,8 @@ const M = defineMessages({
     noReviews: 'No PRs waiting for your review',
     nothingOpen: 'No open issues or PRs',
     comments: (n: number) => (n === 1 ? '1 comment' : `${n} comments`),
-    enter: 'Enter session'
+    enter: 'Enter session',
+    toReview: 'To review'
   }
 })
 const SMALL = { size: 14, strokeWidth: 1.75, 'aria-hidden': true } as const
@@ -215,7 +217,7 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
         )}
         {!linked && claimed?.state !== 'queued' && <span className={styles.time}>{item.updatedAt > 0 ? formatElapsed(now - item.updatedAt) : ''}</span>}
       </button>
-      {linked && <LinkedSession session={linked} />}
+      {linked && <LinkedSession session={linked} awaiting={claimed?.state === 'awaiting'} />}
       {/* 自动领取 (PRD F26, Figma 102C): claimed, waiting for a free slot — a hollow glyph and 排队 where the session goes. */}
       {!linked && claimed?.state === 'queued' && (
         <span className={styles.linked} data-testid="github-queued">
@@ -227,14 +229,17 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
   )
 }
 
-/** The session started on this item: its status (glyph and word) and title; a click enters it. */
-function LinkedSession({ session }: { session: Session }) {
+/**
+ * The session started on this item: its status (glyph and word) and title; a click enters it. A 自动领取 issue whose report
+ * waits says 待审阅 — the word 看板 · 进度 gives done_unread — even when the user has already looked at the session (idle).
+ */
+function LinkedSession({ session, awaiting }: { session: Session; awaiting: boolean }) {
   const m = useMessages(M)
   const status = glyphStatus(session)
   return (
     <button type="button" className={styles.linked} onClick={() => enterSession(session.id)} title={m.enter} data-testid="github-linked">
-      <StatusGlyph status={status} />
-      <span>{`${STATUS_LABEL[status]} · ${session.title}`}</span>
+      <StatusGlyph status={awaiting ? 'done_unread' : status} />
+      <span>{`${awaiting ? m.toReview : STATUS_LABEL[status]} · ${session.title}`}</span>
     </button>
   )
 }

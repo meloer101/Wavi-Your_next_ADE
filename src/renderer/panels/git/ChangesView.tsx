@@ -247,6 +247,9 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
   // open, never the local merge sheet past the PR), nothing for another blocked primary; the merge sheet for a worktree
   // with no primary or a stuck one.
   const shortcut = zoneShortcut(chain, idle)
+  // The three steps replace the chain's headline and footer once 批准 started (Figma 102B3 / 102B4).
+  const approvalFlow = issueReport !== undefined && (shipping || issueReport.approval !== undefined || issueReport.state === 'merged')
+  const archiveIssue = (): void => void runChainCommand(worktree.path, 'archive', sessionId)
   const approveShortcut = awaitingApproval && reviewer !== null ? (): void => void approveIssue(issueReport, worktree.path, reviewer) : null
   const shortcutExit =
     approveShortcut ?? (shortcut === null ? null : shortcut === 'nothing' ? () => undefined : () => void runChainCommand(worktree.path, shortcut, sessionId))
@@ -272,7 +275,7 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
       <div className={styles.shipZone}>
         <BaseCiRows worktree={worktree} openIn={sessionId} />
         <PrStatusLine worktree={worktree} onBase={onBase} target={target} openIn={sessionId} ghHint={headline === null} />
-        {headline && <ChainHeadlineRow headline={headline} files={files} />}
+        {headline && !approvalFlow && <ChainHeadlineRow headline={headline} files={files} />}
         {/* While shipping, the change's own facts give way to the Ship block; the PR's stay. */}
         <FactsLine
           risks={shipping ? [] : risks}
@@ -283,13 +286,13 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
         {prStatus && <PrAutomationRow worktreePath={worktree.path} status={prStatus} />}
         {shipping ? (
           issueReport && shipState?.error === null ? (
-            <IssueApproval record={issueReport} run={shipState} />
+            <IssueApproval record={issueReport} run={shipState} onArchive={archiveIssue} />
           ) : (
             <ShipBlock worktree={worktree.path} base={baseName} />
           )
         ) : stopped ? (
           <FixStopFooter scope={stopped.scope} worktreePath={worktree.path} run={stopped.run} agent={fixAgent} note={stopped.note} attempts={stopped.attempts} />
-        ) : (
+        ) : approvalFlow ? null : (
           (count > 0 || !nothing || runnable) && (
             <div className={styles.footer}>
               {count > 0 ? (
@@ -342,8 +345,8 @@ export function ChangesView({ root, git, worktree, layout }: { root: string; git
             </div>
           )
         )}
-        {/* 批准's three steps stay in the exit zone after the runs finished (Figma 102B4). */}
-        {!shipping && issueReport?.approval && <IssueApproval record={issueReport} run={shipState} />}
+        {/* 批准's three steps stay in the exit zone after the runs finished, with 归档 below them (Figma 102B4). */}
+        {!shipping && approvalFlow && issueReport && <IssueApproval record={issueReport} run={shipState} onArchive={archiveIssue} />}
       </div>
     </>
   )
