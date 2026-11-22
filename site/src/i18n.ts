@@ -13,6 +13,8 @@ export type LinkTarget = Section | 'repo' | 'releases' | 'roadmap' | 'license' |
 export type Line = [before: string, em: string, after: string]
 /** A board card: title, age, path, status line, diff and the agent whose mark sits at its right. */
 export interface Card {
+  /** The id the board's loop script moves the card by (PRD v1.227 ②); the same in both languages. */
+  id: string
   title: string
   age: string
   path: string
@@ -85,9 +87,19 @@ const en = {
     now: 'now',
     jump: 'Jump to the next session that needs you',
     columns: ['Needs you', 'Error', 'To review', 'Running', 'Idle'],
+    /** The status line a card takes on when the loop moves it into a column (PRD v1.227 ②); it keeps its own line
+        until it moves. The glyph and the colour come from the column. */
+    cycle: {
+      status: {
+        needs: 'Confirm: push to jacob/refresh',
+        review: 'Done, ready for review',
+        running: 'Running pnpm test'
+      }
+    },
     cards: [
       [
         {
+          id: 'cookie',
           title: 'Cookie session migration',
           age: '3m',
           path: 'acme-web › jacob/session-cookie',
@@ -96,6 +108,7 @@ const en = {
           agent: 'claude'
         },
         {
+          id: 'sidebar',
           title: 'Sidebar status groups',
           age: '1m',
           path: 'terminal-reborn › jacob/sidebar-agg',
@@ -106,6 +119,7 @@ const en = {
       ],
       [
         {
+          id: 'graph',
           title: 'Git graph layout',
           age: '3m',
           path: 'terminal-reborn › jacob/graph-layout',
@@ -116,6 +130,7 @@ const en = {
       ],
       [
         {
+          id: 'mobile',
           title: 'Fix mobile nav jitter',
           age: '2m',
           path: 'acme-web › jacob/mobile-nav-jitter',
@@ -126,6 +141,7 @@ const en = {
       ],
       [
         {
+          id: 'checkout',
           title: 'Checkout performance',
           age: '12m',
           path: 'acme-web › jacob/checkout-perf',
@@ -134,6 +150,7 @@ const en = {
           agent: 'codex'
         },
         {
+          id: 'refresh',
           title: 'Auto-refresh sessions',
           age: '1m',
           path: 'acme-web › jacob/refresh',
@@ -144,6 +161,7 @@ const en = {
       ],
       [
         {
+          id: 'main',
           title: 'main',
           age: '29m',
           path: 'acme-web',
@@ -345,9 +363,19 @@ const zh: Copy = {
     now: '现在',
     jump: '跳到下一个等你处理的会话',
     columns: ['等你处理', '出错', '待审阅', '运行中', '空闲'],
+    /** The status line a card takes on when the loop moves it into a column (PRD v1.227 ②); it keeps its own line
+        until it moves. The glyph and the colour come from the column. */
+    cycle: {
+      status: {
+        needs: '等你确认：推送到 jacob/refresh',
+        review: '已完成，等你审阅',
+        running: '运行 pnpm test'
+      }
+    },
     cards: [
       [
         {
+          id: 'cookie',
           title: 'Cookie 会话迁移',
           age: '3m',
           path: 'acme-web › jacob/session-cookie',
@@ -356,6 +384,7 @@ const zh: Copy = {
           agent: 'claude'
         },
         {
+          id: 'sidebar',
           title: '侧边栏状态聚合',
           age: '1m',
           path: 'terminal-reborn › jacob/sidebar-agg',
@@ -366,6 +395,7 @@ const zh: Copy = {
       ],
       [
         {
+          id: 'graph',
           title: 'Git 图谱布局算法',
           age: '3m',
           path: 'terminal-reborn › jacob/graph-layout',
@@ -376,6 +406,7 @@ const zh: Copy = {
       ],
       [
         {
+          id: 'mobile',
           title: '修复移动端导航抖动',
           age: '2m',
           path: 'acme-web › jacob/mobile-nav-jitter',
@@ -386,6 +417,7 @@ const zh: Copy = {
       ],
       [
         {
+          id: 'checkout',
           title: '结算页性能优化',
           age: '12m',
           path: 'acme-web › jacob/checkout-perf',
@@ -394,6 +426,7 @@ const zh: Copy = {
           agent: 'codex'
         },
         {
+          id: 'refresh',
           title: '会话过期自动刷新',
           age: '1m',
           path: 'acme-web › jacob/refresh',
@@ -404,6 +437,7 @@ const zh: Copy = {
       ],
       [
         {
+          id: 'main',
           title: 'main',
           age: '29m',
           path: 'acme-web',

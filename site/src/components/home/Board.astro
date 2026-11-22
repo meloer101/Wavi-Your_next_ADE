@@ -1,7 +1,12 @@
 ---
 /* 02 Board: the five columns drawn on the page, only "needs you" in brand, and a macOS notification for the first of
    them. The head, board and facts sit on ink. In the body, the ⌘J keycap is a button: each press rings the next
-   needs-you card. */
+   needs-you card.
+
+   The board also plays a fixed loop while it is in the viewport (PRD v1.227 ②): four hand-offs, then the first picture
+   again, one step every STEP_MS. board-cycle.ts is the script as data; the module script below applies a step to the
+   DOM and FLIPs the cards that moved. Every status line the loop can write comes from i18n (data-status-*), and the
+   glyphs are cloned from the <template>s at the foot of the board, so the markup stays the server's. */
 import { copy, type Lang } from '../../i18n'
 import AgentMark from './AgentMark.astro'
 import BoardGlyph, { type GlyphKind } from './BoardGlyph.astro'
@@ -35,12 +40,23 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
     <aside class="notice" data-reveal data-board-notice>
       <span class="notice-tile"><Logo /></span>
       <div class="notice-text">
-        <p class="notice-top"><span>{notice.title}</span><span class="notice-time">{t.board.now}</span></p>
-        <p class="notice-body">{notice.status}</p>
+        <p class="notice-top">
+          <span data-notice-title>{notice.title}</span>
+          <span class="notice-time">{t.board.now}</span>
+        </p>
+        <p class="notice-body" data-notice-status>{notice.status}</p>
       </div>
     </aside>
 
-    <div class="board" data-reveal data-container data-board>
+    <div
+      class="board"
+      data-reveal
+      data-container
+      data-board
+      data-status-needs={t.board.cycle.status.needs}
+      data-status-review={t.board.cycle.status.review}
+      data-status-running={t.board.cycle.status.running}
+    >
       {t.board.columns.map((name, i) => (
         <section class:list={['col', i === 0 && 'col-needs']}>
           <p class="col-head">
@@ -50,14 +66,14 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
           </p>
           <div class="col-cards">
             {t.board.cards[i].map((card, j) => (
-              <article class:list={['card', i === 0 && 'card-needs']} style={`--i:${at(i) + j}`}>
+              <article class:list={['card', i === 0 && 'card-needs']} style={`--i:${at(i) + j}`} data-card={card.id}>
                 <p class="card-top">
-                  <BoardGlyph kind={kinds[i]} />
+                  <span class="card-glyph" data-card-glyph><BoardGlyph kind={kinds[i]} /></span>
                   <span class="card-title">{card.title}</span>
                   <span class="card-age">{card.age}</span>
                 </p>
                 <p class="card-path">{card.path}</p>
-                <p class="card-status">{card.status}</p>
+                <p class="card-status" data-card-status>{card.status}</p>
                 <p class="card-foot">
                   <span class="card-diff">{card.diff}</span>
                   <AgentMark id={card.agent} />
@@ -66,6 +82,11 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
             ))}
           </div>
         </section>
+      ))}
+      {kinds.map((kind) => (
+        <template data-glyph={kind}>
+          <BoardGlyph kind={kind} />
+        </template>
       ))}
     </div>
 
@@ -79,3 +100,161 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
     </ul>
   </div>
 </section>
+
+<script>
+  import { COLUMNS, STEP_COUNT, STEP_MS, stateAt } from './board-cycle'
+  import type { Status } from './board-cycle'
+
+  // The board's loop (PRD v1.227 ②). Everything here is gated on there being a board and on motion being allowed:
+  // with reduced motion the server's picture stays as it is, and without JavaScript none of this runs.
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+  function run(board: HTMLElement): void {
+    const stacks = [...board.querySelectorAll<HTMLElement>('.col-cards')]
+    const counts = [...board.querySelectorAll<HTMLElement>('.col-count')]
+    const cards = new Map<string, HTMLElement>()
+    for (const el of board.querySelectorAll<HTMLElement>('.card[data-card]')) cards.set(el.dataset.card!, el)
+
+    const glyphs = new Map<string, HTMLTemplateElement>()
+    for (const tpl of board.querySelectorAll<HTMLTemplateElement>('template[data-glyph]')) {
+      glyphs.set(tpl.dataset.glyph!, tpl)
+    }
+    const status: Partial<Record<Status, string>> = {
+      needs: board.dataset.statusNeeds,
+      review: board.dataset.statusReview,
+      running: board.dataset.statusRunning
+    }
+
+    // What the server drew: the layout, each card's own status line, and the column it started in.
+    const initial = stacks.map((stack) =>
+      [...stack.querySelectorAll<HTMLElement>('.card[data-card]')].map((el) => el.dataset.card!)
+    )
+    const own = new Map<string, { text: string; kind: Status }>()
+    initial.forEach((ids, column) => {
+      for (const id of ids) {
+        const text = cards.get(id)!.querySelector<HTMLElement>('[data-card-status]')!
+        own.set(id, { text: text.textContent ?? '', kind: COLUMNS[column] })
+      }
+    })
+
+    /** The line a card shows in a column: its own until it moves, then the line the copy gives that status. */
+    const line = (id: string, kind: Status): string => {
+      const mine = own.get(id)!
+      return kind === mine.kind ? mine.text : (status[kind] ?? mine.text)
+    }
+
+    const setCard = (card: HTMLElement, id: string, column: number): void => {
+      const kind = COLUMNS[column]
+      card.classList.toggle('card-needs', column === 0)
+      const text = card.querySelector<HTMLElement>('[data-card-status]')!
+      text.textContent = line(id, kind)
+      const slot = card.querySelector<HTMLElement>('[data-card-glyph]')!
+      if (slot.dataset.glyph === kind) return
+      const template = glyphs.get(kind)
+      if (!template) return
+      slot.dataset.glyph = kind
+      slot.replaceChildren(template.content.cloneNode(true))
+    }
+
+    const notice = board.parentElement?.querySelector<HTMLElement>('[data-board-notice]')
+    const noticeTitle = notice?.querySelector<HTMLElement>('[data-notice-title]')
+    const noticeStatus = notice?.querySelector<HTMLElement>('[data-notice-status]')
+
+    const apply = (step: number, settle = true): void => {
+      const state = stateAt(step, initial)
+      state.columns.forEach((ids, column) => {
+        const stack = stacks[column]
+        for (const id of ids) {
+          const card = cards.get(id)!
+          stack.append(card)
+          setCard(card, id, column)
+        }
+        counts[column].textContent = String(ids.length)
+      })
+      if (!settle) return
+      if (noticeTitle) noticeTitle.textContent = cards.get(state.notice.card)!.querySelector('.card-title')!.textContent
+      if (noticeStatus) noticeStatus.textContent = line(state.notice.card, state.notice.kind)
+      if (state.notice.drop && notice) {
+        // Drop it again: the class has to leave the element for one frame, or the animation does not restart.
+        notice.classList.remove('drop')
+        void notice.offsetWidth
+        notice.classList.add('drop')
+      }
+    }
+
+    /** Every card's box before the DOM moves. */
+    const measure = (): Map<string, DOMRect> =>
+      new Map([...cards].map(([id, el]) => [id, el.getBoundingClientRect()]))
+
+    const easing = getComputedStyle(document.documentElement).getPropertyValue('--ease-in-out').trim()
+    /** FLIP: after the nodes moved, slide each one back to where it was and let it travel to its new place. */
+    const flip = (before: Map<string, DOMRect>): void => {
+      for (const [id, el] of cards) {
+        const from = before.get(id)
+        if (!from) continue
+        const to = el.getBoundingClientRect()
+        const x = from.left - to.left
+        const y = from.top - to.top
+        if (!x && !y) continue
+        el.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'none' }], {
+          duration: 420,
+          easing: easing || 'cubic-bezier(0.77, 0, 0.175, 1)'
+        })
+      }
+    }
+
+    // Reorder first, then measure: a column that gains a card is as tall as it can get, and the board keeps that height
+    // for the whole loop so nothing below it moves. (Cards do not change the page while this runs — one task.)
+    let tallest = 0
+    for (let step = 0; step < STEP_COUNT; step++) {
+      apply(step, false)
+      for (const stack of stacks) tallest = Math.max(tallest, stack.scrollHeight)
+    }
+    for (const stack of stacks) stack.style.minHeight = `${tallest}px`
+    apply(0)
+
+    let step = 0
+    let timer: number | undefined
+    const tick = (): void => {
+      const before = measure()
+      step = (step + 1) % STEP_COUNT
+      apply(step)
+      flip(before)
+    }
+    const start = (): void => {
+      if (timer === undefined && !document.hidden && !reduce.matches) timer = window.setInterval(tick, STEP_MS)
+    }
+    const stop = (): void => {
+      if (timer !== undefined) window.clearInterval(timer)
+      timer = undefined
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stop()
+      else if (board.classList.contains('in-view')) start()
+    })
+
+    // In view: loop; out of view: hold. The observer is never disconnected, so scrolling back resumes in place.
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          board.classList.toggle('in-view', entry.isIntersecting)
+          if (entry.isIntersecting) start()
+          else stop()
+        }
+      },
+      { threshold: 0.2 }
+    )
+    io.observe(board)
+
+    // Motion switched off while the page is open: back to the server's picture, and stay there.
+    reduce.addEventListener('change', () => {
+      if (!reduce.matches) return
+      stop()
+      for (const stack of stacks) stack.style.minHeight = ''
+      apply(0)
+    })
+  }
+
+  const board = document.querySelector<HTMLElement>('[data-board]')
+  if (board && !reduce.matches) run(board)
+</script>
