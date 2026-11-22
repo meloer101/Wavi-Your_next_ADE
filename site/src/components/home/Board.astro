@@ -70,14 +70,10 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
                 <p class="card-top">
                   <span class="card-glyph" data-card-glyph><BoardGlyph kind={kinds[i]} /></span>
                   <span class="card-title">{card.title}</span>
-                  <span class="card-age">{card.age}</span>
+                  <AgentMark id={card.agent} />
                 </p>
                 <p class="card-path">{card.path}</p>
                 <p class="card-status" data-card-status>{card.status}</p>
-                <p class="card-foot">
-                  <span class="card-diff">{card.diff}</span>
-                  <AgentMark id={card.agent} />
-                </p>
               </article>
             ))}
           </div>

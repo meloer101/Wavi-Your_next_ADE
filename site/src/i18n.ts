@@ -11,16 +11,13 @@ export type LinkTarget = Section | 'repo' | 'releases' | 'roadmap' | 'license' |
 
 /** A headline line: text, the one emphasised word drawn in the serif italic, then the rest. */
 export type Line = [before: string, em: string, after: string]
-/** A board card: title, age, path, status line, diff and the agent whose mark sits at its right. */
+/** A board card: title, path and status line, with the agent whose mark closes the top line. */
 export interface Card {
   /** The id the board's loop script moves the card by (PRD v1.227 ②); the same in both languages. */
   id: string
   title: string
-  age: string
   path: string
   status: string
-  /** Empty on the idle card, which has no changes. */
-  diff: string
   agent: 'claude' | 'codex' | 'gemini'
 }
 
@@ -101,19 +98,15 @@ const en = {
         {
           id: 'cookie',
           title: 'Cookie session migration',
-          age: '3m',
           path: 'acme-web › jacob/session-cookie',
           status: 'Confirm: run pnpm prisma migrate dev',
-          diff: '+42 −18',
           agent: 'claude'
         },
         {
           id: 'sidebar',
           title: 'Sidebar status groups',
-          age: '1m',
           path: 'terminal-reborn › jacob/sidebar-agg',
           status: 'Choose: which layer keeps the state?',
-          diff: '+61 −4',
           agent: 'codex'
         }
       ],
@@ -121,10 +114,8 @@ const en = {
         {
           id: 'graph',
           title: 'Git graph layout',
-          age: '3m',
           path: 'terminal-reborn › jacob/graph-layout',
           status: 'pnpm build failed · 2 errors',
-          diff: '+210 −12',
           agent: 'claude'
         }
       ],
@@ -132,10 +123,8 @@ const en = {
         {
           id: 'mobile',
           title: 'Fix mobile nav jitter',
-          age: '2m',
           path: 'acme-web › jacob/mobile-nav-jitter',
           status: 'Done, ready for review',
-          diff: '+23 −9',
           agent: 'claude'
         }
       ],
@@ -143,19 +132,15 @@ const en = {
         {
           id: 'checkout',
           title: 'Checkout performance',
-          age: '12m',
           path: 'acme-web › jacob/checkout-perf',
           status: 'Running pnpm test checkout',
-          diff: '+128 −35',
           agent: 'codex'
         },
         {
           id: 'refresh',
           title: 'Auto-refresh sessions',
-          age: '1m',
           path: 'acme-web › jacob/refresh',
           status: 'Reading src/auth/refresh.ts',
-          diff: '+36 −12',
           agent: 'gemini'
         }
       ],
@@ -163,10 +148,8 @@ const en = {
         {
           id: 'main',
           title: 'main',
-          age: '29m',
           path: 'acme-web',
           status: 'Terminal · ~/code/acme-web',
-          diff: '',
           agent: 'claude'
         }
       ]
@@ -377,19 +360,15 @@ const zh: Copy = {
         {
           id: 'cookie',
           title: 'Cookie 会话迁移',
-          age: '3m',
           path: 'acme-web › jacob/session-cookie',
           status: '等你确认：运行 pnpm prisma migrate dev',
-          diff: '+42 −18',
           agent: 'claude'
         },
         {
           id: 'sidebar',
           title: '侧边栏状态聚合',
-          age: '1m',
           path: 'terminal-reborn › jacob/sidebar-agg',
           status: '等你选择：状态存在哪一层？',
-          diff: '+61 −4',
           agent: 'codex'
         }
       ],
@@ -397,10 +376,8 @@ const zh: Copy = {
         {
           id: 'graph',
           title: 'Git 图谱布局算法',
-          age: '3m',
           path: 'terminal-reborn › jacob/graph-layout',
           status: 'pnpm build 失败 · 2 个错误',
-          diff: '+210 −12',
           agent: 'claude'
         }
       ],
@@ -408,10 +385,8 @@ const zh: Copy = {
         {
           id: 'mobile',
           title: '修复移动端导航抖动',
-          age: '2m',
           path: 'acme-web › jacob/mobile-nav-jitter',
           status: '已完成，等你审阅',
-          diff: '+23 −9',
           agent: 'claude'
         }
       ],
@@ -419,19 +394,15 @@ const zh: Copy = {
         {
           id: 'checkout',
           title: '结算页性能优化',
-          age: '12m',
           path: 'acme-web › jacob/checkout-perf',
           status: '运行 pnpm test checkout',
-          diff: '+128 −35',
           agent: 'codex'
         },
         {
           id: 'refresh',
           title: '会话过期自动刷新',
-          age: '1m',
           path: 'acme-web › jacob/refresh',
           status: '读取 src/auth/refresh.ts',
-          diff: '+36 −12',
           agent: 'gemini'
         }
       ],
@@ -439,10 +410,8 @@ const zh: Copy = {
         {
           id: 'main',
           title: 'main',
-          age: '29m',
           path: 'acme-web',
           status: '终端 · ~/code/acme-web',
-          diff: '',
           agent: 'claude'
         }
       ]

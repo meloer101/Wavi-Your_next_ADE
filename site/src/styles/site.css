@@ -690,10 +690,10 @@ button.keycap {
   white-space: nowrap;
   font: 500 14px/20px var(--sans);
 }
-.card-age {
-  flex: none;
-  font: 400 11px/20px var(--mono);
-  color: var(--text-ink-3);
+.card-top .mark {
+  width: 12px;
+  height: 12px;
+  color: var(--white);
 }
 .card-path {
   overflow: hidden;
@@ -710,31 +710,10 @@ button.keycap {
   /* The glyph's slot in a card: the span itself draws nothing, its child is the flex item. */
   display: contents;
 }
-.card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 4px;
-}
-.card-diff {
-  font: 400 11px/16px var(--mono);
-  color: var(--text-ink-3);
-}
-.card-foot .mark {
-  width: 12px;
-  height: 12px;
-  color: var(--white);
-}
-.card-needs .card-age {
-  color: var(--white);
-}
 .card-needs .card-path {
   color: var(--white);
 }
 .card-needs .card-status {
-  color: var(--white);
-}
-.card-needs .card-diff {
   color: var(--white);
 }
 .facts {
@@ -1338,13 +1317,11 @@ details[open] .faq-mark span:last-child {
   color: var(--white);
 }
 
-/* Figures line up: every mono span and the counts and ages use tabular numerals. This is after every `font`
+/* Figures line up: every mono span and the counts use tabular numerals. This is after every `font`
    shorthand, which would otherwise reset it. */
 .mono,
 .col-count,
-.card-age,
 .card-path,
-.card-diff,
 .step-n,
 .frag-field {
   font-variant-numeric: tabular-nums;
