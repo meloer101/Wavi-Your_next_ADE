@@ -5,6 +5,7 @@ import { isCliAgent, type CliAgent } from './agents'
 import type { PendingPrompt } from './agent-events'
 import { parseGitHubLink, type BoardScope, type GitHubItemKind } from './github-board'
 import { GUI_MODEL_ID } from './gui-chat'
+import { isStartAt } from './new-session'
 import { isSettingKind, parseSessionSettings, settingValue, type SessionSettings, type SettingKind } from './session-settings'
 import type { ChatItem } from './transcript-chat'
 import type { CheckKind, KindStatus } from './turn-checks'
@@ -414,7 +415,9 @@ function task(raw: unknown): RemoteTask | null | undefined {
   const link = parseGitHubLink(t?.link)
   const title = cleanText(t?.title, 300)
   const startAt = t?.startAt === undefined ? undefined : cleanText(t.startAt, 500)
-  if (!t || !link || !title || startAt === null) return null
+  // Where a PR's worktree starts is main's own finding (prStart): a fetched remote-tracking branch, or a fork's PR
+  // head under refs/wavi/pull/. Anything else from the phone is refused, as worktree creation would refuse it.
+  if (!t || !link || !title || startAt === null || (startAt !== undefined && !isStartAt(startAt))) return null
   return { link, title, ...(startAt ? { startAt } : {}) }
 }
 

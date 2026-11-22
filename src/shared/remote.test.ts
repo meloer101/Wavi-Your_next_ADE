@@ -133,9 +133,12 @@ describe('parsePhoneRequest', () => {
       prompt: '修好它',
       task
     })
-    // A PR's head travels with the task: the worktree starts there.
+    // A PR's head travels with the task: only the two refs prStart fetches are taken.
     expect(parsePhoneRequest({ id: 6, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, startAt: 'refs/remotes/origin/jacoy/vite-7' } })).toMatchObject({
       task: { startAt: 'refs/remotes/origin/jacoy/vite-7' }
+    })
+    expect(parsePhoneRequest({ id: 6, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, startAt: 'refs/wavi/pull/140' } })).toMatchObject({
+      task: { startAt: 'refs/wavi/pull/140' }
     })
     // Off: an unknown scope, a number gh could not take, a link that is not one.
     expect(parsePhoneRequest({ id: 1, type: 'github-board', scope: 'everything' })).toBeNull()
@@ -146,6 +149,10 @@ describe('parsePhoneRequest', () => {
     expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, link: { repo: 'acme/web', kind: 'issue', number: 139 } } })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, title: 42 } })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, startAt: 'refs/a\0b' } })).toBeNull()
+    // A ref the phone made up: a local branch, a bare remote name, a ref that is not a valid ref name, a bad PR number.
+    for (const startAt of ['refs/heads/main', 'origin/main', 'refs/remotes/origin/../x', 'refs/remotes/origin', 'refs/wavi/pull/0', 'refs/wavi/pull/x', 'refs/remotes/origin/feat/x extra']) {
+      expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, startAt } }), startAt).toBeNull()
+    }
   })
 
   it('takes a photo-only send', () => {

@@ -51,11 +51,13 @@ test.describe('手机看板 · GitHub', () => {
   const bin = join(root, 'bin')
   const zdot = join(root, 'zdot')
   const project = join(root, 'web')
+  // A second project on GitHub: the answer has one entry per project, in the session list's order.
+  const notes = join(root, 'notes')
   const home = join(root, 'home')
   const profile = join(root, 'profile')
   const argsFile = join(root, 'claude-args.json')
   const agyArgv = join(root, 'agy-argv')
-  for (const dir of [bin, zdot, project, home, profile]) mkdirSync(dir, { recursive: true })
+  for (const dir of [bin, zdot, project, notes, home, profile]) mkdirSync(dir, { recursive: true })
   // The headless Claude the GUI session runs (src/main/gui/fixtures); the fake's chat answers `Hello: <text>`.
   writeFileSync(join(bin, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "${join(FIXTURES, 'fake-claude.mjs')}" "$@"\n`)
   chmodSync(join(bin, 'claude'), 0o755)
@@ -78,12 +80,17 @@ test.describe('手机看板 · GitHub', () => {
 
   test.beforeAll(async () => {
     const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.email=e2e@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd }).toString()
-    writeFileSync(join(project, 'README.md'), '# web\n')
-    git(project, 'init', '-q', '-b', 'main')
-    git(project, 'config', 'user.name', 'Jacob Yu')
-    git(project, 'add', '.')
-    git(project, 'commit', '-q', '-m', 'init')
-    git(project, 'remote', 'add', 'origin', 'https://github.com/acme/web.git')
+    for (const [dir, repo] of [
+      [project, 'web'],
+      [notes, 'notes']
+    ] as const) {
+      writeFileSync(join(dir, 'README.md'), '# r\n')
+      git(dir, 'init', '-q', '-b', 'main')
+      git(dir, 'config', 'user.name', 'Jacob Yu')
+      git(dir, 'add', '.')
+      git(dir, 'commit', '-q', '-m', 'init')
+      git(dir, 'remote', 'add', 'origin', `https://github.com/acme/${repo}.git`)
+    }
 
     const author = (login: string) => ({ login })
     gh.setBoard(
@@ -130,8 +137,14 @@ test.describe('手机看板 · GitHub', () => {
       join(profile, 'workspace.json'),
       JSON.stringify({
         version: 2,
-        projects: [{ id: 'p1', name: 'web', rootPath: project }],
-        worktrees: [{ id: 'w1', projectId: 'p1', branch: 'main', path: project, isMain: true }],
+        projects: [
+          { id: 'p1', name: 'web', rootPath: project },
+          { id: 'p2', name: 'notes', rootPath: notes }
+        ],
+        worktrees: [
+          { id: 'w1', projectId: 'p1', branch: 'main', path: project, isMain: true },
+          { id: 'w2', projectId: 'p2', branch: 'main', path: notes, isMain: true }
+        ],
         sessions: [{ id: 's1', worktreeId: 'w1', kind: 'shell', title: '终端', startedAt: 1, lastActivityAt: 1 }],
         activeSessionId: 's1',
         sidebarCollapsed: false,
@@ -157,7 +170,7 @@ test.describe('手机看板 · GitHub', () => {
     await expect.poll(async () => {
       const answer = await phone.request({ type: 'github-board', scope: 'all' })
       return answer.ok ? (answer.data as { projects?: { project: string }[] }).projects?.map((p) => p.project) : undefined
-    }, LONG).toEqual(['p1'])
+    }, LONG).toEqual(['p1', 'p2'])
   })
 
   test.afterAll(async () => {
@@ -168,11 +181,16 @@ test.describe('手机看板 · GitHub', () => {
   test('the phone gets each project\'s issues and PRs, and one item\'s body and comments', async () => {
     const answer = await phone.request({ type: 'github-board', scope: 'all', force: true }, 30_000)
     expect(answer).toMatchObject({ ok: true, data: { gh: 'ready' } })
-    const board = (answer as { data: BoardAnswer }).data.projects[0]!.board
-    expect(board).toMatchObject({ state: 'ok', repo: { host: 'github.com', owner: 'acme', name: 'web' } })
+    const data = (answer as { data: BoardAnswer }).data
+    // Every project is answered, in the session list's order: two gh lists that both come back.
+    expect(data.projects.map((p) => p.project)).toEqual(['p1', 'p2'])
+    expect(data.projects.map((p) => p.board.state)).toEqual(['ok', 'ok'])
+    const board = data.projects[0]!.board
+    expect(board).toMatchObject({ repo: { host: 'github.com', owner: 'acme', name: 'web' } })
     expect(board.issues.map((i) => i.number)).toEqual([142, 139])
     expect(board.prs.map((p) => p.number)).toEqual([140])
     expect(board.prs[0]!.checks.state).toBe('failing')
+    expect(data.projects[1]!.board.issues.map((i) => i.number)).toEqual([142, 139])
     // The phone's 刷新 bypasses the minute of cache; a scope reaches gh as its filter.
     await phone.request({ type: 'github-board', scope: 'review', force: true }, 30_000)
     await expect.poll(() => gh.calls().some((c) => c.includes('--search=review-requested:@me')), WITHIN).toBe(true)

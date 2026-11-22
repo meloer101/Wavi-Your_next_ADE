@@ -10,7 +10,7 @@ import { hostname, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import type { PendingPrompt } from '@shared/agent-events'
 import { isCliAgent } from '@shared/agents'
-import type { BoardPrStart, BoardProject } from '@shared/github-board'
+import type { BoardPrStart } from '@shared/github-board'
 import {
   pairingLink,
   parseRemoteResult,
@@ -216,7 +216,17 @@ const calls = new Map<string, { owner: WebContents; resolve: (result: RemoteResu
  * 归档 runs the repository's archive script and records the worktree; an exit's preflight may ask GitHub; a send to a
  * session that has not started waits for its agent to come up.
  */
-const SLOW_WINDOW_MS: Partial<Record<RemoteWindowCommand['type'], number>> = { 'agent-models': 30_000, archive: 120_000, exits: 30_000, ship: 30_000, send: 30_000, 'set-setting': 30_000 }
+const SLOW_WINDOW_MS: Partial<Record<RemoteWindowCommand['type'], number>> = {
+  'agent-models': 30_000,
+  archive: 120_000,
+  exits: 30_000,
+  ship: 30_000,
+  send: 30_000,
+  'set-setting': 30_000,
+  // A worktree start (a PR's head fetched, `git worktree add`, the setup script) can outlast the default, and the phone
+  // must not be told it failed while the window goes on to create the session.
+  'new-session': 60_000
+}
 
 function askWindow(owner: WebContents | null, command: RemoteWindowCommand): Promise<RemoteResult> {
   if (!owner || owner.isDestroyed()) return Promise.resolve(remoteFail(pickLang(M).noWindow))
@@ -360,15 +370,18 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
     // 看板 · GitHub (PRD F22 v1.227 ⑤, F9): gh's whole answer is read here, as the Mac's own tab reads it — the phone
     // never runs gh, and the project's root comes from the session list's roots.
     case 'github-board': {
-      const projects: { project: string; board: BoardProject }[] = []
-      for (const project of windowSessions.projects) {
-        const root = windowSessions.roots[project.id]
-        if (!root) continue
-        const list = await listBoard({ root, scope: request.scope, force: request.force === true })
-        // gh cannot answer at all (not installed, signed out): one answer, not an error per project.
-        if (list.gh !== 'ready') return { ok: true, data: { gh: list.gh } }
-        projects.push({ project: project.id, board: list.project })
-      }
+      // All projects ask at once, as the Mac's own tab does (src/renderer/overview/github-store.ts): one gh call each,
+      // and ten of them one after another would outlast the phone's 20 s.
+      const answered = await Promise.all(
+        windowSessions.projects.flatMap((project) => {
+          const root = windowSessions.roots[project.id]
+          return root ? [listBoard({ root, scope: request.scope, force: request.force === true }).then((list) => ({ project: project.id, list }))] : []
+        })
+      )
+      // gh cannot answer at all (not installed, signed out): one answer, not an error per project.
+      const unavailable = answered.find((a) => a.list.gh !== 'ready')
+      if (unavailable && unavailable.list.gh !== 'ready') return { ok: true, data: { gh: unavailable.list.gh } }
+      const projects = answered.flatMap((a) => (a.list.gh === 'ready' ? [{ project: a.project, board: a.list.project }] : []))
       return { ok: true, data: { gh: 'ready', projects } }
     }
     case 'github-detail': {
