@@ -557,8 +557,8 @@ button.keycap {
   font-size: clamp(40px, 6svh, 64px);
   line-height: 1.0625;
 }
-/* Shorter than 860px: the board gives up padding, heading size, card padding and multi-line statuses so the screen
-   still fits the viewport. */
+/* Shorter than 860px: the board gives up padding, heading size and card padding so the screen still fits the
+   viewport. */
 @media (max-height: 859px) {
   #board {
     padding-block: 32px;
@@ -568,11 +568,6 @@ button.keycap {
   }
   #board .card {
     padding: 12px;
-  }
-  #board .card-status {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
   }
 }
 
@@ -703,6 +698,10 @@ button.keycap {
   color: var(--text-ink-3);
 }
 .card-status {
+  /* One line at every size: a card is three lines — title, path, status — so a wrapped status would make it four. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font: 400 13px/19px var(--sans);
   color: var(--text-ink-2);
 }
