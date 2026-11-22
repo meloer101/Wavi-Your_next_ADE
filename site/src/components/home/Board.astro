@@ -142,6 +142,8 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
     const setCard = (card: HTMLElement, id: string, column: number): void => {
       const kind = COLUMNS[column]
       card.classList.toggle('card-needs', column === 0)
+      // ⌘J's ring belongs to a card that is waiting; leaving the column takes it with it.
+      if (column !== 0) card.classList.remove('target')
       const text = card.querySelector<HTMLElement>('[data-card-status]')!
       text.textContent = line(id, kind)
       const slot = card.querySelector<HTMLElement>('[data-card-glyph]')!
@@ -185,14 +187,18 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
     const easing = getComputedStyle(document.documentElement).getPropertyValue('--ease-in-out').trim()
     /** FLIP: after the nodes moved, slide each one back to where it was and let it travel to its new place. */
     const flip = (before: Map<string, DOMRect>): void => {
+      // Read every box before starting an animation: a running animation changes the next card's measured box.
+      const slides: { card: HTMLElement; x: number; y: number }[] = []
       for (const [id, el] of cards) {
         const from = before.get(id)
         if (!from) continue
         const to = el.getBoundingClientRect()
         const x = from.left - to.left
         const y = from.top - to.top
-        if (!x && !y) continue
-        el.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'none' }], {
+        if (x || y) slides.push({ card: el, x, y })
+      }
+      for (const { card, x, y } of slides) {
+        card.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'none' }], {
           duration: 420,
           easing: easing || 'cubic-bezier(0.77, 0, 0.175, 1)'
         })
@@ -201,17 +207,31 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
 
     // Reorder first, then measure: a column that gains a card is as tall as it can get, and the board keeps that height
     // for the whole loop so nothing below it moves. (Cards do not change the page while this runs — one task.)
-    let tallest = 0
-    for (let step = 0; step < STEP_COUNT; step++) {
-      apply(step, false)
-      for (const stack of stacks) tallest = Math.max(tallest, stack.scrollHeight)
-    }
-    for (const stack of stacks) stack.style.minHeight = `${tallest}px`
-    apply(0)
-
     let step = 0
+    const reserve = (): void => {
+      // A previous reservation would floor the measurement, so drop it while measuring.
+      for (const stack of stacks) stack.style.minHeight = ''
+      let tallest = 0
+      for (let at = 0; at < STEP_COUNT; at++) {
+        apply(at, false)
+        for (const stack of stacks) tallest = Math.max(tallest, stack.scrollHeight)
+      }
+      for (const stack of stacks) stack.style.minHeight = `${tallest}px`
+      apply(step, false)
+    }
+    reserve()
+    // Crossing the short-screen query changes the card padding, so the height measured above can go stale.
+    let resizing: number | undefined
+    window.addEventListener('resize', () => {
+      if (resizing !== undefined) window.clearTimeout(resizing)
+      resizing = window.setTimeout(() => {
+        resizing = undefined
+        if (!reduce.matches) reserve()
+      }, 150)
+    })
     let timer: number | undefined
     const tick = (): void => {
+      board.classList.add('cycling')
       const before = measure()
       step = (step + 1) % STEP_COUNT
       apply(step)
@@ -242,12 +262,18 @@ const at = (column: number): number => t.board.cards.slice(0, column).reduce((n,
     )
     io.observe(board)
 
-    // Motion switched off while the page is open: back to the server's picture, and stay there.
+    // Motion switched off while the page is open: back to the server's picture, and stay there. Switched back on, the
+    // height is reserved again and the loop picks up from the first picture if the board is on screen.
     reduce.addEventListener('change', () => {
-      if (!reduce.matches) return
-      stop()
-      for (const stack of stacks) stack.style.minHeight = ''
-      apply(0)
+      if (reduce.matches) {
+        stop()
+        step = 0
+        for (const stack of stacks) stack.style.minHeight = ''
+        apply(0)
+        return
+      }
+      reserve()
+      if (board.classList.contains('in-view')) start()
     })
   }
 
