@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { CliAgent } from '@shared/agents'
+import type { BoardDetailResult, BoardProject, BoardStart } from '@shared/github-board'
 import { parsePhoneRequest, type PhoneCommand, type PhoneEvent, type RemoteAgentModels, type RemoteExits, type RemotePrompt, type RemoteSession, type RemoteSessionList, type RemoteShipAction } from '@shared/remote'
 import type { ChatItem } from '@shared/transcript-chat'
 import type { changes, fileDiff } from '../git-graph'
@@ -34,6 +35,9 @@ interface Results {
   changes: NonNullable<Awaited<ReturnType<typeof changes>>>
   diff: { text: Awaited<ReturnType<typeof fileDiff>> }
   exits: RemoteExits
+  'github-board': { gh: 'ready'; projects: { project: string; board: BoardProject }[] }
+  'github-detail': BoardDetailResult
+  'github-start': BoardStart
 }
 
 const PHOTO = Buffer.from('not really a jpeg').toString('base64')
@@ -59,13 +63,26 @@ const commands: Commands = {
   answer: { type: 'answer', prompt: 'p2', answers: { 用哪个数据库: 'Postgres' } },
   'new-session-info': { type: 'new-session-info', project: 'proj1' },
   'agent-models': { type: 'agent-models', agent: 'codex' },
-  'new-session': { type: 'new-session', project: 'proj1', workdir: 'worktree', agent: 'claude', base: 'main', branch: 'jacoy/fix-login', prompt: '修好登录', model: 'claude-opus-5-5' },
+  'new-session': {
+    type: 'new-session',
+    project: 'proj1',
+    workdir: 'worktree',
+    agent: 'claude',
+    base: 'main',
+    branch: 'jacoy/fix-login',
+    prompt: '修好登录',
+    model: 'claude-opus-5-5',
+    task: { link: { repo: 'github.com/acme/web', kind: 'issue', number: 139 }, title: '#139 Safari 17 上结算页白屏' }
+  },
   changes: { type: 'changes', session: 's1' },
   diff: { type: 'diff', session: 's1', path: 'src/new.ts', scope: 'uncommitted', oldPath: 'src/old.ts', untracked: true },
   exits: { type: 'exits', session: 's1' },
   ship: { type: 'ship', session: 's1', action: shipActions.edit },
   archive: { type: 'archive', session: 's1' },
-  'set-setting': { type: 'set-setting', session: 's1', kind: 'effort', value: 'high' }
+  'set-setting': { type: 'set-setting', session: 's1', kind: 'effort', value: 'high' },
+  'github-board': { type: 'github-board', scope: 'assigned', force: true },
+  'github-detail': { type: 'github-detail', project: 'proj1', kind: 'pr', number: 140 },
+  'github-start': { type: 'github-start', project: 'proj1', kind: 'issue', number: 139 }
 }
 
 const session: RemoteSession = {
@@ -96,6 +113,17 @@ const session: RemoteSession = {
     error: { step: 'push', message: '推送被拒绝', output: 'rejected', conflicts: false, pushRefused: true }
   },
   shipNotice: '已合并到 main 并推送 · a41c9e2',
+  checks: {
+    turn: 'previous',
+    edited: true,
+    kinds: [
+      { kind: 'test', status: 'pass' },
+      { kind: 'lint', status: 'fail' },
+      { kind: 'typecheck', status: 'not-run' }
+    ]
+  },
+  stat: { added: 12, removed: 3 },
+  github: { repo: 'github.com/acme/web', kind: 'issue', number: 139 },
   settings: {
     items: [
       { kind: 'model', current: 'opus', values: [{ value: 'opus', label: 'Opus 5.5' }, { value: 'sonnet', label: 'Sonnet 5' }] },
@@ -237,7 +265,90 @@ const results: Results = {
     base: 'main',
     baseProtected: true,
     archive: { blocker: '还有未推送的提交' }
-  } satisfies Required<RemoteExits>
+  } satisfies Required<RemoteExits>,
+  // 看板 · GitHub (PRD F22 v1.227 ⑤): two projects, one on GitHub and one with no remote there.
+  'github-board': {
+    gh: 'ready',
+    projects: [
+      {
+        project: 'proj1',
+        board: {
+          state: 'ok',
+          repo: { host: 'github.com', owner: 'acme', name: 'web' },
+          issues: [
+            {
+              kind: 'issue',
+              number: 139,
+              title: 'Safari 17 上结算页白屏',
+              url: 'https://github.com/acme/web/issues/139',
+              author: 'lin-wei',
+              labels: ['bug'],
+              comments: 2,
+              updatedAt: 1_730_000_000_000
+            }
+          ],
+          prs: [
+            {
+              kind: 'pr',
+              number: 140,
+              title: 'chore: 升级 Vite 到 7',
+              url: 'https://github.com/acme/web/pull/140',
+              author: 'jacob',
+              labels: [],
+              comments: 1,
+              updatedAt: 1_730_000_100_000,
+              draft: false,
+              review: 'changes-requested',
+              reviewRequestedFromMe: true,
+              checks: { state: 'failing', total: 2, passed: 1, pending: 0, failing: [{ name: 'e2e (playwright)', runId: 500, jobId: 1 }] }
+            }
+          ],
+          fetchedAt: 1_730_000_200_000
+        }
+      },
+      { project: 'proj2', board: { state: 'not-github' } }
+    ]
+  },
+  'github-detail': {
+    ok: true,
+    detail: {
+      kind: 'pr',
+      repo: { host: 'github.com', owner: 'acme', name: 'web' },
+      number: 140,
+      title: 'chore: 升级 Vite 到 7',
+      url: 'https://github.com/acme/web/pull/140',
+      state: 'open',
+      author: 'jacob',
+      createdAt: 1_730_000_000_000,
+      labels: [],
+      assignees: ['jacob'],
+      body: '- vite 6.3 → 7.1\n- Node 最低版本改成 20.19',
+      comments: [{ author: 'github-actions', createdAt: 1_730_000_050_000, body: 'e2e 失败：checkout.spec.ts › 付款按钮可见' }],
+      commentCount: 3,
+      pr: {
+        draft: false,
+        headRef: 'jacoy/vite-7',
+        baseRef: 'main',
+        crossRepo: false,
+        additions: 86,
+        deletions: 41,
+        changedFiles: 7,
+        review: 'approved',
+        checks: [
+          { name: 'e2e (playwright)', verdict: 'failed', startedAt: 1_730_000_000_000, completedAt: 1_730_000_050_000 },
+          { name: 'lint', verdict: 'passed', startedAt: 1_730_000_000_000, completedAt: 1_730_000_028_000 }
+        ]
+      }
+    }
+  },
+  'github-start': {
+    link: { repo: 'github.com/acme/web', kind: 'pr', number: 140 },
+    title: '#140 chore: 升级 Vite 到 7',
+    prompt: '处理 GitHub PR acme/web#140\nhttps://github.com/acme/web/pull/140',
+    branch: 'jacoy/vite-7',
+    base: 'main',
+    startAt: 'refs/remotes/origin/jacoy/vite-7'
+  }
 }
 
 function compute() {

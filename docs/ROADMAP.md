@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-22：手机看板的 Mac 端和线格式（PRD v1.227 ⑤，F9 / F22；手机界面还没做）：`RemoteSession` 多三个可选字段 `checks`（这一轮的检查，`turnCheckView`，无话可说时不发）、`stat`（worktree 的 `+N −M`，两者都是 0 或未知时不发）、`github`（会话处理的 issue / PR）；新命令 `github-board`（每个项目一条，按会话列表顺序，用主进程 `listBoard` 的 1 分钟缓存，`force` 绕过；gh 答不了时只回 gh 的状态）、`github-detail`（`boardDetail`）、`github-start`（`boardDetail` → PR 再 `prStart` → `taskPrompt` / `itemTitle`，分支名按同仓库 PR 的 head（没被本地分支占用时）否则 `itemBranch`）；`new-session` 加可选 `task`，有它时 worktree 从 `startAt` 开始、建好后会话拿标题 / `titleSource` / `github` 和首条消息（桌面 `handTask` 抽到 `src/renderer/new-session/hand-task.ts`，两边共用；`startBranch` 进 `src/shared/github-board.ts`，`新建会话` 和主进程同一套起名规则）。Swift 只加线格式（`ios/Wavi/Model/Wire.swift`、`WireTests`），`REMOTE_PROTOCOL` 不变。单测 `remote.test.ts`、`model.test.ts`、`github-start.test.ts`、`wire-samples.test.ts`（样张重生成），e2e `remote-github.spec.ts`（假手机 + 假 gh：列表、详情、交给 agent、新会话的标题 / `github` / 首条消息；CLI agent 的任务在命令行上）。
 - 2026-11-20：官网分享封面换成新首屏的样子（Figma「官网·新风格探究‘」`OG · 分享封面 C · 英文` `1811:18007`：朱红底、`Run ALL coding agents on your Mac.`、协作句、GitHub「Open source · Totally free」、点阵翻花绳），导出成 `site/public/og-2.png`（2400×1260），删掉杂志封面 `og.png`；换文件名是为了让 X 等按图片地址缓存的卡片重新抓图，中英文两页仍是同一张。
 - 2026-11-19：官网从翻页杂志换成滚动落地页（PRD v1.224，Figma「官网·新风格探究‘」frame O `1794:15463`）：一页一语言（英文 `/`、中文 `/zh/`），静态 HTML + CSS，页头 → 朱红首屏（`Run ALL coding agents on your Mac.`）→ 19 家 agent 条 → 01 Agents → 02 Board → 03 GitHub → 04 Windows + Appearance → FAQ → 下载与页脚合成一块；`site/src/components/Home.astro` 加 `home/` 下每段一个组件，文案在 `i18n.ts`，字体换成 DM Sans / Source Serif 4 Italic / JetBrains Mono / Noto Sans SC 的自托管子集，翻页脚本、杂志组件和图片删掉。
 - 2026-11-19：手机的离线缓存和重连（PRD v1.220 ④，Figma 62B / 62F / 63B3，只做手机端）：`ios/Wavi/Store/Cache.swift` —— 会话列表带 Mac 发来的时刻、每个会话最近 200 条对话，写成 `Application Support/Wavi/Remote/<配对密钥摘要>/` 下的 JSON，首解锁后可读（后台唤醒还能连）、不进备份、1 s 防抖、写文件不在主线程；取消配对后整个目录删掉（Mac 说不认识这台手机时配对和缓存都留着，v1.223），Mac 的完整列表里没有的会话删掉它的对话。`AppModel` 冷启动先读它再连，连上后照旧用快照和 feed 替换，`watch` 打开会话时没连上就用缓存里的对话（62F），没有缓存时列表是 63B3。重连：`RemoteClient` 里新的 `Reconnect`（前台 1 秒、之后每 2 秒一次，连上并站住后从 1 开始；Mac 不认识这台手机、协议对不上或连开连断三次时 30 秒），网络变化和回到前台仍立即重连。测试 `WaviTests/CacheTests.swift`；截图 `test-results/offline/offline-{list,session}-{dark,light}.png`（`WaviTests/OfflineShots.swift`）
@@ -472,7 +473,7 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
 - [ ] 阶段 2 · TestFlight 外部测试（验收 ⑬；作者在 App Store Connect 建 App）
 - [ ] 手机看板（2026-11-22 定，PRD v1.227，Figma 103 `1853:9213`）
   - [x] Figma：103A–103I 深浅各一（2026-11-22），待作者确认
-  - [ ] Mac 端和线格式：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式
+  - [x] Mac 端和线格式（2026-11-22）：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式。`src/shared/remote.ts`、`src/shared/github-board.ts`（新增 `startBranch` / `BoardStart`）、`src/main/remote/index.ts`、`src/main/remote/github-start.ts`、`src/renderer/remote/*`、`src/renderer/new-session/hand-task.ts`、`src/shared/remote-wire-samples.json`、`ios/Wavi/Model/Wire.swift`、`ios/WaviTests/WireTests.swift`；e2e `remote-github.spec.ts`。手机界面还没做
   - [ ] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
 

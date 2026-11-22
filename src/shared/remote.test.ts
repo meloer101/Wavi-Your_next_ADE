@@ -117,6 +117,37 @@ describe('parsePhoneRequest', () => {
     expect(parsePhoneRequest({ id: 4, type: 'agent-models', agent: 'shell' })).toBeNull()
   })
 
+  it('takes 看板 · GitHub\'s three commands and a new session\'s task (PRD F22 v1.227 ⑤)', () => {
+    expect(parsePhoneRequest({ id: 1, type: 'github-board', scope: 'review' })).toEqual({ id: 1, type: 'github-board', scope: 'review' })
+    expect(parsePhoneRequest({ id: 2, type: 'github-board', scope: 'all', force: true })).toEqual({ id: 2, type: 'github-board', scope: 'all', force: true })
+    expect(parsePhoneRequest({ id: 3, type: 'github-detail', project: 'p1', kind: 'pr', number: 140 })).toEqual({ id: 3, type: 'github-detail', project: 'p1', kind: 'pr', number: 140 })
+    expect(parsePhoneRequest({ id: 4, type: 'github-start', project: 'p1', kind: 'issue', number: 139 })).toEqual({ id: 4, type: 'github-start', project: 'p1', kind: 'issue', number: 139 })
+    const task = { link: { repo: 'github.com/acme/web', kind: 'issue' as const, number: 139 }, title: '#139 Safari 17 上结算页白屏' }
+    expect(parsePhoneRequest({ id: 5, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', branch: 'jacoy/issue-139', prompt: '修好它', task })).toEqual({
+      id: 5,
+      type: 'new-session',
+      project: 'p1',
+      workdir: 'worktree',
+      agent: 'claude',
+      branch: 'jacoy/issue-139',
+      prompt: '修好它',
+      task
+    })
+    // A PR's head travels with the task: the worktree starts there.
+    expect(parsePhoneRequest({ id: 6, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, startAt: 'refs/remotes/origin/jacoy/vite-7' } })).toMatchObject({
+      task: { startAt: 'refs/remotes/origin/jacoy/vite-7' }
+    })
+    // Off: an unknown scope, a number gh could not take, a link that is not one.
+    expect(parsePhoneRequest({ id: 1, type: 'github-board', scope: 'everything' })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'github-board', scope: 'all', force: 'yes' })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'github-detail', project: 'p1', kind: 'discussion', number: 1 })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'github-detail', project: 'p1', kind: 'pr', number: '--web' })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'github-start', project: '../x', kind: 'pr', number: 1 })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, link: { repo: 'acme/web', kind: 'issue', number: 139 } } })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, title: 42 } })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'new-session', project: 'p1', workdir: 'worktree', agent: 'claude', task: { ...task, startAt: 'refs/a\0b' } })).toBeNull()
+  })
+
   it('takes a photo-only send', () => {
     expect(parsePhoneRequest({ id: 1, type: 'send', session: 's1', text: '', photos: [{ name: 'a.jpg', data: 'AAAA' }] })).toMatchObject({ text: '', photos: [{ name: 'a.jpg' }] })
   })
@@ -149,6 +180,26 @@ describe('window messages', () => {
     expect(relative?.sessions).toEqual([])
     expect(parseWindowSessions({ ...good, roots: { p1: '/a/../b' } })?.roots).toEqual({})
     expect(parseWindowSessions({ ...good, sessions: 'all' })).toBeNull()
+  })
+
+  it('carries 看板 · 进度\'s checks and size and 看板 · GitHub\'s link, and leaves a bad one off (PRD F22 v1.227 ⑤)', () => {
+    const row = {
+      projects: [{ id: 'p1', name: 'acme-web' }],
+      sessions: [{ id: 's1', projectId: 'p1', title: '修好登录', agent: 'claude', status: 'running', activity: 1 }],
+      folders: { s1: { cwd: '/Users/me/acme' } },
+      roots: { p1: '/Users/me/acme' }
+    }
+    const checks = { turn: 'previous', edited: true, kinds: [{ kind: 'test', status: 'pass' }, { kind: 'lint', status: 'not-run' }] }
+    const stat = { added: 12, removed: 3 }
+    const github = { repo: 'github.com/acme/web', kind: 'issue', number: 139 }
+    const full = { ...row, sessions: [{ ...row.sessions[0], checks, stat, github }] }
+    expect(parseWindowSessions(full)?.sessions[0]).toMatchObject({ checks, stat, github })
+    // Off: an unknown check kind or status, a negative size, a link without the host.
+    expect(parseWindowSessions({ ...full, sessions: [{ ...row.sessions[0], checks: { ...checks, kinds: [{ kind: 'e2e', status: 'pass' }] } }] })?.sessions[0]?.checks).toBeUndefined()
+    expect(parseWindowSessions({ ...full, sessions: [{ ...row.sessions[0], checks: { ...checks, turn: 'now' } }] })?.sessions[0]?.checks).toBeUndefined()
+    expect(parseWindowSessions({ ...full, sessions: [{ ...row.sessions[0], stat: { added: -1, removed: 0 } }] })?.sessions[0]?.stat).toBeUndefined()
+    expect(parseWindowSessions({ ...full, sessions: [{ ...row.sessions[0], stat: { added: 0, removed: 0 } }] })?.sessions[0]?.stat).toBeUndefined()
+    expect(parseWindowSessions({ ...full, sessions: [{ ...row.sessions[0], github: { ...github, repo: 'acme/web' } }] })?.sessions[0]?.github).toBeUndefined()
   })
 })
 

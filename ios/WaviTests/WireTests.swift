@@ -169,7 +169,16 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
   case "new-session-info": return .newSessionInfo(project: try text(v, "project"))
   case "agent-models": return .agentModels(agent: try text(v, "agent"))
   case "new-session":
-    return .newSession(project: try text(v, "project"), workdir: try text(v, "workdir"), agent: try text(v, "agent"), base: try text(v, "base"), branch: try text(v, "branch"), prompt: try text(v, "prompt"), model: try text(v, "model"))
+    return .newSession(
+      project: try text(v, "project"),
+      workdir: try text(v, "workdir"),
+      agent: try text(v, "agent"),
+      base: try text(v, "base"),
+      branch: try text(v, "branch"),
+      prompt: try text(v, "prompt"),
+      model: try text(v, "model"),
+      task: try decoded(v["task"], GitHubTask.self, "task")
+    )
   case "changes": return .changes(session: try text(v, "session"))
   case "diff":
     return .diff(session: try text(v, "session"), path: try text(v, "path"), scope: try text(v, "scope"), oldPath: try text(v, "oldPath"), untracked: v["untracked"] == .bool(true))
@@ -177,6 +186,9 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
   case "ship": return .ship(session: try text(v, "session"), action: try shipAction(v["action"]))
   case "archive": return .archive(session: try text(v, "session"))
   case "set-setting": return .setSetting(session: try text(v, "session"), kind: try text(v, "kind"), value: try text(v, "value"))
+  case "github-board": return .githubBoard(scope: try text(v, "scope"), force: v["force"] == .bool(true))
+  case "github-detail": return .githubDetail(project: try text(v, "project"), kind: try text(v, "kind"), number: Int(try number(v, "number")))
+  case "github-start": return .githubStart(project: try text(v, "project"), kind: try text(v, "kind"), number: Int(try number(v, "number")))
   default: throw Missing(what: "a PhoneCommand for \(type)")
   }
 }
@@ -237,6 +249,9 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
       case "changes": try expectRoundTrip(GitChanges.self, data, ignoring: gitChangesUnread, label)
       case "diff": try expectRoundTrip(FileDiffView.Text_.self, data, label)
       case "exits": try expectRoundTrip(RemoteExits.self, data, label)
+      case "github-board": try expectRoundTrip(GitHubBoard.self, data, label)
+      case "github-detail": try expectRoundTrip(BoardDetailResult.self, data, label)
+      case "github-start": try expectRoundTrip(GitHubStart.self, data, label)
       default: Issue.record("\(label): no screen decodes it")
       }
     }

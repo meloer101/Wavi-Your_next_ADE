@@ -4,6 +4,7 @@
 import type { GuiModelCatalog, GuiPicks } from '@shared/gui-chat'
 import type { RemoteAgentModels, RemoteSession, RemoteShip, RemoteShipField, RemoteWindowSessions } from '@shared/remote'
 import type { SessionSettings } from '@shared/session-settings'
+import { turnCheckView, type TurnChecks } from '@shared/turn-checks'
 import type { Project, Session, Worktree } from '@shared/types'
 import { glanceFields, submitBlocker, submitLabel, type ShipKind, type ShipState } from '../pull-requests/ship-flow'
 
@@ -66,7 +67,8 @@ export interface RemoteShipping {
 export function remoteSessions(
   data: { projects: readonly Project[]; worktrees: readonly Worktree[]; sessions: readonly Session[] },
   shipping: RemoteShipping = { ships: {}, endings: {} },
-  settings: (session: Session) => SessionSettings | undefined = () => undefined
+  settings: (session: Session) => SessionSettings | undefined = () => undefined,
+  checks: (session: Session) => TurnChecks | undefined = () => undefined
 ): RemoteWindowSessions {
   const worktrees = new Map(data.worktrees.map((w) => [w.id, w]))
   const out: RemoteWindowSessions = { projects: [], sessions: [], folders: {}, roots: {} }
@@ -81,6 +83,13 @@ export function remoteSessions(
     if (s.lastReply) row.reply = s.lastReply
     const own = settings(s)
     if (own) row.settings = own
+    // 看板 · 进度's third line (PRD F22 v1.227 ②): the desktop card's checks and `+N −M`, as the phone draws them.
+    const view = turnCheckView(checks(s))
+    if (view) row.checks = { turn: view.turn, edited: view.edited, kinds: view.kinds.map((k) => ({ kind: k.kind, status: k.status })) }
+    const added = w.added ?? 0
+    const removed = w.removed ?? 0
+    if (added + removed > 0) row.stat = { added, removed }
+    if (s.github) row.github = s.github
     const ship = shipping.ships[w.path]
     const root = data.projects.find((p) => p.id === w.projectId)?.rootPath ?? ''
     if (ship && shownOnPhone(ship.kind)) row.ship = remoteShip(ship, [w.path, root])

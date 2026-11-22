@@ -9,6 +9,7 @@ import { remoteFail, type RemoteResult, type RemoteWindowCommand } from '@shared
 import type { SessionUi } from '@shared/types'
 import { setLaunch } from '../dispatch/store'
 import { createWorktreeFor, holdForWorktree, startEagerly } from '../new-session/creation'
+import { handTask } from '../new-session/hand-task'
 import { binaryInstalled, branchProblemText, planCreate, uiRow } from '../new-session/model'
 import { insertPaths, interruptAgent, submitInputLine, submitPrompt, whenAgentReady } from '../session-io'
 import { setSessionSetting } from '../session-settings'
@@ -107,7 +108,10 @@ async function newSession(command: Extract<RemoteWindowCommand, { type: 'new-ses
       if (planned.problem === 'loading') return remoteFail(pick(M).loading)
       return remoteFail(branchProblemText(planned.problem, branch) ?? pick(M).badBranch)
     }
-    const plan = planned.plan
+    // 交给 agent (PRD F22 v1.227 ④): a PR's worktree starts at the head main fetched; the chosen base stays what it
+    // merges into (as the desktop sheet's `create` does).
+    const plan =
+      command.task?.startAt && planned.plan.type === 'worktree' ? { ...planned.plan, request: { ...planned.plan.request, startAt: command.task.startAt } } : planned.plan
     if (plan.type === 'current') {
       id = workspace.addSession(project.id, command.agent, ui)
     } else if (plan.type === 'existing') {
@@ -122,8 +126,10 @@ async function newSession(command: Extract<RemoteWindowCommand, { type: 'new-ses
   }
   if (!id) return remoteFail(pick(M).createFailed)
   if (model) workspace.rememberGuiPicks(command.agent, { model })
-  // A first message starts the session as a dispatch does, which takes its model from the launch, not the picks.
-  if (command.prompt) setLaunch(id, { initialPrompt: command.prompt, ...(model ? { model } : {}) })
+  // 交给 agent: the item's title, link and first message, the same way the desktop's sheet hands them over. Without a
+  // task, a first message starts the session as a dispatch does, which takes its model from the launch, not the picks.
+  if (command.task) handTask(id, command.task, command.agent, ui, command.prompt ?? null, model)
+  else if (command.prompt) setLaunch(id, { initialPrompt: command.prompt, ...(model ? { model } : {}) })
   startEagerly(id)
   return { ok: true, data: { session: id } }
 }

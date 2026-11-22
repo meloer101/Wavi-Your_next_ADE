@@ -10,6 +10,7 @@ import { hostname, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import type { PendingPrompt } from '@shared/agent-events'
 import { isCliAgent } from '@shared/agents'
+import type { BoardPrStart, BoardProject } from '@shared/github-board'
 import {
   pairingLink,
   parseRemoteResult,
@@ -19,6 +20,7 @@ import {
   remoteFail,
   type PhoneRequest,
   type RemoteAddress,
+  type RemoteTask,
   type RemotePrompt,
   type RemoteResult,
   type RemoteStatus,
@@ -32,11 +34,13 @@ import { changes, fileDiff } from '../git-graph'
 import { answerGuiPrompt, isGuiSession, setGuiPrompts } from '../gui'
 import { answerFromRemote, promptHeld, respondFromRemote, setRemoteHooks, transcriptSource } from '../hooks'
 import { claudeTranscriptPath, defaultAgentDataDirs } from '../hooks/agent-title'
+import { boardDetail, listBoard, prStart } from '../github-board'
 import { getSettings, onSettingsChange } from '../settings'
 import { newSessionInfo } from '../worktree-create'
 import { identityFromPem, identityToPem, newIdentity, type Identity } from './crypto'
 import { DeviceStore, type StoredDevice } from './devices'
 import { FeedHub, type FeedSource } from './feed'
+import { startItem } from './github-start'
 import { GuiPrompts, optionFor, planAnswer, questionAnswer } from './gui-prompts'
 import { PhotoError, savePhotos } from './photos'
 import { PromptPusher } from './prompt-push'
@@ -353,6 +357,42 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
     case 'new-session':
       if (!windowSessions.roots[request.project]) return remoteFail(pickLang(M).noProject)
       return askWindow(mainWindow(), { type: 'new-session', project: request.project, workdir: request.workdir, agent: request.agent, ...pick(request) })
+    // 看板 · GitHub (PRD F22 v1.227 ⑤, F9): gh's whole answer is read here, as the Mac's own tab reads it — the phone
+    // never runs gh, and the project's root comes from the session list's roots.
+    case 'github-board': {
+      const projects: { project: string; board: BoardProject }[] = []
+      for (const project of windowSessions.projects) {
+        const root = windowSessions.roots[project.id]
+        if (!root) continue
+        const list = await listBoard({ root, scope: request.scope, force: request.force === true })
+        // gh cannot answer at all (not installed, signed out): one answer, not an error per project.
+        if (list.gh !== 'ready') return { ok: true, data: { gh: list.gh } }
+        projects.push({ project: project.id, board: list.project })
+      }
+      return { ok: true, data: { gh: 'ready', projects } }
+    }
+    case 'github-detail': {
+      const root = windowSessions.roots[request.project]
+      if (!root) return remoteFail(pickLang(M).noProject)
+      // The answer is the BoardDetailResult itself: a failed read says why in its `message`, as on the Mac.
+      return { ok: true, data: await boardDetail({ root, kind: request.kind, number: request.number }) }
+    }
+    case 'github-start': {
+      const root = windowSessions.roots[request.project]
+      if (!root) return remoteFail(pickLang(M).noProject)
+      const detail = await boardDetail({ root, kind: request.kind, number: request.number })
+      if (!detail.ok) return remoteFail(detail.message)
+      // A PR's head is fetched first (as the Mac's 交给 agent does): the new worktree starts there.
+      let pr: Extract<BoardPrStart, { ok: true }> | null = null
+      if (request.kind === 'pr') {
+        const start = await prStart({ root, kind: 'pr', number: request.number })
+        if (!start.ok) return remoteFail(start.message)
+        pr = start
+      }
+      const info = await newSessionInfo(root)
+      const taken = new Set(info.branches.filter((b) => !b.remote).map((b) => b.name))
+      return { ok: true, data: startItem(detail.detail, pr, info.prefix, taken) }
+    }
     case 'changes': {
       const folder = windowSessions.folders[request.session]
       if (!folder) return notFound()
@@ -381,12 +421,13 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
   }
 }
 
-function pick(request: Extract<PhoneRequest, { type: 'new-session' }>): { base?: string; branch?: string; prompt?: string; model?: string } {
+function pick(request: Extract<PhoneRequest, { type: 'new-session' }>): { base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask } {
   return {
     ...(request.base ? { base: request.base } : {}),
     ...(request.branch ? { branch: request.branch } : {}),
     ...(request.prompt ? { prompt: request.prompt } : {}),
-    ...(request.model ? { model: request.model } : {})
+    ...(request.model ? { model: request.model } : {}),
+    ...(request.task ? { task: request.task } : {})
   }
 }
 
