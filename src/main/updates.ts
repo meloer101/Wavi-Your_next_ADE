@@ -5,7 +5,7 @@ import { app, ipcMain, Notification, shell } from 'electron'
 import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { IPC, type UpdateInfo } from '@shared/ipc'
+import { IPC, type UpdateCheck, type UpdateInfo } from '@shared/ipc'
 import { isDeveloperBuild, sourceRoot } from './source-checkout'
 import { defineMessages, pick } from '@shared/i18n'
 
@@ -35,8 +35,8 @@ export function appVersion(): string {
   return typeof version === 'string' ? version : app.getVersion()
 }
 
-/** Latest GitHub release if newer than the running app, else null. Never throws. */
-export function checkForUpdates(): Promise<UpdateInfo | null> {
+/** Latest GitHub release if newer than the running app: `latest`, `available` or `failed`. Never throws. */
+export function checkForUpdates(): Promise<UpdateCheck> {
   return checkLatestRelease(parseRepository(runningPackage()?.repository), appVersion(), fetch as FetchLike)
 }
 
@@ -83,8 +83,8 @@ function notify(update: UpdateInfo): void {
 }
 
 async function checkAndNotify(): Promise<void> {
-  const update = await checkForUpdates()
-  if (update) notify(update)
+  const result = await checkForUpdates()
+  if (result.status === 'available') notify(result.info)
 }
 
 export function registerUpdateHandlers(): void {
