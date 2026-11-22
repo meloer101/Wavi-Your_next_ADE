@@ -1,6 +1,6 @@
 # Wavi 路线图与进度
 
-> 最后更新：2026-11-21
+> 最后更新：2026-11-22
 > 本文只记**做到哪了**：已完成什么、正在做什么、还没做什么。产品最终长什么样写在 [PRD](PRD.md)。
 > 维护规则：完成、新增、取消一项时直接改这里（勾选、移动或划掉），更新顶部日期；不要另建任务单、验收记录或计划文档。验收结论写进对应里程碑下面，几行即可。
 
@@ -470,6 +470,10 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
   - [ ] 手机端：通知权限、device token 和 Live Activity push token 交给 Mac；Notification Service Extension 解密；权限通知的「允许 / 拒绝」；Live Activity 后台 start / update / end
   - [ ] Figma：通知的文字和按钮、设置 · 手机 的「推送」开关
 - [ ] 阶段 2 · TestFlight 外部测试（验收 ⑬；作者在 App Store Connect 建 App）
+- [ ] 手机看板（2026-11-22 定，PRD v1.227，Figma 103 `1853:9213`）
+  - [x] Figma：103A–103I 深浅各一（2026-11-22），待作者确认
+  - [ ] Mac 端和线格式：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式
+  - [ ] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
 
 ## 进行中：F25 Ultracode（2026-11-11 定）
