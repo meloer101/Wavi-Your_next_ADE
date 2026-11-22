@@ -3,7 +3,7 @@
    hairline under it, a vertical hairline between cells; it does not stick. */
 import { copy, otherPath, type Lang } from '../../i18n'
 import { dmg, gh, withBase } from '../../site'
-import Chevron from './Chevron.astro'
+import BtnIcon from './BtnIcon.astro'
 import Logo from './Logo.astro'
 
 interface Props {
@@ -32,7 +32,7 @@ const home = withBase(lang === 'en' ? '' : 'zh/')
   <a class="nav-cell nav-github" href={gh()} rel="noopener">{t.nav.github}</a>
   <span class="nav-dl">
     <a class="btn btn-nav" href={dmg('arm64')} data-intel={dmg('x64')} rel="noopener">
-      {t.nav.download}<Chevron />
+      <BtnIcon name="download" />{t.nav.download}
     </a>
   </span>
 </header>

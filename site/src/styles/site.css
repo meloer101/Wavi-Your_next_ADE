@@ -264,7 +264,7 @@ button.keycap {
   align-items: center;
   gap: 8px;
   height: 44px;
-  padding: 0 16px 0 20px;
+  padding: 0 20px 0 16px;
   border: 1px solid transparent;
   border-radius: 2px;
   font: 500 15px/1 var(--sans);
@@ -293,18 +293,12 @@ button.keycap {
 .btn-ghost:hover {
   background: rgb(11 11 20 / 0.1);
 }
-.chev {
+.btn-icon {
   display: block;
   width: 16px;
   height: 16px;
-  transition: transform var(--duration) var(--ease);
 }
-@media (hover: hover) and (pointer: fine) {
-  .btn:hover .chev {
-    transform: translateX(2px);
-  }
-}
-.chev svg {
+.btn-icon svg {
   display: block;
   width: 16px;
   height: 16px;
@@ -1613,15 +1607,11 @@ html.js .cell4.in .layout-branch .link-red {
     transform: none;
     transition: none;
   }
-  .faq-mark span,
-  .chev {
+  .faq-mark span {
     transition: none;
   }
   .faq details::details-content {
     transition: opacity 200ms linear;
-  }
-  .btn:hover .chev {
-    transform: none;
   }
 }
 
