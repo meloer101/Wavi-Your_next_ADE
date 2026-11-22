@@ -1,8 +1,8 @@
 ---
-/* "Download for macOS" and "GitHub", each with a chevron: the hero's buttons, repeated in the footer, plus the script
+/* "Download for macOS" and "GitHub", each led by its own icon: the hero's buttons, repeated in the footer, plus the script
    that swaps in the Intel dmg. */
 import { dmg, gh } from '../site'
-import Chevron from './home/Chevron.astro'
+import BtnIcon from './home/BtnIcon.astro'
 
 interface Props {
   download: string
@@ -13,8 +13,8 @@ const { download, github, class: extra } = Astro.props
 ---
 
 <p class:list={['ctas', extra]}>
-  <a class="btn btn-primary" href={dmg('arm64')} data-intel={dmg('x64')} rel="noopener">{download}<Chevron /></a>
-  <a class="btn btn-ghost" href={gh()} rel="noopener">{github}<Chevron /></a>
+  <a class="btn btn-primary" href={dmg('arm64')} data-intel={dmg('x64')} rel="noopener"><BtnIcon name="download" />{download}</a>
+  <a class="btn btn-ghost" href={gh()} rel="noopener"><BtnIcon name="github" />{github}</a>
 </p>
 
 <script>
