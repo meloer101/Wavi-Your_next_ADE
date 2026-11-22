@@ -536,6 +536,7 @@ button.keycap {
   width: auto;
   height: clamp(96px, 14svh, 176px);
   max-width: 100%;
+  aspect-ratio: 384 / 176;
 }
 .cell-title {
   margin-top: 24px;
@@ -556,8 +557,8 @@ button.keycap {
   font-size: clamp(40px, 6svh, 64px);
   line-height: 1.0625;
 }
-/* Shorter than 860px: the board gives up padding, heading size, card padding and multi-line statuses so the screen
-   still fits the viewport. */
+/* Shorter than 860px: the board gives up padding, heading size and card padding so the screen still fits the
+   viewport. */
 @media (max-height: 859px) {
   #board {
     padding-block: 32px;
@@ -567,11 +568,6 @@ button.keycap {
   }
   #board .card {
     padding: 12px;
-  }
-  #board .card-status {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
   }
 }
 
@@ -689,10 +685,10 @@ button.keycap {
   white-space: nowrap;
   font: 500 14px/20px var(--sans);
 }
-.card-age {
-  flex: none;
-  font: 400 11px/20px var(--mono);
-  color: var(--text-ink-3);
+.card-top .mark {
+  width: 12px;
+  height: 12px;
+  color: var(--white);
 }
 .card-path {
   overflow: hidden;
@@ -702,34 +698,21 @@ button.keycap {
   color: var(--text-ink-3);
 }
 .card-status {
+  /* One line at every size: a card is three lines — title, path, status — so a wrapped status would make it four. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font: 400 13px/19px var(--sans);
   color: var(--text-ink-2);
 }
-.card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 4px;
-}
-.card-diff {
-  font: 400 11px/16px var(--mono);
-  color: var(--text-ink-3);
-}
-.card-foot .mark {
-  width: 12px;
-  height: 12px;
-  color: var(--white);
-}
-.card-needs .card-age {
-  color: var(--white);
+.card-glyph {
+  /* The glyph's slot in a card: the span itself draws nothing, its child is the flex item. */
+  display: contents;
 }
 .card-needs .card-path {
   color: var(--white);
 }
 .card-needs .card-status {
-  color: var(--white);
-}
-.card-needs .card-diff {
   color: var(--white);
 }
 .facts {
@@ -1333,13 +1316,11 @@ details[open] .faq-mark span:last-child {
   color: var(--white);
 }
 
-/* Figures line up: every mono span and the counts and ages use tabular numerals. This is after every `font`
+/* Figures line up: every mono span and the counts use tabular numerals. This is after every `font`
    shorthand, which would otherwise reset it. */
 .mono,
 .col-count,
-.card-age,
 .card-path,
-.card-diff,
 .step-n,
 .frag-field {
   font-variant-numeric: tabular-nums;
@@ -1400,6 +1381,17 @@ html.js .board.in .card {
   opacity: 1;
   transform: none;
 }
+/* Once the loop is running, a card that changes column takes its colour at once: the reveal's 1.2s wait belongs to the
+   first landing only, and the loop's moves are 420ms slides. */
+html.js .board.cycling .card {
+  transition:
+    opacity var(--dur-enter) var(--ease-out) calc(var(--i, 0) * 50ms),
+    transform var(--dur-enter) var(--ease-out) calc(var(--i, 0) * 50ms),
+    background-color 300ms var(--ease-out),
+    border-color 300ms var(--ease-out),
+    outline-color 160ms var(--ease-out),
+    outline-offset 160ms var(--ease-out);
+}
 html.js .board .card-needs {
   background: rgb(255 255 255 / 0.04);
   border-color: rgb(255 255 255 / 0.16);
@@ -1417,6 +1409,22 @@ html.js .notice[data-reveal] {
 html.js .notice[data-reveal].in {
   opacity: 1;
   transform: none;
+}
+
+/* The board's loop lands a needs-you card again: the notification drops in with it (PRD v1.227 ②). Only the loop adds
+   `drop`; the first landing is the reveal above. */
+@keyframes notice-drop {
+  from {
+    opacity: 0;
+    translate: 0 -10px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+html.js .notice.drop {
+  animation: notice-drop 420ms var(--ease-out);
 }
 
 /* The GitHub line draws through the five steps; each dot, its card and the last check follow it. */
@@ -1538,6 +1546,699 @@ html.js .layout-branch .link-red {
 html.js .cell4.in .layout-branch .node-red,
 html.js .cell4.in .layout-branch .link-red {
   opacity: 1;
+}
+
+/* ---------------------------------------------------------------- the six agent diagrams (PRD v1.227 ②) */
+
+/* Each diagram loops while it is in the viewport — Home.astro's observer toggles `in-view` on every [data-loop] on
+   enter and on leave — and holds where it was otherwise. Every loop ends on the picture the site has always shown, and
+   the parts that appeared fade back out in the last 6%, so the restart reads as a fade and not a cut. Timings are
+   percentages of the diagram's --dg-t; only transform, opacity, stroke-dashoffset and the two fills that swap (a
+   child being taken over, the kept result) move anything else. */
+html.js .dg-dispatch,
+html.js .dg-leader,
+html.js .dg-same-task {
+  --dg-t: 3800ms;
+}
+html.js .dg-subagents {
+  --dg-t: 3400ms;
+}
+html.js .dg-teams {
+  --dg-t: 3600ms;
+}
+html.js .dg-workflows {
+  --dg-t: 3200ms;
+}
+html.js .diagram[data-loop]:not(.in-view),
+html.js .diagram[data-loop]:not(.in-view) * {
+  animation-play-state: paused;
+}
+
+/* Lines that draw: one dash as long as the path, pulled in from its first point. */
+html.js .dg-dispatch .l1,
+html.js .dg-dispatch .l3,
+html.js .dg-leader .l1,
+html.js .dg-leader .l2,
+html.js .dg-leader .l4,
+html.js .dg-teams .k1,
+html.js .dg-teams .k2 {
+  stroke-dasharray: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Dispatch: the three links draw out of the left node, each target node and its two bars landing after its link,
+     the brand branch last. The dashed link keeps its dashes and its pattern marches in from the left node. */
+  html.js .dg-dispatch .l1 {
+    animation: dg-dispatch-l1 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-dispatch .ld {
+    animation: dg-dispatch-ld var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-dispatch .l3 {
+    animation: dg-dispatch-l3 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-dispatch .n1 {
+    animation: dg-dispatch-n1 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-dispatch .n2 {
+    animation: dg-dispatch-n2 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-dispatch .n3 {
+    animation: dg-dispatch-n3 var(--dg-t) var(--ease-out) infinite;
+  }
+  @keyframes dg-dispatch-l1 {
+    0%,
+    3% {
+      stroke-dashoffset: 1;
+      opacity: 1;
+    }
+    16%,
+    94% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+  }
+  @keyframes dg-dispatch-l3 {
+    0%,
+    45% {
+      stroke-dashoffset: 1;
+      opacity: 1;
+    }
+    58%,
+    94% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+  }
+  @keyframes dg-dispatch-ld {
+    0%,
+    24% {
+      stroke-dashoffset: 200;
+      opacity: 1;
+    }
+    37%,
+    94% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 200;
+      opacity: 0;
+    }
+  }
+  @keyframes dg-dispatch-n1 {
+    0%,
+    13% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    24%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-dispatch-n2 {
+    0%,
+    34% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    45%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-dispatch-n3 {
+    0%,
+    55% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    66%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+
+  /* Leader: the three solid children connect from the leader; then the dashed empty child is taken over — its ring
+     fills in, its dashes close and its grey bar turns black. */
+  html.js .dg-leader .l1 {
+    animation: dg-leader-l1 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-leader .l2 {
+    animation: dg-leader-l2 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-leader .l4 {
+    animation: dg-leader-l4 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-leader .c1 {
+    animation: dg-leader-c1 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-leader .c2 {
+    animation: dg-leader-c2 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-leader .c4 {
+    animation: dg-leader-c4 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-leader .t {
+    animation: dg-leader-t var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-leader .tb {
+    animation: dg-leader-tb var(--dg-t) var(--ease-in-out) infinite;
+  }
+  @keyframes dg-leader-l1 {
+    0%,
+    3% {
+      stroke-dashoffset: 1;
+      opacity: 1;
+    }
+    14%,
+    94% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+  }
+  @keyframes dg-leader-l2 {
+    0%,
+    18% {
+      stroke-dashoffset: 1;
+      opacity: 1;
+    }
+    29%,
+    94% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+  }
+  @keyframes dg-leader-l4 {
+    0%,
+    33% {
+      stroke-dashoffset: 1;
+      opacity: 1;
+    }
+    44%,
+    94% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+  }
+  @keyframes dg-leader-c1 {
+    0%,
+    11% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    21%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-leader-c2 {
+    0%,
+    26% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    36%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-leader-c4 {
+    0%,
+    41% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    51%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-leader-t {
+    0%,
+    60% {
+      fill: #fff;
+      stroke-dasharray: 4 4;
+    }
+    70%,
+    94% {
+      fill: #0b0b14;
+      stroke-dasharray: 0 0;
+    }
+    100% {
+      fill: #fff;
+      stroke-dasharray: 4 4;
+    }
+  }
+  @keyframes dg-leader-tb {
+    0%,
+    60% {
+      fill-opacity: 0.3;
+    }
+    70%,
+    94% {
+      fill-opacity: 1;
+    }
+    100% {
+      fill-opacity: 0.3;
+    }
+  }
+
+  /* Subagents: the three sub-rows slide out from the parent one after another, then their circles fill in turn. */
+  html.js .dg-subagents .s1 {
+    animation: dg-subagents-s1 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-subagents .s2 {
+    animation: dg-subagents-s2 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-subagents .s3 {
+    animation: dg-subagents-s3 var(--dg-t) var(--ease-out) infinite;
+  }
+  /* A row's circle runs two animations — the row sliding in and its own fill — so it gets one rule of its own: a
+     second `animation` declaration would replace the row's, not add to it. */
+  html.js .dg-subagents .s1.c1 {
+    animation:
+      dg-subagents-s1 var(--dg-t) var(--ease-out) infinite,
+      dg-subagents-c1 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-subagents .s2.c2 {
+    animation:
+      dg-subagents-s2 var(--dg-t) var(--ease-out) infinite,
+      dg-subagents-c2 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-subagents .s3.c3 {
+    animation:
+      dg-subagents-s3 var(--dg-t) var(--ease-out) infinite,
+      dg-subagents-c3 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  @keyframes dg-subagents-s1 {
+    0%,
+    3% {
+      opacity: 0;
+      translate: -6px 0;
+    }
+    13%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: -6px 0;
+    }
+  }
+  @keyframes dg-subagents-s2 {
+    0%,
+    15% {
+      opacity: 0;
+      translate: -6px 0;
+    }
+    25%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: -6px 0;
+    }
+  }
+  @keyframes dg-subagents-s3 {
+    0%,
+    27% {
+      opacity: 0;
+      translate: -6px 0;
+    }
+    37%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: -6px 0;
+    }
+  }
+  @keyframes dg-subagents-c1 {
+    0%,
+    30% {
+      fill: #fff;
+    }
+    37%,
+    94% {
+      fill: #0b0b14;
+    }
+    100% {
+      fill: #fff;
+    }
+  }
+  @keyframes dg-subagents-c2 {
+    0%,
+    40% {
+      fill: #fff;
+    }
+    47%,
+    94% {
+      fill: #0b0b14;
+    }
+    100% {
+      fill: #fff;
+    }
+  }
+  @keyframes dg-subagents-c3 {
+    0%,
+    50% {
+      fill: #fff;
+    }
+    57%,
+    94% {
+      fill: #0b0b14;
+    }
+    100% {
+      fill: #fff;
+    }
+  }
+
+  /* Agent teams: one task bar travels lane to lane along the curves — the bar of the first lane is the one that
+     travels, stretched to each lane's width, so the hand-offs read as the same piece of work. It ends as the brand
+     bar in the last lane, where the ring pulses once. The lane bars it lands on are drawn by it, so they stay hidden
+     while the loop runs. */
+  html.js .dg-teams .t {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: dg-teams-t var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-teams .b2,
+  html.js .dg-teams .b3 {
+    animation: dg-teams-cover var(--dg-t) linear infinite;
+  }
+  html.js .dg-teams .k1 {
+    animation: dg-teams-k1 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-teams .k2 {
+    animation: dg-teams-k2 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-teams .pulse {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: dg-teams-pulse var(--dg-t) var(--ease-out) infinite;
+  }
+  @keyframes dg-teams-t {
+    0% {
+      opacity: 0;
+      translate: 0 0;
+      scale: 1 1;
+      fill: #0b0b14;
+    }
+    4%,
+    18% {
+      opacity: 1;
+      translate: 0 0;
+      scale: 1 1;
+      fill: #0b0b14;
+    }
+    34%,
+    50% {
+      translate: 90px 48px;
+      scale: 1.143 1;
+      fill: #0b0b14;
+    }
+    66%,
+    94% {
+      opacity: 1;
+      translate: 190px 96px;
+      scale: 0.8 1;
+      fill: #d8330e;
+    }
+    100% {
+      opacity: 0;
+      translate: 190px 96px;
+      scale: 0.8 1;
+      fill: #d8330e;
+    }
+  }
+  @keyframes dg-teams-cover {
+    0%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes dg-teams-k1 {
+    0%,
+    20% {
+      stroke-dashoffset: 1;
+    }
+    34%,
+    94% {
+      stroke-dashoffset: 0;
+    }
+    100% {
+      stroke-dashoffset: 1;
+    }
+  }
+  @keyframes dg-teams-k2 {
+    0%,
+    52% {
+      stroke-dashoffset: 1;
+    }
+    66%,
+    94% {
+      stroke-dashoffset: 0;
+    }
+    100% {
+      stroke-dashoffset: 1;
+    }
+  }
+  @keyframes dg-teams-pulse {
+    0%,
+    72% {
+      scale: 1 1;
+    }
+    76% {
+      scale: 1.35 1.35;
+    }
+    82%,
+    100% {
+      scale: 1 1;
+    }
+  }
+
+  /* Workflows: the bars fill left to right, row by row — the brand review row last — and retract at the end. The
+     n/m counts are outlines in the export, so they stay as they are; swapping them would need JavaScript. */
+  html.js .dg-workflows .f1 {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: dg-workflows-f1 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-workflows .f2 {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: dg-workflows-f2 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-workflows .f3 {
+    transform-box: fill-box;
+    transform-origin: 0% 50%;
+    animation: dg-workflows-f3 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  @keyframes dg-workflows-f1 {
+    0%,
+    3% {
+      scale: 0 1;
+    }
+    15%,
+    94% {
+      scale: 1 1;
+    }
+    100% {
+      scale: 0 1;
+    }
+  }
+  @keyframes dg-workflows-f2 {
+    0%,
+    22% {
+      scale: 0 1;
+    }
+    34%,
+    94% {
+      scale: 1 1;
+    }
+    100% {
+      scale: 0 1;
+    }
+  }
+  @keyframes dg-workflows-f3 {
+    0%,
+    41% {
+      scale: 0 1;
+    }
+    53%,
+    94% {
+      scale: 1 1;
+    }
+    100% {
+      scale: 0 1;
+    }
+  }
+
+  /* Same task, several hands: the three results land one after another, then the middle one — the kept one — turns
+     black, its bar white and the check arrives. */
+  html.js .dg-same-task .u1 {
+    animation: dg-same-task-u1 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-same-task .u2 {
+    animation: dg-same-task-u2 var(--dg-t) var(--ease-out) infinite;
+  }
+  html.js .dg-same-task .u3 {
+    animation: dg-same-task-u3 var(--dg-t) var(--ease-out) infinite;
+  }
+  /* The kept result and its bar land with the middle unit and then swap, so each needs both animations in one rule. */
+  html.js .dg-same-task .u2.k {
+    animation:
+      dg-same-task-u2 var(--dg-t) var(--ease-out) infinite,
+      dg-same-task-k var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-same-task .u2.k2 {
+    animation:
+      dg-same-task-u2 var(--dg-t) var(--ease-out) infinite,
+      dg-same-task-k2 var(--dg-t) var(--ease-in-out) infinite;
+  }
+  html.js .dg-same-task .chk {
+    animation: dg-same-task-chk var(--dg-t) var(--ease-out) infinite;
+  }
+  @keyframes dg-same-task-u1 {
+    0%,
+    3% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    14%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-same-task-u2 {
+    0%,
+    20% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    31%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-same-task-u3 {
+    0%,
+    37% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+    48%,
+    94% {
+      opacity: 1;
+      translate: 0 0;
+    }
+    100% {
+      opacity: 0;
+      translate: 0 3px;
+    }
+  }
+  @keyframes dg-same-task-k {
+    0%,
+    54% {
+      fill: #fff;
+    }
+    64%,
+    100% {
+      fill: #0b0b14;
+    }
+  }
+  @keyframes dg-same-task-k2 {
+    0%,
+    54% {
+      fill: #0b0b14;
+      fill-opacity: 0.7;
+    }
+    64%,
+    100% {
+      fill: #fff;
+      fill-opacity: 1;
+    }
+  }
+  @keyframes dg-same-task-chk {
+    0%,
+    54% {
+      opacity: 0;
+    }
+    64%,
+    94% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
 }
 
 /* Reduced motion: no transforms and no drawing, a 200ms opacity fade only, and the board and line in their final
