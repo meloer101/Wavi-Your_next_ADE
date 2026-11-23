@@ -97,6 +97,8 @@ struct MarkdownBlock: Hashable, Sendable {
   var marker: String?
   /// A task list item: true when its box is ticked.
   var checked: Bool?
+  /// Inside a block quote: the block is drawn behind the quote's bar, whatever it is (words, a list, code, a table).
+  var quoted = false
 }
 
 /// `text` parsed into the blocks above. Every call parses (tests and the shots want that); the views use
@@ -147,7 +149,12 @@ private func blocks(of markup: BlockMarkup, level: Int) -> [MarkdownBlock] {
       }
     }
     flush()
-    return out
+    // Everything that came out of the quote, a list inside it too, sits behind the bar.
+    return out.map { block in
+      var quoted = block
+      quoted.quoted = true
+      return quoted
+    }
   case let table as Markdown.Table:
     return [MarkdownBlock(kind: tableKind(table), level: level)]
   case let list as UnorderedList:
@@ -279,14 +286,14 @@ private struct InlineStyle {
   var link: URL?
   /// Whether a file path is a chip / a link to the file page: false where nothing answers the tap (no session).
   var files = true
-  /// The chip's icon is drawn on its own background, which follows the colour scheme.
-  var dark = true
 }
 
 private enum InlinePiece {
   case runs(AttributedString)
-  /// A path in inline code: drawn with its icon, tappable.
-  case chip(FileRef, dark: Bool)
+  /// Inline code that is not a path: drawn on a pill.
+  case code(AttributedString)
+  /// A path in inline code: its icon and name on one pill, tappable.
+  case chip(FileRef)
 }
 
 private func runs(_ text: String, _ style: InlineStyle) -> AttributedString {
@@ -329,17 +336,65 @@ private func pieces(of node: MarkdownInline, _ style: InlineStyle) -> [InlinePie
     linked.link = markdownLinkURL(destination, files: style.files)
     return children.flatMap { pieces(of: $0, linked) }
   case .code(let code):
-    if style.files, let ref = fileRef(inCode: code) { return [.chip(ref, dark: style.dark)] }
-    var inline = runs(code, style)
+    if style.files, let ref = fileRef(inCode: code) { return [.chip(ref)] }
+    var inline = runs(narrowPad + code + narrowPad, style)
     inline.font = codeFont
-    inline.backgroundColor = .fillSubtle
-    return [.runs(inline)]
+    return [.code(inline)]
   }
 }
 
-/// The inline runs of a paragraph, heading or cell as one `Text`, so they wrap as prose. A chip is a piece of its own:
-/// its icon is an image, which the text attributes cannot carry (a `Text(Image(…))` interpolation can).
-private func markdownText(_ inlines: [MarkdownInline], files: Bool, dark: Bool) -> Text {
+/// The padding inside a pill: a narrow no-break space, so a line never ends or starts on the padding alone.
+private let narrowPad = "\u{202F}"
+
+// MARK: - Pills
+
+/// Marks the runs a pill is drawn behind: inline code (radius 4) and a chip's icon and name (radius 6).
+private struct PillMark: TextAttribute {
+  let chip: Bool
+}
+
+/// Draws a rounded `fillSubtle` rectangle behind each line's consecutive marked runs, then the text. One rectangle per
+/// line, as tall as the marked runs and as wide as they are together, so a pill that wraps is one pill per line, with
+/// round ends, and the text's own line height is untouched (an `AttributedString` background is the whole line tall, is
+/// square, and is cut at each line break).
+private struct PillRenderer: TextRenderer {
+  func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+    for line in layout {
+      var pills: [(rect: CGRect, chip: Bool)] = []
+      var current: (rect: CGRect, chip: Bool)?
+      for run in line {
+        if let mark = run[PillMark.self] {
+          let rect = run.typographicBounds.rect
+          if let open = current, open.chip == mark.chip {
+            current = (open.rect.union(rect), mark.chip)
+          } else {
+            if let open = current { pills.append(open) }
+            current = (rect, mark.chip)
+          }
+        } else if let open = current {
+          pills.append(open)
+          current = nil
+        }
+      }
+      if let open = current { pills.append(open) }
+      for pill in pills {
+        let rect = pill.rect.insetBy(dx: 0, dy: 1)
+        context.fill(Path(roundedRect: rect, cornerRadius: pill.chip ? 6 : 4), with: .color(.fillSubtle))
+      }
+      for run in line { context.draw(run) }
+    }
+  }
+}
+
+extension Text {
+  /// This text with the pills behind its inline code and chips.
+  fileprivate func pills() -> some View { textRenderer(PillRenderer()) }
+}
+
+/// The inline runs of a paragraph, heading or cell as one `Text`, so they wrap as prose. Inline code and chips are pieces
+/// of their own, marked for `PillRenderer` (a chip's icon is an image, which text attributes cannot carry; a
+/// `Text(Image(…))` can).
+private func markdownText(_ inlines: [MarkdownInline], files: Bool) -> Text {
   var out: [Text] = []
   var runs = AttributedString()
   func flush() {
@@ -348,12 +403,15 @@ private func markdownText(_ inlines: [MarkdownInline], files: Bool, dark: Bool) 
   func add(_ piece: InlinePiece) {
     switch piece {
     case .runs(let text): runs += text
-    case .chip(let ref, let dark):
+    case .code(let code):
       flush()
-      out.append(chip(ref, dark: dark))
+      out.append(Text(code).customAttribute(PillMark(chip: false)))
+    case .chip(let ref):
+      flush()
+      out.append(chip(ref))
     }
   }
-  for node in inlines { pieces(of: node, InlineStyle(files: files, dark: dark)).forEach(add) }
+  for node in inlines { pieces(of: node, InlineStyle(files: files)).forEach(add) }
   flush()
   return out.isEmpty ? Text("") : out.dropFirst().reduce(out[0], +)
 }
@@ -369,42 +427,38 @@ func markdownLinkURL(_ destination: String, files: Bool) -> URL? {
   return ref.url
 }
 
-/// A chip: the file icon and the name on one `fillSubtle` background. The icon is an image, which text attributes cannot
-/// paint a background behind, so the background is part of the image (one per colour scheme, 14 pt icon, as tall as the
-/// line); the name's run has the same background, with thin spaces for the padding. VoiceOver reads "文件 name".
-private func chip(_ ref: FileRef, dark: Bool) -> Text {
-  var name = runs("\u{2009}" + fileRefName(ref.path) + "\u{2009}", InlineStyle())
+/// A chip: a file icon at 14 pt (scaled like `codeFont`, relative to `.callout`) and the file's name, both marked for one
+/// pill. A hyphen in the name is U+2011, so the name breaks a line only where it has to. VoiceOver reads "文件 name".
+private func chip(_ ref: FileRef) -> Text {
+  var pad = AttributedString(narrowPad)
+  pad.font = codeFont
+  var name = AttributedString(fileRefName(ref.path).replacingOccurrences(of: "-", with: "\u{2011}") + narrowPad)
   name.font = codeFont
-  name.backgroundColor = .fillSubtle
   name.foregroundColor = .textPrimary
   if let url = ref.url { name.link = url }
-  let icon = Image(fileChipIcon(dark: dark), scale: chipIconScale, label: Text("文件"))
-  return Text(icon).baselineOffset(-4) + Text(name)
+  let mark = PillMark(chip: true)
+  let icon = Image(uiImage: fileChipIcon(points: UIFontMetrics(forTextStyle: .callout).scaledValue(for: 14)))
+  return Text(pad).customAttribute(mark)
+    + Text(icon).foregroundColor(.textSecondary).baselineOffset(-1.5).customAttribute(mark)
+    + Text(narrowPad).font(codeFont).customAttribute(mark) // not a breaking space: the icon never ends a line alone
+    + Text(name).customAttribute(mark)
 }
 
-private let chipIconScale: CGFloat = 3
-
-/// The icon on its background, drawn for one colour scheme (`Color.fillSubtle` and `textSecondary` are translucent, so the
-/// background is not baked into a single image for both).
-private func fileChipIcon(dark: Bool) -> CGImage {
-  cachedChipIcons[dark ? 1 : 0]
-}
-
-private let cachedChipIcons: [CGImage] = [UIUserInterfaceStyle.light, .dark].map { style in
-  let traits = UITraitCollection(userInterfaceStyle: style)
-  let size = CGSize(width: 22, height: 19)
+/// The file icon, a template image `points` square, kept per size (`Text` takes an image at its own size).
+private func fileChipIcon(points: CGFloat) -> UIImage {
+  let key = NSNumber(value: Int((points * 10).rounded()))
+  if let cached = chipIcons.object(forKey: key) { return cached }
+  let size = CGSize(width: points, height: points)
   let format = UIGraphicsImageRendererFormat()
-  format.scale = chipIconScale
-  let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-    UIColor(Color.fillSubtle).resolvedColor(with: traits).setFill()
-    UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), byRoundingCorners: [.topLeft, .bottomLeft], cornerRadii: CGSize(width: 6, height: 6)).fill()
-    if let source = UIImage(named: "Icons/file")?.withRenderingMode(.alwaysTemplate) {
-      let tint = UIColor(Color.textSecondary).resolvedColor(with: traits)
-      source.withTintColor(tint, renderingMode: .alwaysOriginal).draw(in: CGRect(x: 5, y: 2.5, width: 14, height: 14))
-    }
-  }
-  return image.cgImage ?? UIImage().cgImage!
+  format.scale = 3
+  let source = UIImage(named: "Icons/file") ?? UIImage()
+  let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in source.draw(in: CGRect(origin: .zero, size: size)) }
+    .withRenderingMode(.alwaysTemplate)
+  chipIcons.setObject(image, forKey: key)
+  return image
 }
+
+private nonisolated(unsafe) let chipIcons = NSCache<NSNumber, UIImage>()
 
 // MARK: - Chips open a file
 
@@ -459,8 +513,20 @@ struct MarkdownText: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      ForEach(Array(parsedBlocks(text).enumerated()), id: \.offset) { _, block in
-        MarkdownBlockView(block: block)
+      ForEach(Array(quoteGroups(parsedBlocks(text)).enumerated()), id: \.offset) { _, group in
+        if group.quoted, let first = group.blocks.first {
+          // One quote is one bar, however many blocks it holds.
+          HStack(alignment: .top, spacing: 10) {
+            Rectangle().fill(Color.lineStrong).frame(width: 2)
+            VStack(alignment: .leading, spacing: 8) {
+              ForEach(Array(group.blocks.enumerated()), id: \.offset) { _, block in MarkdownBlockView(block: block, base: first.level) }
+            }
+          }
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.leading, CGFloat(min(first.level, 6)) * 22)
+        } else {
+          ForEach(Array(group.blocks.enumerated()), id: \.offset) { _, block in MarkdownBlockView(block: block, base: 0) }
+        }
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -473,31 +539,43 @@ struct MarkdownText: View {
   }
 }
 
+/// The blocks in runs of quoted / not quoted, in order.
+func quoteGroups(_ blocks: [MarkdownBlock]) -> [(quoted: Bool, blocks: [MarkdownBlock])] {
+  var groups: [(quoted: Bool, blocks: [MarkdownBlock])] = []
+  for block in blocks {
+    if let last = groups.last, last.quoted == block.quoted {
+      groups[groups.count - 1].blocks.append(block)
+    } else {
+      groups.append((block.quoted, [block]))
+    }
+  }
+  return groups
+}
+
 private struct MarkdownBlockView: View {
   let block: MarkdownBlock
+  /// The level the enclosing quote's bar stands at: blocks inside it indent from there.
+  let base: Int
   /// A path is a chip only where a tap can open it: a reply in a session, not the plan sheet over one.
   @Environment(\.fileSession) private var session
-  @Environment(\.colorScheme) private var scheme
+  /// The chip's icon is sized from the text style, so a change of text size redraws it.
+  @Environment(\.dynamicTypeSize) private var typeSize
 
-  private func words(_ inlines: [MarkdownInline]) -> Text { markdownText(inlines, files: session != nil, dark: scheme == .dark) }
+  private func words(_ inlines: [MarkdownInline]) -> Text { markdownText(inlines, files: session != nil) }
 
   var body: some View {
     switch block.kind {
     case .paragraph(let inlines):
-      row(words(inlines))
+      row(inlines)
     case .heading(let level, let inlines):
       words(inlines)
         .font(headingFont(level))
         .foregroundStyle(Color.textPrimary)
+        .pills()
         .padding(.top, 4)
         .padding(.leading, indent)
     case .quote(let inlines):
-      HStack(alignment: .top, spacing: 10) {
-        Rectangle().fill(Color.lineStrong).frame(width: 2)
-        words(inlines).font(.ui(.callout)).lineSpacing(5).foregroundStyle(Color.textSecondary)
-      }
-      .fixedSize(horizontal: false, vertical: true)
-      .padding(.leading, indent)
+      words(inlines).font(.ui(.callout)).foregroundStyle(Color.textSecondary).pills().lineSpacing(5).padding(.leading, indent)
     case .code(let language, let code):
       MarkdownCodeBlock(language: language, code: code).padding(.leading, indent)
     case .table(let header, let rows):
@@ -507,7 +585,7 @@ private struct MarkdownBlockView: View {
     }
   }
 
-  private var indent: CGFloat { CGFloat(min(block.level, 6)) * 22 }
+  private var indent: CGFloat { CGFloat(min(max(block.level - base, 0), 6)) * 22 }
 
   private func headingFont(_ level: Int) -> Font {
     // 20 / 18 / 16, each scaled with the text style it is nearest to.
@@ -518,12 +596,15 @@ private struct MarkdownBlockView: View {
     }
   }
 
-  @ViewBuilder private func row(_ content: Text) -> some View {
-    let text = content.font(.ui(.callout)).lineSpacing(5).foregroundStyle(Color.textPrimary)
+  private func text(_ inlines: [MarkdownInline], _ color: Color) -> some View {
+    words(inlines).font(.ui(.callout)).foregroundStyle(color).pills().lineSpacing(5)
+  }
+
+  @ViewBuilder private func row(_ inlines: [MarkdownInline]) -> some View {
     if block.checked != nil {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
         CheckBox(done: block.checked == true)
-        if block.checked == true { text.foregroundStyle(Color.textSecondary) } else { text }
+        text(inlines, block.checked == true ? .textSecondary : .textPrimary)
       }
       .padding(.leading, indent)
     } else if let marker = block.marker {
@@ -537,11 +618,11 @@ private struct MarkdownBlockView: View {
           }
         }
         .frame(minWidth: 16, alignment: .leading)
-        text
+        text(inlines, .textPrimary)
       }
       .padding(.leading, indent)
     } else {
-      text.padding(.leading, indent)
+      text(inlines, .textPrimary).padding(.leading, indent)
     }
   }
 }
@@ -630,7 +711,7 @@ private struct MarkdownTable: View {
   /// Scrolled to the right end: the last column is then fully readable and the fade goes.
   @State private var atEnd = false
   @Environment(\.fileSession) private var session
-  @Environment(\.colorScheme) private var scheme
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   private static let spacing: CGFloat = 12
 
@@ -684,6 +765,6 @@ private struct MarkdownTable: View {
   }
 
   private func cell(_ inlines: [MarkdownInline], header: Bool) -> some View {
-    markdownText(inlines, files: session != nil, dark: scheme == .dark).font(.ui(.subheadline, medium: header)).foregroundStyle(Color.textPrimary)
+    markdownText(inlines, files: session != nil).font(.ui(.subheadline, medium: header)).foregroundStyle(Color.textPrimary).pills()
   }
 }

@@ -66,13 +66,23 @@ import Testing
 
   @Test func aQuoteAndARuleAreTheirOwnBlocks() {
     let blocks = markdownBlocks("> 一句引用\n\n---\n")
-    #expect(blocks == [.init(kind: .quote([.text("一句引用")])), .init(kind: .rule)])
+    #expect(blocks == [.init(kind: .quote([.text("一句引用")]), quoted: true), .init(kind: .rule)])
   }
 
   @Test func aQuoteKeepsTheOrderOfWhatIsInsideIt() {
     let blocks = markdownBlocks("> a\n>\n> - x\n>\n> b")
     #expect(blocks.map(\.kind) == [.quote([.text("a")]), .paragraph([.text("x")]), .quote([.text("b")])])
     #expect(blocks.map(\.marker) == [nil, "•", nil])
+    // Everything in the quote, the list too, is quoted: one bar for the three.
+    #expect(blocks.map(\.quoted) == [true, true, true])
+    #expect(quoteGroups(blocks).map(\.quoted) == [true])
+    #expect(quoteGroups(blocks).first?.blocks.count == 3)
+  }
+
+  @Test func blocksOutsideAQuoteAreNotQuoted() {
+    let blocks = markdownBlocks("前\n\n> 引\n\n后")
+    #expect(blocks.map(\.quoted) == [false, true, false])
+    #expect(quoteGroups(blocks).map(\.quoted) == [false, true, false])
   }
 
   @Test func blocksInAnItemAlignWithItsText() {
