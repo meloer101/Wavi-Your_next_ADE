@@ -28,6 +28,7 @@ const ICON_NAMES: Record<string, GlyphName> = {
   bot: 'Bot',
   camera: 'Camera',
   check: 'Check',
+  copy: 'Copy',
   'chevron-down': 'ChevronDown',
   'chevron-left': 'ChevronLeft',
   'chevron-right': 'ChevronRight',
