@@ -84,10 +84,15 @@ func receiptText(_ prompt: RemotePrompt, decision: String?, onPhone: Bool) -> St
   }
 }
 
+/// The item kinds `FeedRow` draws.
+private let shownKinds: Set<String> = ["user", "text", "thinking", "tool", "system"]
+
 /// `turnOpen`: the agent is still at the last turn (no totals for it yet).
 func transcriptBlocks(_ items: [ChatItem], receipts: [Receipt], turnOpen: Bool) -> [TranscriptBlock] {
   // Answers go after the last item or answer that came before them.
-  var entries: [TranscriptBlock] = items.map { .item($0) }
+  // A line of a type the Mac does not know (`unknown`, or a kind newer than this app) has nothing to show: it is left out
+  // rather than drawn as a placeholder row.
+  var entries: [TranscriptBlock] = items.filter { shownKinds.contains($0.kind) }.map { .item($0) }
   for receipt in receipts.sorted(by: { $0.at < $1.at }) {
     let index = entries.lastIndex {
       switch $0 {
