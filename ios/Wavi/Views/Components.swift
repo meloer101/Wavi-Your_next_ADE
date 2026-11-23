@@ -76,30 +76,59 @@ struct ButtonRow<Content: View>: View {
 }
 
 /// A Markdown table: columns as wide as their text, between 48 and 220 (a longer cell wraps), the whole table
-/// scrolling sideways when it is wider than the reply.
+/// scrolling sideways when it is wider than the reply. Each column's width is measured first and every cell is laid out
+/// at that width: inside a sideways ScrollView nothing proposes a width, so a Grid sized its rows for one-line cells
+/// while the cells wrapped at 220, and the rows overlapped.
 private struct MarkdownTable: View {
   let header: [String]
   let rows: [[String]]
   let inline: (String) -> Text
+  /// Each column's widest cell on one line.
+  @State private var natural: [Int: CGFloat] = [:]
+
+  private static let spacing: CGFloat = 12
+
+  private func width(_ column: Int) -> CGFloat { min(max(natural[column] ?? 48, 48), 220) }
 
   var body: some View {
+    let columns = Array(header.indices)
+    let total = columns.map(width).reduce(0, +) + Self.spacing * CGFloat(max(columns.count - 1, 0))
     ScrollView(.horizontal, showsIndicators: false) {
-      Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 0) {
-        GridRow { ForEach(Array(header.enumerated()), id: \.offset) { _, cell in self.cell(cell, header: true) } }
-        Rectangle().fill(Color.lineStrong).frame(height: 1).gridCellUnsizedAxes(.horizontal)
-        ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-          GridRow { ForEach(Array(row.enumerated()), id: \.offset) { _, cell in self.cell(cell, header: false) } }
-          if index < rows.count - 1 { Rectangle().fill(Color.hairline).frame(height: 1).gridCellUnsizedAxes(.horizontal) }
+      VStack(alignment: .leading, spacing: 0) {
+        row(header, header: true)
+        Rectangle().fill(Color.lineStrong).frame(width: total, height: 1)
+        ForEach(Array(rows.enumerated()), id: \.offset) { index, cells in
+          row(cells, header: false)
+          if index < rows.count - 1 { Rectangle().fill(Color.hairline).frame(width: total, height: 1) }
         }
+      }
+      .background(alignment: .topLeading) {
+        HStack(alignment: .top, spacing: 0) {
+          ForEach(columns, id: \.self) { column in
+            VStack(alignment: .leading, spacing: 0) {
+              cell(header[column], header: true)
+              ForEach(Array(rows.enumerated()), id: \.offset) { _, cells in cell(cells[column], header: false) }
+            }
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { natural[column] = $0 }
+          }
+        }
+        .hidden()
       }
     }
   }
 
+  private func row(_ cells: [String], header: Bool) -> some View {
+    HStack(alignment: .top, spacing: Self.spacing) {
+      ForEach(Array(cells.enumerated()), id: \.offset) { column, text in
+        cell(text, header: header).fixedSize(horizontal: false, vertical: true).frame(width: width(column), alignment: .leading)
+      }
+    }
+    .padding(.vertical, 6)
+  }
+
   private func cell(_ text: String, header: Bool) -> some View {
     inline(text).font(.ui(.subheadline, medium: header)).foregroundStyle(Color.textPrimary)
-      .fixedSize(horizontal: false, vertical: true)
-      .frame(minWidth: 48, maxWidth: 220, alignment: .leading)
-      .padding(.vertical, 6)
   }
 }
 
@@ -129,7 +158,9 @@ extension ButtonStyle where Self == WaviButtonStyle {
 
 /// One block of an agent's Markdown reply.
 enum MarkdownBlock: Hashable {
-  case paragraph(String), heading(String), item(marker: String, text: String), quote(String), code(String)
+  case paragraph(String), heading(String), quote(String), code(String)
+  /// A list item; `level` 0 at the margin, 1 under an item of level 0, and so on.
+  case item(marker: String, text: String, level: Int)
   /// A GitHub table: the header's cells, then each row's (padded or cut to the header's count).
   case table(header: [String], rows: [[String]])
 }
@@ -157,6 +188,8 @@ private func isTableDivider(_ line: String) -> Bool {
 func markdownBlocks(_ text: String) -> [MarkdownBlock] {
   var out: [MarkdownBlock] = []
   var paragraph: [String] = []
+  /// The indents of the list items that are open, outermost first.
+  var indents: [Int] = []
   func flush() {
     if !paragraph.isEmpty { out.append(.paragraph(paragraph.joined(separator: "\n"))) }
     paragraph = []
@@ -192,11 +225,15 @@ func markdownBlocks(_ text: String) -> [MarkdownBlock] {
       flush()
     } else if let m = line.wholeMatch(of: /#{1,6}\s+(.*)/) {
       flush()
+      indents = []
       out.append(.heading(String(m.1)))
-    } else if let m = line.wholeMatch(of: /\s*([-*+]|\d+[.)])\s+(.*)/) {
+    } else if let m = line.wholeMatch(of: /(\s*)([-*+]|\d+[.)])\s+(.*)/) {
       flush()
-      let marker = String(m.1)
-      out.append(.item(marker: marker.first?.isNumber == true ? marker : "•", text: String(m.2)))
+      let indent = m.1.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
+      while let last = indents.last, last >= indent { indents.removeLast() }
+      let marker = String(m.2)
+      out.append(.item(marker: marker.first?.isNumber == true ? marker : "•", text: String(m.3), level: indents.count))
+      indents.append(indent)
     } else if let m = line.wholeMatch(of: />\s?(.*)/) {
       flush()
       out.append(.quote(String(m.1)))
@@ -228,11 +265,12 @@ struct MarkdownText: View {
         switch block {
         case .paragraph(let t): inline(t).font(.ui(.callout)).lineSpacing(5).foregroundStyle(Color.textPrimary)
         case .heading(let t): inline(t).font(.ui(.callout, medium: true)).foregroundStyle(Color.textPrimary)
-        case .item(let marker, let t):
+        case .item(let marker, let t, let level):
           HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(marker).font(.ui(.callout)).foregroundStyle(Color.textSecondary).frame(minWidth: 14, alignment: .leading)
             inline(t).font(.ui(.callout)).lineSpacing(5).foregroundStyle(Color.textPrimary)
           }
+          .padding(.leading, CGFloat(min(level, 4)) * 22)
         case .quote(let t):
           inline(t).font(.ui(.callout)).foregroundStyle(Color.textSecondary).padding(.leading, 10)
             .overlay(alignment: .leading) { Rectangle().fill(Color.lineStrong).frame(width: 2) }
