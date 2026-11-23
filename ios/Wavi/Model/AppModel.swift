@@ -92,6 +92,14 @@ final class AppModel {
     return id
   }
 
+  /// Text for a session's composer that something else asked for (the context sheet's 「放进 /compact」), until the
+  /// composer has taken it. It is put in, never sent.
+  private(set) var pendingInsert: [String: String] = [:]
+
+  func insert(_ text: String, into session: String) { pendingInsert[session] = text }
+
+  func insertTaken(_ session: String) { pendingInsert[session] = nil }
+
   /// Its copy took off (or it faded in): later layouts of the message do not start it again.
   func launched(_ id: String) {
     if launch?.id == id { launch = nil }
@@ -162,7 +170,7 @@ final class AppModel {
     guard let cached = cache.sessions(cacheScope) else { return }
     // An exit the Mac was in the middle of (提交 / 合并 / 推送) is stale by definition — it may have finished or failed
     // since; the Mac's snapshot brings it back if it is still running. The rest of the row was true when it was sent.
-    sessions = RemoteSessionList(projects: cached.list.projects, sessions: cached.list.sessions.map(\.withoutShip))
+    sessions = RemoteSessionList(projects: cached.list.projects, sessions: cached.list.sessions.map(\.withoutShip), usage: cached.list.usage)
     heardAt = cached.heardAt
     turnStarts = nextTurnStarts([:], sessions: sessions.sessions)
   }
@@ -364,13 +372,14 @@ final class AppModel {
   struct Snapshot: Codable {
     let projects: [RemoteProject]
     let sessions: [RemoteSession]
+    let usage: [RemoteVendorUsage]?
     let prompts: [RemotePrompt]?
   }
 
   @discardableResult
   func refresh(timeout: Double = Link.requestSeconds) async -> Bool {
     guard let snapshot = await client?.request(.snapshot, timeout: timeout).decode(Snapshot.self) else { return false }
-    sessions = RemoteSessionList(projects: snapshot.projects, sessions: snapshot.sessions)
+    sessions = RemoteSessionList(projects: snapshot.projects, sessions: snapshot.sessions, usage: snapshot.usage)
     turnStarts = nextTurnStarts(turnStarts, sessions: sessions.sessions)
     heardAt = Date().timeIntervalSince1970 * 1000
     promptsListed(snapshot.prompts ?? [])

@@ -235,6 +235,23 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
     }
   }
 
+  /// PRD F22 v1.230 ④: the context ring's figures and the vendors' plan windows, read by value (the round trip above
+  /// only says no field is lost).
+  @Test func contextAndUsageDecodeWithTheMacsValues() throws {
+    let list = try decoded(try Samples.load().events["sessions"]?["data"], RemoteSessionList.self, "event sessions")
+    let context = try #require(list.sessions.first?.context)
+    #expect(context == RemoteContext(percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true))
+    #expect(list.sessions.last?.context == nil)
+    let claude = try #require(list.usage?.first { $0.vendor == "claude" })
+    #expect(claude.plan == "Max")
+    #expect(claude.windows.map(\.id) == ["300", "10080:Sonnet"])
+    #expect(claude.windows.first?.resetsAt == 1_730_000_900_000)
+    // Every new field is optional: an older Mac's list still decodes.
+    let old = Data(#"{"projects":[],"sessions":[{"id":"s","projectId":"p","title":"t","agent":"claude","status":"idle","activity":1}]}"#.utf8)
+    let decodedOld = try JSONDecoder().decode(RemoteSessionList.self, from: old)
+    #expect(decodedOld.usage == nil && decodedOld.sessions.first?.context == nil)
+  }
+
   /// As the screens that ask decode each answer's `data`.
   @Test func answersDecodeAsTheAppReadsThem() throws {
     let samples = try Samples.load().results
