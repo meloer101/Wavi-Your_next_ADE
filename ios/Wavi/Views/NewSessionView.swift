@@ -67,15 +67,21 @@ struct NewSessionView: View {
     NavigationStack {
       Form {
         if let handoff {
-          // The item being handed over (Figma 103G): its glyph, `#142` in mono, then its title.
-          HStack(spacing: 8) {
-            Icon(handoff.start.link.kind == "pr" ? "git-pull-request" : "circle-dot", size: 16).foregroundStyle(Color.textSecondary)
-            Text("#\(handoff.start.link.number)").font(.mono(.footnote)).foregroundStyle(Color.textSecondary)
-            Text(handoff.itemTitle).font(.ui(.subheadline)).foregroundStyle(Color.textPrimary).lineLimit(1)
+          Section {
+            // The item being handed over (Figma 103G): its glyph, `#142` in mono, then its title, standing alone above 项目.
+            HStack(spacing: 8) {
+              Icon(handoff.start.link.kind == "pr" ? "git-pull-request" : "circle-dot", size: 16).foregroundStyle(Color.textSecondary)
+              Text("#\(handoff.start.link.number)").font(.mono(.footnote)).foregroundStyle(Color.textSecondary)
+              Text(handoff.itemTitle).font(.ui(.subheadline)).foregroundStyle(Color.textPrimary).lineLimit(1)
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityElement(children: .combine)
           }
-          .listRowBackground(Color.clear)
-          .accessibilityElement(children: .combine)
-          LabeledContent("项目", value: model.sessions.projects.first { $0.id == handoff.project }?.name ?? handoff.project)
+          .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+          Section {
+            LabeledContent("项目", value: model.sessions.projects.first { $0.id == handoff.project }?.name ?? handoff.project)
+          }
         } else {
           Picker("项目", selection: $project) {
             ForEach(model.sessions.projects) { Text($0.name).tag(Optional($0.id)) }
