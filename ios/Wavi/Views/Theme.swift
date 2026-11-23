@@ -64,6 +64,10 @@ extension Color {
   static let diffAddBg = shared("diff-add-bg")
   static let diffDelFg = shared("diff-del-fg")
   static let diffDelBg = shared("diff-del-bg")
+  /// 看板 · 进度's cards (PRD F22 v1.227 ②): the desktop board's `--card-<tone>` fill and its quieter line colour, so a
+  /// status has the same colour on the phone and on the Mac.
+  static func card(_ tone: CardTone) -> Color { shared("card-\(tone.rawValue)") }
+  static func cardMeta(_ tone: CardTone) -> Color { shared("card-\(tone.rawValue)-meta") }
   /// The Live Activity's Lock Screen card and its quiet buttons (Figma 47D / 47E; the island is always black).
   static let activityBackground = token(0x141414, 0xffffff, alpha: 0.82, 0.8)
   static let activityButton = token(0xffffff, 0x000000, alpha: 0.14, 0.06)
@@ -80,6 +84,11 @@ extension UIColor {
   }
 }
 
+/// A 看板 · 进度 card's fill: the desktop's `card/<tone>` tokens (tokens.css `--card-<tone>`), one per column.
+enum CardTone: String, Sendable {
+  case attention, error, review, working, idle
+}
+
 /// Spacing, radii and sizes (Mobile · Layout). Spacing is on the 4 grid.
 enum Metric {
   static let margin: CGFloat = 16
@@ -89,6 +98,8 @@ enum Metric {
   static let radiusGroup: CGFloat = 16
   /// The composer and rows that float over content.
   static let radiusField: CGFloat = 22
+  /// 看板's cards (Figma 103′B): a block that reads as one coloured surface, between a control and a group.
+  static let radiusCard: CGFloat = 14
   /// Sheets: concentric with the screen corner, 8 from the edge.
   static let radiusSheetTop: CGFloat = 34
   static let radiusSheetBottom: CGFloat = 54
