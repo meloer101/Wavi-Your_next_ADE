@@ -337,14 +337,17 @@ struct BlockRow: View {
     switch block {
     case .item(let item): FeedRow(item: item, session: session)
     case .fold(let fold): FoldRow(fold: fold, session: session, agent: agent, open: foldOpen)
-    case .reply(let item):
+    case .reply(let item, let meta):
       VStack(alignment: .leading, spacing: 8) {
         MarkdownText(text: item.text ?? "")
-        MessageMeta(item: item)
+        if meta { MessageMeta(item: item) }
       }
     case .tools(let run): ToolGroupRow(run: run, session: session)
     case .turn(let turn):
-      NavigationLink(value: Route.turn(session: session, tools: turn.tools)) { TurnRow(turn: turn) }.buttonStyle(.plain)
+      VStack(alignment: .leading, spacing: 8) {
+        NavigationLink(value: Route.turn(session: session, tools: turn.tools)) { TurnRow(turn: turn) }.buttonStyle(.plain)
+        if let reply = turn.reply { MessageMeta(item: reply) }
+      }
     case .receipt(let receipt): ReceiptRow(receipt: receipt)
     }
   }

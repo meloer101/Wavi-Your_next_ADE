@@ -31,6 +31,8 @@ struct TurnChange: Equatable, Sendable {
   let added: Int
   let removed: Int
   let tools: [String]
+  /// The finished turn's answer, when it has one: its time and copy go under the totals (Figma 104B1).
+  var reply: ChatItem? = nil
 }
 
 /// A finished turn's process (thinking, tools, intermediate text, answers given) folded into one line, 「工作了 1 分 15 秒」.
@@ -48,8 +50,8 @@ enum TranscriptBlock: Equatable, Sendable, Identifiable {
   case turn(TurnChange)
   case receipt(Receipt)
   case fold(TurnFold)
-  /// A finished turn's final reply.
-  case reply(ChatItem)
+  /// A finished turn's final reply. `meta`: its time and copy go under it (off when the turn's totals carry them).
+  case reply(ChatItem, meta: Bool)
 
   var id: String {
     switch self {
@@ -58,7 +60,7 @@ enum TranscriptBlock: Equatable, Sendable, Identifiable {
     case .turn(let turn): turn.id
     case .receipt(let receipt): receipt.id
     case .fold(let fold): fold.id
-    case .reply(let item): item.id
+    case .reply(let item, _): item.id
     }
   }
 }
@@ -126,9 +128,9 @@ func transcriptBlocks(_ items: [ChatItem], receipts: [Receipt], turnOpen: Bool) 
     }
     let finished = index < turns.count - 1 || !turnOpen
     let totals = finished && !edits.isEmpty
-    if finished, let folded = foldedTurn(turn) {
-      out.append(contentsOf: folded)
-      if totals, case .item(let first) = turn.first { out.append(turnTotals(first, edits)) }
+    if finished, let folded = foldedTurn(turn, totals: totals) {
+      out.append(contentsOf: folded.blocks)
+      if totals, case .item(let first) = turn.first { out.append(turnTotals(first, edits, reply: folded.answer)) }
       continue
     }
     var run: [ChatItem] = []
@@ -156,10 +158,10 @@ func transcriptBlocks(_ items: [ChatItem], receipts: [Receipt], turnOpen: Bool) 
   return out
 }
 
-private func turnTotals(_ first: ChatItem, _ edits: [ChatItem]) -> TranscriptBlock {
+private func turnTotals(_ first: ChatItem, _ edits: [ChatItem], reply: ChatItem? = nil) -> TranscriptBlock {
   let diffs = edits.compactMap(\.diff)
   return .turn(TurnChange(id: "turn-\(first.id)", files: Set(diffs.map(\.path)).count, added: diffs.reduce(0) { $0 + $1.added },
-    removed: diffs.reduce(0) { $0 + $1.removed }, tools: edits.map(\.id)))
+    removed: diffs.reduce(0) { $0 + $1.removed }, tools: edits.map(\.id), reply: reply))
 }
 
 private func entryAt(_ entry: TranscriptBlock) -> Double {
@@ -170,9 +172,10 @@ private func entryAt(_ entry: TranscriptBlock) -> Double {
   }
 }
 
-/// A finished turn as: the user's message (if it has one), the fold of everything before the answer, the answer. A turn that is only an answer has no fold; nil
-/// when the turn has no agent entry at all.
-private func foldedTurn(_ turn: [TranscriptBlock]) -> [TranscriptBlock]? {
+/// A finished turn as: the user's message (if it has one), the fold of everything before the answer, the answer. The
+/// answer is the last item (receipts after it go into the fold) when that is a text. A turn that is only an answer has no
+/// fold; nil when the turn has no agent entry at all.
+private func foldedTurn(_ turn: [TranscriptBlock], totals: Bool) -> (blocks: [TranscriptBlock], answer: ChatItem?)? {
   var head: [TranscriptBlock] = []
   var agent = turn
   if case .item(let first) = turn.first, first.kind == "user" {
@@ -181,16 +184,18 @@ private func foldedTurn(_ turn: [TranscriptBlock]) -> [TranscriptBlock]? {
   }
   guard !agent.isEmpty else { return nil }
   var answer: ChatItem?
-  if case .item(let last) = agent.last, last.kind == "text" { answer = last }
-  let process = answer == nil ? agent : Array(agent.dropLast())
+  var process = agent
+  if let index = agent.lastIndex(where: { if case .item = $0 { true } else { false } }), case .item(let last) = agent[index], last.kind == "text" {
+    answer = last
+    process.remove(at: index)
+  }
   let start = (head.first.map(entryAt)) ?? entryAt(agent[0])
   let end = answer?.at ?? entryAt(agent[agent.count - 1])
   var out = head
   if let first = process.first { out.append(.fold(TurnFold(id: "fold-\(first.id)", ms: max(0, end - start), entries: process))) }
-  if let answer { out.append(.reply(answer)) }
-  return out
+  if let answer { out.append(.reply(answer, meta: !totals)) }
+  return (out, answer)
 }
-
 
 /// 工作了 N 秒 / N 分 M 秒 / N 小时 M 分.
 func workedFor(_ ms: Double) -> String {

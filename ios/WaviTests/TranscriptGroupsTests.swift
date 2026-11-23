@@ -27,10 +27,12 @@ private func tool(_ id: String, _ name: String, _ arg: String, at: Double, state
       text("t", at: 5), user("u2", at: 6), tool("d", "Edit", "c.ts", at: 7, state: "running", added: 1)]
     let blocks = transcriptBlocks(items, receipts: [], turnOpen: true)
     #expect(blocks.map(\.id) == ["u1", "fold-a", "t", "turn-u1", "u2", "d"])
-    guard case .turn(let turn) = blocks[3], case .fold(let fold) = blocks[1], case .reply(let reply) = blocks[2] else { Issue.record("no turn"); return }
-    #expect(turn == TurnChange(id: "turn-u1", files: 2, added: 34, removed: 2, tools: ["a", "b", "c"]))
+    guard case .turn(let turn) = blocks[3], case .fold(let fold) = blocks[1], case .reply(let reply, let meta) = blocks[2] else { Issue.record("no turn"); return }
+    #expect(turn == TurnChange(id: "turn-u1", files: 2, added: 34, removed: 2, tools: ["a", "b", "c"], reply: text("t", at: 5)))
     #expect(fold.entries.map(\.id) == ["a", "b", "c"])
     #expect(reply.id == "t")
+    // The turn has totals: its time and copy go under them, not under the reply.
+    #expect(!meta)
     // The open turn (the agent is still at it) has none yet, and is not folded.
     #expect(!blocks.contains { $0.id == "turn-u2" })
   }
@@ -71,7 +73,9 @@ private func tool(_ id: String, _ name: String, _ arg: String, at: Double, state
       text("t1", at: 5000), tool("c", "Bash", "ls", at: 6000), text("t2", at: 76000)]
     let blocks = transcriptBlocks(items, receipts: [], turnOpen: false)
     #expect(blocks.map(\.id) == ["u", "fold-k", "t2"])
-    guard case .fold(let fold) = blocks[1], case .reply = blocks[2] else { Issue.record("shape"); return }
+    guard case .fold(let fold) = blocks[1], case .reply(_, let meta) = blocks[2] else { Issue.record("shape"); return }
+    // No totals: the time and copy stay under the reply.
+    #expect(meta)
     // No ToolRun inside, the first text with the rest of the process, in order.
     #expect(fold.entries.map(\.id) == ["k", "a", "b", "t1", "c"])
     #expect(fold.ms == 75000)
@@ -89,7 +93,8 @@ private func tool(_ id: String, _ name: String, _ arg: String, at: Double, state
   @Test func aTurnOfOnlyATextHasNoFold() {
     let blocks = transcriptBlocks([user("u", at: 1), text("t", at: 2)], receipts: [], turnOpen: false)
     #expect(blocks.map(\.id) == ["u", "t"])
-    guard case .reply = blocks[1] else { Issue.record("no reply"); return }
+    guard case .reply(_, let meta) = blocks[1] else { Issue.record("no reply"); return }
+    #expect(meta)
   }
 
   @Test func theOpenLastTurnIsNotFolded() {
@@ -134,5 +139,14 @@ private func tool(_ id: String, _ name: String, _ arg: String, at: Double, state
     #expect(messageTime(ms(22, 19, 41), now: now, calendar: calendar, locale: locale).contains("22"))
     #expect(messageTime(ms(22, 19, 41), now: now, calendar: calendar, locale: locale).contains("19:41"))
     #expect(messageTime(ms(22, 19, 41), now: now, calendar: calendar, locale: locale) != "19:41")
+  }
+
+  @Test func aReceiptAfterTheFinalTextDoesNotTakeTheReplyAway() {
+    let items = [user("u", at: 1), tool("a", "Read", "a.ts", at: 2), text("t", at: 3)]
+    let receipt = Receipt(id: "r1", at: 5, onPhone: true, text: "x")
+    let blocks = transcriptBlocks(items, receipts: [receipt], turnOpen: false)
+    #expect(blocks.map(\.id) == ["u", "fold-a", "t"])
+    guard case .fold(let fold) = blocks[1], case .reply = blocks[2] else { Issue.record("shape"); return }
+    #expect(fold.entries.map(\.id) == ["a", "r1"])
   }
 }
