@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Project, Session, Worktree } from '@shared/types'
 import { EMPTY_TEXTS, fail, startState, toGlance } from '../pull-requests/ship-flow'
-import { agentModels, remoteSessions, remoteShip } from './model'
+import { agentModels, remoteContext, remoteSessions, remoteShip, remoteUsage } from './model'
 
 const project: Project = { id: 'p1', name: 'acme-web', rootPath: '/code/acme' }
 const main: Worktree = { id: 'w0', projectId: 'p1', branch: 'main', path: '/code/acme', isMain: true }
@@ -108,5 +108,32 @@ describe('agentModels (新建会话 · 模型, Figma 67A)', () => {
   it('has no row for a session that will run in a terminal, and only 默认 for an agent that lists none', () => {
     expect(agentModels(false, { models: [opus], model: 'opus' }, undefined)).toEqual({ gui: false, models: [] })
     expect(agentModels(true, undefined, undefined)).toEqual({ gui: true, models: [] })
+  })
+})
+
+describe('context and usage for the phone (PRD F22 v1.230 ④)', () => {
+  it('fills a session\'s context with the desktop\'s own high rule and mark', () => {
+    const data = { projects: [project], worktrees: [tree], sessions: [session({ id: 's1' }), session({ id: 's2' })] }
+    const list = remoteSessions(data, undefined, undefined, undefined, (s) => (s.id === 's1' ? { percent: 91, usedTokens: 182_000, windowTokens: 200_000, compactAt: 190_000, compactPercent: 95 } : undefined))
+    expect(list.sessions[0]!.context).toEqual({ percent: 91, usedTokens: 182_000, windowTokens: 200_000, markPercent: 95, high: true })
+    expect(list.sessions[1]!.context).toBeUndefined()
+  })
+
+  it('works high and the mark out the way contextHigh and contextMark do', () => {
+    // 20k before the compaction point; the mark only when the point is known; 80 % when it is not.
+    expect(remoteContext({ percent: 50, usedTokens: 100_000, windowTokens: 200_000, compactAt: 150_000, compactPercent: 75 })).toEqual({ percent: 50, usedTokens: 100_000, windowTokens: 200_000, markPercent: 75, high: false })
+    expect(remoteContext({ percent: 80 })).toEqual({ percent: 80, high: true })
+    expect(remoteContext({ percent: 79 }).markPercent).toBeUndefined()
+    expect(remoteContext({ percent: 140 }).percent).toBe(100)
+  })
+
+  it('lists a vendor only when it has live windows, with the plan label', () => {
+    const now = 1_000_000
+    const usage = { claude: { vendor: 'claude' as const, at: now, windows: [{ minutes: 300, percent: 62, resetsAt: now + 3_600_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] } }
+    const accounts = { claude: { vendor: 'claude' as const, state: 'ok' as const, plan: 'max', at: now }, codex: { vendor: 'codex' as const, state: 'ok' as const, plan: 'chatgpt_plus', at: now } }
+    expect(remoteUsage(usage, accounts, now)).toEqual([
+      { vendor: 'claude', plan: 'Max', windows: [{ minutes: 300, percent: 62, resetsAt: now + 3_600_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] }
+    ])
+    expect(remoteUsage({}, {}, now)).toEqual([])
   })
 })

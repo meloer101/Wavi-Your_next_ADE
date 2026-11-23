@@ -194,6 +194,39 @@ describe('window messages', () => {
     expect(parseWindowSessions({ ...good, sessions: 'all' })).toBeNull()
   })
 
+  it('validates the context ring and the vendors\' plan windows, and leaves a bad one off (PRD F22 v1.230 ④)', () => {
+    const row = {
+      projects: [{ id: 'p1', name: 'acme-web' }],
+      sessions: [{ id: 's1', projectId: 'p1', title: '修好登录', agent: 'claude', status: 'running', activity: 1 }],
+      folders: { s1: { cwd: '/Users/me/acme' } },
+      roots: { p1: '/Users/me/acme' }
+    }
+    const context = { percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true }
+    const usage = [{ vendor: 'claude', plan: 'Max', windows: [{ minutes: 300, percent: 62, resetsAt: 1_730_000_000_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] }]
+    const full = { ...row, sessions: [{ ...row.sessions[0], context }], usage }
+    const parsed = parseWindowSessions(full)
+    expect(parsed?.sessions[0]?.context).toEqual(context)
+    expect(parsed?.usage).toEqual(usage)
+    // Without them the fields stay off.
+    expect(parseWindowSessions(row)?.sessions[0]?.context).toBeUndefined()
+    expect(parseWindowSessions(row)?.usage).toBeUndefined()
+    const ctx = (c: unknown) => parseWindowSessions({ ...row, sessions: [{ ...row.sessions[0], context: c }] })?.sessions[0]
+    // The percent is clamped; a bad optional field is dropped; a context without a percent or `high` is dropped, the session stays.
+    expect(ctx({ percent: 140, high: true })?.context).toEqual({ percent: 100, high: true })
+    expect(ctx({ ...context, usedTokens: Infinity, markPercent: 'x' })?.context).toEqual({ percent: 86, windowTokens: 200_000, high: true })
+    expect(ctx({ percent: Number.NaN, high: true })?.context).toBeUndefined()
+    expect(ctx({ percent: 50 })?.context).toBeUndefined()
+    expect(ctx({ percent: 50, high: true })?.id).toBe('s1')
+    const use = (u: unknown) => parseWindowSessions({ ...row, usage: u })?.usage
+    expect(use([{ vendor: 'gemini', windows: [{ minutes: 300, percent: 1 }] }])).toBeUndefined()
+    expect(use([{ vendor: 'codex', windows: [{ minutes: 300, percent: 130 }, { minutes: 0, percent: 5 }, { minutes: 60, percent: 'x' }] }])).toEqual([{ vendor: 'codex', windows: [{ minutes: 300, percent: 100 }] }])
+    expect(use([{ vendor: 'codex', plan: 'x'.repeat(41), windows: [{ minutes: 300, percent: 1 }] }])?.[0]?.plan).toBeUndefined()
+    // Bounded: at most 4 vendors and 8 windows each.
+    const many = Array.from({ length: 20 }, (_, i) => ({ minutes: 60 + i, percent: i }))
+    expect(use(Array.from({ length: 9 }, () => ({ vendor: 'claude', windows: many })))?.map((v) => v.windows.length)).toEqual([8, 8, 8, 8])
+    expect(use('all')).toBeUndefined()
+  })
+
   it('carries 看板 · 进度\'s checks and size and 看板 · GitHub\'s link, and leaves a bad one off (PRD F22 v1.229 ⑤)', () => {
     const row = {
       projects: [{ id: 'p1', name: 'acme-web' }],

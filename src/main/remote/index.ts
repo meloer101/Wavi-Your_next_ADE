@@ -281,7 +281,7 @@ async function visiblePrompts(): Promise<RemotePrompt[]> {
   return [...hook, ...guiPrompts.list(knownSession)].sort((a, b) => a.createdAt - b.createdAt)
 }
 
-const phoneList = () => ({ projects: windowSessions.projects, sessions: windowSessions.sessions })
+const phoneList = () => ({ projects: windowSessions.projects, sessions: windowSessions.sessions, ...(windowSessions.usage ? { usage: windowSessions.usage } : {}) })
 
 async function handle(connection: RemoteConnection, request: PhoneRequest): Promise<RemoteResult> {
   switch (request.type) {

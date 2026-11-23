@@ -261,6 +261,13 @@
               "added": 12,
               "removed": 3
             },
+            "context": {
+              "percent": 86,
+              "usedTokens": 172000,
+              "windowTokens": 200000,
+              "markPercent": 92,
+              "high": true
+            },
             "github": {
               "repo": "github.com/acme/web",
               "kind": "issue",
@@ -314,6 +321,34 @@
             "agent": "shell",
             "status": "idle",
             "activity": 1730000200000
+          }
+        ],
+        "usage": [
+          {
+            "vendor": "claude",
+            "plan": "Max",
+            "windows": [
+              {
+                "minutes": 300,
+                "percent": 62,
+                "resetsAt": 1730000900000
+              },
+              {
+                "minutes": 10080,
+                "scope": "Sonnet",
+                "percent": 40
+              }
+            ]
+          },
+          {
+            "vendor": "codex",
+            "plan": "Plus",
+            "windows": [
+              {
+                "minutes": 10080,
+                "percent": 12
+              }
+            ]
           }
         ]
       }
@@ -606,6 +641,13 @@
             "added": 12,
             "removed": 3
           },
+          "context": {
+            "percent": 86,
+            "usedTokens": 172000,
+            "windowTokens": 200000,
+            "markPercent": 92,
+            "high": true
+          },
           "github": {
             "repo": "github.com/acme/web",
             "kind": "issue",
@@ -659,6 +701,34 @@
           "agent": "shell",
           "status": "idle",
           "activity": 1730000200000
+        }
+      ],
+      "usage": [
+        {
+          "vendor": "claude",
+          "plan": "Max",
+          "windows": [
+            {
+              "minutes": 300,
+              "percent": 62,
+              "resetsAt": 1730000900000
+            },
+            {
+              "minutes": 10080,
+              "scope": "Sonnet",
+              "percent": 40
+            }
+          ]
+        },
+        {
+          "vendor": "codex",
+          "plan": "Plus",
+          "windows": [
+            {
+              "minutes": 10080,
+              "percent": 12
+            }
+          ]
         }
       ],
       "prompts": [

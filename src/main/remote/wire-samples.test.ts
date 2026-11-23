@@ -127,6 +127,7 @@ const session: RemoteSession = {
     ]
   },
   stat: { added: 12, removed: 3 },
+  context: { percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true },
   github: { repo: 'github.com/acme/web', kind: 'issue', number: 139 },
   settings: {
     items: [
@@ -143,7 +144,11 @@ const session: RemoteSession = {
 
 const sessions: RemoteSessionList = {
   projects: [{ id: 'proj1', name: 'wavi' }],
-  sessions: [session, { id: 's2', projectId: 'proj1', title: '终端', agent: 'shell', status: 'idle', activity: 1_730_000_200_000 }]
+  sessions: [session, { id: 's2', projectId: 'proj1', title: '终端', agent: 'shell', status: 'idle', activity: 1_730_000_200_000 }],
+  usage: [
+    { vendor: 'claude', plan: 'Max', windows: [{ minutes: 300, percent: 62, resetsAt: 1_730_000_900_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] },
+    { vendor: 'codex', plan: 'Plus', windows: [{ minutes: 10080, percent: 12 }] }
+  ]
 }
 
 const prompts: RemotePrompt[] = [

@@ -231,6 +231,37 @@ export interface RemoteSession {
   stat?: RemoteStat
   /** The issue or PR the session works on (F9 · 交给 agent). */
   github?: GitHubLink
+  /** The context window as the desktop's ring shows it (PRD F22 v1.230 ④); absent when the session has no reading. */
+  context?: RemoteContext
+}
+
+/** One session's context window. `high` is worked out on the Mac (`contextHigh`); the phone never re-derives it. */
+export interface RemoteContext {
+  /** 0–100. */
+  percent: number
+  usedTokens?: number
+  windowTokens?: number
+  /** The agent's compaction point on the 0–100 scale; absent when it is not known. */
+  markPercent?: number
+  high: boolean
+}
+
+/** One plan window of a vendor (`UsageWindow` without the pace rate). */
+export interface RemoteUsageWindow {
+  minutes: number
+  scope?: string
+  /** 0–100. */
+  percent: number
+  /** Epoch ms. */
+  resetsAt?: number
+}
+
+/** A vendor that has live plan windows (PRD F22 v1.230 ④); the phone matches a session to it by its agent. */
+export interface RemoteVendorUsage {
+  vendor: 'claude' | 'codex'
+  /** `planLabel` of the account's plan. */
+  plan?: string
+  windows: RemoteUsageWindow[]
 }
 
 /** 这一轮跑过的检查 as the phone's 看板 · 进度 row shows it: the view's kinds, without their runs. */
@@ -248,6 +279,8 @@ export interface RemoteStat {
 export interface RemoteSessionList {
   projects: RemoteProject[]
   sessions: RemoteSession[]
+  /** The plan windows of each vendor that has any (additive, PRD F22 v1.230 ④). */
+  usage?: RemoteVendorUsage[]
 }
 
 /** Where a session runs, for main only (git and the transcript read it; the phone never sees local paths). */
@@ -666,6 +699,48 @@ function windowShip(raw: unknown): RemoteShip | null {
   return { kind: v.kind, title, agent, stage: v.stage, steps, texts: { commit, title: shipTitle, body, draft: t.draft }, fields: v.fields as RemoteShipField[], submitLabel, submitBlocker, error }
 }
 
+const clampPercent = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : null)
+const tokenCount = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1e12 ? Math.round(v) : undefined)
+
+/** The context ring's figures; null when the percent or `high` do not validate (the session still shows). */
+function windowContext(raw: unknown): RemoteContext | null {
+  const c = record(raw)
+  const percent = clampPercent(c?.percent)
+  if (!c || percent === null || typeof c.high !== 'boolean') return null
+  const usedTokens = tokenCount(c.usedTokens)
+  const windowTokens = tokenCount(c.windowTokens)
+  const markPercent = clampPercent(c.markPercent)
+  return {
+    percent,
+    ...(usedTokens !== undefined ? { usedTokens } : {}),
+    ...(windowTokens !== undefined ? { windowTokens } : {}),
+    ...(markPercent !== null ? { markPercent } : {}),
+    high: c.high
+  }
+}
+
+/** The vendors' plan windows; a vendor or window that does not validate is left out, at most 4 vendors of 8 windows. */
+function windowUsage(raw: unknown): RemoteVendorUsage[] {
+  if (!Array.isArray(raw)) return []
+  const out: RemoteVendorUsage[] = []
+  for (const item of raw.slice(0, 4)) {
+    const v = record(item)
+    if (!v || (v.vendor !== 'claude' && v.vendor !== 'codex') || !Array.isArray(v.windows)) continue
+    const plan = v.plan === undefined ? undefined : cleanText(v.plan, 40)
+    const windows: RemoteUsageWindow[] = []
+    for (const raw of v.windows.slice(0, 8)) {
+      const w = record(raw)
+      const percent = clampPercent(w?.percent)
+      const scope = w?.scope === undefined ? undefined : cleanText(w.scope, 40)
+      const resetsAt = optTime(w?.resetsAt)
+      if (!w || percent === null || scope === null || resetsAt === null || typeof w.minutes !== 'number' || !Number.isSafeInteger(w.minutes) || w.minutes <= 0 || w.minutes > 525_600) continue
+      windows.push({ minutes: w.minutes, ...(scope ? { scope } : {}), percent, ...(resetsAt !== undefined ? { resetsAt } : {}) })
+    }
+    if (windows.length > 0) out.push({ vendor: v.vendor, ...(plan ? { plan } : {}), windows })
+  }
+  return out
+}
+
 function windowSession(raw: unknown): RemoteSession | null {
   const s = record(raw)
   if (!s || !isId(s.id) || !isId(s.projectId) || !STATUSES.has(s.status) || (s.agent !== 'shell' && !isCliAgent(s.agent))) return null
@@ -698,6 +773,10 @@ function windowSession(raw: unknown): RemoteSession | null {
   if (s.github !== undefined) {
     const link = parseGitHubLink(s.github)
     if (link) out.github = link
+  }
+  if (s.context !== undefined) {
+    const context = windowContext(s.context)
+    if (context) out.context = context
   }
   return out
 }
@@ -734,7 +813,8 @@ export function parseWindowSessions(raw: unknown): RemoteWindowSessions | null {
     const path = absolute(root)
     if (isId(id) && path) roots[id] = path
   }
-  return { projects, sessions, folders: out, roots }
+  const usage = windowUsage(v.usage)
+  return { projects, sessions, folders: out, roots, ...(usage.length > 0 ? { usage } : {}) }
 }
 
 function absolute(v: unknown): string | null {
