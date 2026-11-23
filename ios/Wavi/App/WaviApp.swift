@@ -29,6 +29,8 @@ enum Route: Hashable {
   /// The files one turn changed (its TurnChange's tool calls).
   case turn(session: String, tools: [String])
   case diff(session: String, path: String, scope: String, oldPath: String?, untracked: Bool)
+  /// A file a reply's chip names, read-only (PRD F22 v1.230), opened at `line` when the chip named one.
+  case file(session: String, path: String, line: Int?)
   /// One issue or PR of 看板 · GitHub (PRD F22 v1.229 ③): its body, comments and 交给 agent.
   case github(project: String, kind: String, number: Int)
 }
@@ -70,6 +72,11 @@ struct RootView: View {
             Label("看板", image: "Icons/layout-list")
           }
         }
+        // A chip pushes the file page onto the stack of the tab it was tapped in: a session opens in either tab.
+        .environment(\.openFileRef, { session, ref in
+          let route = Route.file(session: session, path: ref.path, line: ref.line)
+          if tab == .board { boardPath.append(route) } else { path.append(route) }
+        })
         .sheet(item: $linked) { _ in PairView(offer: $linked, replacing: model.pairing?.macName) }
       }
     }
@@ -109,12 +116,13 @@ struct RootView: View {
 
   @ViewBuilder private func destination(_ route: Route) -> some View {
     switch route {
-    case .session(let id): SessionView(id: id)
+    case .session(let id): SessionView(id: id).environment(\.fileSession, id)
     case .changes(let id): ChangesView(id: id)
     case .tool(let session, let item): ToolView(session: session, item: item)
     case .turn(let session, let tools): TurnView(session: session, tools: tools)
     case .diff(let session, let file, let scope, let oldPath, let untracked):
       FileDiffView(session: session, path: file, scope: scope, oldPath: oldPath, untracked: untracked)
+    case .file(let session, let file, let line): FileView(session: session, path: file, line: line)
     case .github(let project, let kind, let number): GitHubItemView(project: project, kind: kind, number: number)
     }
   }

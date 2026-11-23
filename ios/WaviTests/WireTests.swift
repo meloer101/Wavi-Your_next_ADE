@@ -182,6 +182,7 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
   case "changes": return .changes(session: try text(v, "session"))
   case "diff":
     return .diff(session: try text(v, "session"), path: try text(v, "path"), scope: try text(v, "scope"), oldPath: try text(v, "oldPath"), untracked: v["untracked"] == .bool(true))
+  case "file": return .file(session: try text(v, "session"), path: try text(v, "path"))
   case "exits": return .exits(session: try text(v, "session"))
   case "ship": return .ship(session: try text(v, "session"), action: try shipAction(v["action"]))
   case "archive": return .archive(session: try text(v, "session"))
@@ -248,6 +249,7 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
       case "new-session": try expectRoundTrip(NewSessionView.Created.self, data, label)
       case "changes": try expectRoundTrip(GitChanges.self, data, ignoring: gitChangesUnread, label)
       case "diff": try expectRoundTrip(FileDiffView.Text_.self, data, label)
+      case "file": try expectRoundTrip(RemoteFilePreview.self, data, label)
       case "exits": try expectRoundTrip(RemoteExits.self, data, label)
       case "github-board": try expectRoundTrip(GitHubBoard.self, data, label)
       case "github-detail": try expectRoundTrip(BoardDetailResult.self, data, label)

@@ -22,6 +22,11 @@ settings:
 packages:
   Ristretto255:
     path: Packages/Ristretto255
+  # An agent's reply is GFM (PRD F22 v1.230): CommonMark + tables, task lists and strikethrough, from cmark-gfm.
+  # Apache-2.0, attributed in THIRD_PARTY_NOTICES.md. Drawn by ios/Wavi/Views/Markdown.swift, not by the library.
+  swift-markdown:
+    url: https://github.com/swiftlang/swift-markdown
+    from: 0.9.0
 targets:
   Wavi:
     type: application
@@ -32,6 +37,8 @@ targets:
     dependencies:
       - package: Ristretto255
         product: CRistretto255
+      - package: swift-markdown
+        product: Markdown
       - target: WaviActivity
     info:
       path: Wavi/Info.plist

@@ -442,6 +442,14 @@ struct RemotePhoto: Codable, Hashable, Sendable {
   let data: String
 }
 
+/// A file inside a session's folder, as the Mac reads it for the phone (src/shared/worktree-files.ts `FilePreview`):
+/// `kind` is text / binary / too-large / missing, and only text carries the file.
+struct RemoteFilePreview: Codable, Hashable, Sendable {
+  let kind: String
+  var text: String? = nil
+  var size: Int? = nil
+}
+
 /// What the phone may do to an exit (the Ship block's buttons).
 enum ShipAction: Sendable {
   case start(exit: String)
@@ -482,6 +490,8 @@ enum PhoneCommand: Sendable {
   case agentModels(agent: String)
   case changes(session: String)
   case diff(session: String, path: String, scope: String, oldPath: String?, untracked: Bool)
+  /// The file a reply's chip names (PRD F22 v1.230): the path as written, inside the session's folder.
+  case file(session: String, path: String)
   case exits(session: String)
   case ship(session: String, action: ShipAction)
   case archive(session: String)
@@ -522,6 +532,7 @@ enum PhoneCommand: Sendable {
       if let oldPath { f["oldPath"] = .string(oldPath) }
       if untracked { f["untracked"] = .bool(true) }
       return f
+    case .file(let s, let path): return ["type": .string("file"), "session": .string(s), "path": .string(path)]
     case .exits(let s): return ["type": .string("exits"), "session": .string(s)]
     case .ship(let s, let action): return ["type": .string("ship"), "session": .string(s), "action": action.json]
     case .archive(let s): return ["type": .string("archive"), "session": .string(s)]
