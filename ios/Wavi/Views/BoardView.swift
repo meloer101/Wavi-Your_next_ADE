@@ -31,8 +31,9 @@ struct BoardView: View {
   @State private var scope: BoardScope = .all
   @State private var board: GitHubBoard?
   @State private var failure: String?
-  @State private var loading = false
-  @State private var asked: String?
+  /// Which scope is being asked for and whether its answer is still wanted: two taps in a row leave two requests in
+  /// flight, and the first one's answer must not land under the second one's tabs (BoardRequest).
+  @State private var request = BoardRequest()
 
   var body: some View {
     GeometryReader { proxy in
@@ -58,10 +59,12 @@ struct BoardView: View {
     .onAppear {
       if let data = fixture?.board, board == nil { board = data }
     }
-    .task(id: "\(page.rawValue) \(scope.rawValue)") {
+    // `connected` is part of the id: with the Mac back after a drop the page asks again (its first request may have died
+    // with the link), instead of leaving the spinner up for ever.
+    .task(id: "\(page.rawValue) \(scope.rawValue) \(connected)") {
       guard page == .github, connected, fixture?.board == nil else { return }
       // Asking for the scope already on screen again (the page came back) keeps what the Mac answered.
-      guard asked != scope.rawValue || board == nil else { return }
+      guard request.asked != scope.rawValue || board == nil else { return }
       await load()
     }
   }
@@ -110,7 +113,7 @@ struct BoardView: View {
       GHProblem(missing: board.gh == "missing") { Task { await load(force: true) } }
     } else if let board, board.gh == "ready" || board.projects != nil {
       let sections = boardSections(board, projects: list.projects, sessions: list.sessions, scope: scope)
-      GitHubList(sections: sections, scope: $scope, now: Date().timeIntervalSince1970 * 1000, loading: loading) { await load(force: true) }
+      GitHubList(sections: sections, scope: $scope, now: Date().timeIntervalSince1970 * 1000, loading: request.loading) { await load(force: true) }
     } else {
       ScrollView {
         Spinner(color: .textSecondary).frame(maxWidth: .infinity).padding(.top, 80).accessibilityLabel("正在读取 GitHub")
@@ -120,17 +123,19 @@ struct BoardView: View {
   }
 
   /// `github-board`, 45 s: the Mac may be asking gh for every project (its own answer is cached for a minute unless
-  /// `force`, which pull-to-refresh and 重新检查 send).
+  /// `force`, which pull-to-refresh and 重新检查 send). The scope is read once, before the wait: an answer for a scope that
+  /// is no longer on screen (全部 then 请我审阅, quickly) is dropped, and it does not clear the spinner either.
   private func load(force: Bool = false) async {
-    loading = true
-    defer { loading = false }
-    asked = scope.rawValue
-    let result = await model.call(.githubBoard(scope: scope.rawValue, force: force), timeout: 45)
+    let asking = scope.rawValue
+    request.begin(asking)
+    let result = await model.call(.githubBoard(scope: asking, force: force), timeout: 45)
+    guard request.settle(asking) else { return }
     if let data = result.decode(GitHubBoard.self) {
       board = data
       failure = nil
     } else {
-      failure = result.error
+      // No message either (an answer that was not a board): say it failed rather than spin for ever.
+      failure = result.error ?? String(localized: "没有读到 GitHub")
     }
   }
 }
@@ -178,22 +183,26 @@ struct ProgressBoard: View {
   }
 
 
+  /// The columns scroll as one (Figma 103′C): a short screen with six running sessions has more cards than a column can
+  /// show, and one scroll for the whole row of columns keeps their tops level.
   private func columns(_ groups: [BoardGroup]) -> some View {
-    HStack(alignment: .top, spacing: 12) {
-      ForEach(groups) { group in
-        VStack(alignment: .leading, spacing: 8) {
-          title(group, top: 0)
-          ForEach(group.cards) { card in
-            NavigationLink(value: Route.session(card.session.id)) { CompactCardView(card: card, stale: stale) }
-              .buttonStyle(.plain)
+    ScrollView {
+      HStack(alignment: .top, spacing: 12) {
+        ForEach(groups) { group in
+          VStack(alignment: .leading, spacing: 8) {
+            title(group, top: 0)
+            ForEach(group.cards) { card in
+              NavigationLink(value: Route.session(card.session.id)) { CompactCardView(card: card, stale: stale) }
+                .buttonStyle(.plain)
+            }
           }
-          Spacer(minLength: 0)
+          .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
       }
+      .padding(.horizontal, Metric.margin)
+      .padding(.top, 4)
+      .padding(.bottom, 40)
     }
-    .padding(.horizontal, Metric.margin)
-    .padding(.top, 4)
   }
 
   /// The section title: the group's label and its count in neutral colours, as the desktop's column headers (Figma 103′B).
@@ -265,8 +274,9 @@ struct ProgressCardView: View {
   }
 }
 
-/// A card in 进度 · landscape (Figma 103′C): exactly three single lines, truncated — title, 项目 › 分支, and what it is doing
-/// or, when this turn ran checks, the checks. No time and no `+N −M`: a short screen has no room for them (PRD v1.227 ②).
+/// A card in 进度 · landscape (Figma 103′C): the status glyph and exactly three single lines, truncated — title, 项目 › 分支,
+/// and what it is doing or, when this turn ran checks, the checks. No time and no `+N −M`: a short screen has no room for
+/// them (PRD v1.227 ②).
 struct CompactCardView: View {
   let card: BoardCard
   var stale = false
@@ -274,7 +284,12 @@ struct CompactCardView: View {
   var body: some View {
     let tone = card.tone
     VStack(alignment: .leading, spacing: 3) {
-      Text(card.session.title).font(.ui(.subheadline, medium: true)).foregroundStyle(Color.textPrimary).lineLimit(1)
+      HStack(spacing: 6) {
+        // The same glyph as portrait: status is never colour alone (Figma 103′C).
+        StatusGlyph(status: card.session.status)
+        Text(card.session.title).font(.ui(.subheadline, medium: true)).foregroundStyle(Color.textPrimary).lineLimit(1)
+        Spacer(minLength: 0)
+      }
       if !card.whereLine.isEmpty {
         Text(card.whereLine).font(.ui(.footnote)).foregroundStyle(Color.cardMeta(tone)).lineLimit(1)
       }

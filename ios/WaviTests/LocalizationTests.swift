@@ -75,4 +75,38 @@ private func en(_ key: String) -> String { english?.localizedString(forKey: key,
     #expect(Shared.agent("shell").names.keys.sorted() == ["en", "zh"])
     #expect(Shared.agent("claude").name == "Claude Code")
   }
+
+  /// Every Chinese string used as UI text in the app's sources is a catalog key: a missing one shows Chinese on an English
+  /// phone (SwiftUI's own `Text("…")` and `String(localized:)` look the literal up). Literals with an interpolation are
+  /// compared with the catalog's placeholders (`%lld`, `%@`, `%1$@`) and the interpolations both replaced by one mark.
+  @Test func everyChineseUiLiteralIsACatalogKey() throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let catalogData = try Data(contentsOf: root.appendingPathComponent("Wavi/Resources/Localizable.xcstrings"))
+    let catalog = try #require(JSONSerialization.jsonObject(with: catalogData) as? [String: Any])
+    let strings = try #require(catalog["strings"] as? [String: Any])
+    func normal(_ text: String) -> String {
+      text.replacingOccurrences(of: "\\n", with: "\n")
+        .replacingOccurrences(of: "%[0-9]*\\$?(lld|@|d)", with: "\u{1}", options: .regularExpression)
+        .replacingOccurrences(of: "\\\\\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\)", with: "\u{1}", options: .regularExpression)
+    }
+    let keys = Set(strings.keys.map(normal))
+    let literal = try NSRegularExpression(
+      pattern: "(?:\\b(?:Text|Label|Picker|LabeledContent|Section|Button|TextField|Toggle|Menu|accessibilityLabel|navigationTitle)\\(|String\\(localized: )\\s*\"((?:[^\"\\\\]|\\\\.)*[\\x{4E00}-\\x{9FFF}](?:[^\"\\\\]|\\\\.)*)\"")
+    let files = try #require(FileManager.default.enumerator(at: root.appendingPathComponent("Wavi"), includingPropertiesForKeys: nil))
+    var missing: [String] = []
+    var scanned = 0
+    for case let file as URL in files where file.pathExtension == "swift" {
+      let source = try String(contentsOf: file, encoding: .utf8)
+      scanned += 1
+      for match in literal.matches(in: source, range: NSRange(source.startIndex..., in: source)) {
+        guard let range = Range(match.range(at: 1), in: source) else { continue }
+        let text = String(source[range])
+        // An interpolation holding its own string literal cuts the match short: those are not checked.
+        if normal(text).contains("\\(") { continue }
+        if !keys.contains(normal(text)) { missing.append("\(file.lastPathComponent): \(text)") }
+      }
+    }
+    #expect(scanned > 20)
+    #expect(missing.isEmpty, "\(missing.sorted())")
+  }
 }

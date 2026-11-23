@@ -218,3 +218,39 @@ private let projects = [RemoteProject(id: "p1", name: "acme-web"), RemoteProject
     #expect(!isInvalidRequest("rate limited"))
   }
 }
+
+@Suite struct BoardReviewRound1Tests {
+  // Item 3: switching tabs must re-watch the session left open in the first tab.
+  @Test func theOpenSessionIsTheOneOfTheTabOnScreen() {
+    let path: [Route] = [.session("a"), .changes("a")]
+    let boardPath: [Route] = [.session("b")]
+    #expect(openSession(tab: .sessions, path: path, boardPath: boardPath) == "a")
+    #expect(openSession(tab: .board, path: path, boardPath: []) == nil)
+    #expect(openSession(tab: .board, path: path, boardPath: boardPath) == "b")
+    #expect(openSession(tab: .sessions, path: [], boardPath: boardPath) == nil)
+  }
+
+  // Item 4: the answer of a scope no longer on screen is dropped and leaves the spinner for the request still wanted.
+  @Test func anAnswerForAnotherScopeIsDropped() {
+    var request = BoardRequest()
+    request.begin("all")
+    request.begin("review")
+    #expect(request.loading)
+    let stale = request.settle("all")
+    #expect(!stale)
+    #expect(request.loading)
+    let wanted = request.settle("review")
+    #expect(wanted)
+    #expect(!request.loading)
+  }
+
+  // Item 7: only the server's invalid-request text means an old Mac.
+  @Test func onlyTheInvalidRequestTextMeansAnOldMac() {
+    #expect(detailFailure("无效的请求") == String(localized: "Mac 上的 Wavi 要更新"))
+    #expect(detailFailure("Invalid request") == String(localized: "Mac 上的 Wavi 要更新"))
+    #expect(detailFailure(nil) == String(localized: "没有读到"))
+    #expect(detailFailure("") == String(localized: "没有读到"))
+    #expect(detailFailure(nil) != String(localized: "Mac 上的 Wavi 要更新"))
+    #expect(detailFailure("gh 没有登录") == "gh 没有登录")
+  }
+}

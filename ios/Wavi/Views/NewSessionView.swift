@@ -10,6 +10,12 @@ struct NewSessionView: View {
     let project: String
     let start: GitHubStart
     var id: String { "\(start.link.kind)-\(start.link.number)" }
+    /// `start.title` is `#142 …`: the form shows the number apart, in mono.
+    var itemTitle: String {
+      let prefix = "#\(start.link.number)"
+      guard start.title.hasPrefix(prefix) else { return start.title }
+      return start.title.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+    }
   }
 
   var handoff: Handoff?
@@ -61,6 +67,14 @@ struct NewSessionView: View {
     NavigationStack {
       Form {
         if let handoff {
+          // The item being handed over (Figma 103G): its glyph, `#142` in mono, then its title.
+          HStack(spacing: 8) {
+            Icon(handoff.start.link.kind == "pr" ? "git-pull-request" : "circle-dot", size: 16).foregroundStyle(Color.textSecondary)
+            Text("#\(handoff.start.link.number)").font(.mono(.footnote)).foregroundStyle(Color.textSecondary)
+            Text(handoff.itemTitle).font(.ui(.subheadline)).foregroundStyle(Color.textPrimary).lineLimit(1)
+          }
+          .listRowBackground(Color.clear)
+          .accessibilityElement(children: .combine)
           LabeledContent("项目", value: model.sessions.projects.first { $0.id == handoff.project }?.name ?? handoff.project)
         } else {
           Picker("项目", selection: $project) {
@@ -71,12 +85,15 @@ struct NewSessionView: View {
         if let loadError { Text(loadError).foregroundStyle(Color.noticeDanger) }
         if let data {
           Section {
-            Picker("工作目录", selection: $workdir) {
-              Text("新 worktree").tag("worktree")
-              Text("当前目录").tag("current")
+            // 交给 agent always starts a new worktree (PRD F22 v1.227 ④): no 当前目录 to pick.
+            if handoff == nil {
+              Picker("工作目录", selection: $workdir) {
+                Text("新 worktree").tag("worktree")
+                Text("当前目录").tag("current")
+              }
+              .pickerStyle(.segmented)
+              .disabled(!data.info.repo)
             }
-            .pickerStyle(.segmented)
-            .disabled(!data.info.repo)
             if !data.info.repo { LabeledContent("工作目录", value: String(localized: "不是 git 仓库，只能在当前目录")) }
             if workdir == "worktree" {
               Picker("基于", selection: $base) {

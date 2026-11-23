@@ -143,7 +143,8 @@ struct GitHubItemView: View {
       self.detail = detail
       failure = nil
     } else if let answer = result.decode(BoardDetailResult.self), !answer.ok {
-      failure = answer.message.flatMap { isInvalidRequest($0) ? nil : $0 } ?? String(localized: "Mac 上的 Wavi 要更新")
+      // Only the server's own invalid-request text means an old Mac; no message is a plain failure.
+      failure = detailFailure(answer.message)
     } else if let error = result.error {
       failure = isInvalidRequest(error) ? String(localized: "Mac 上的 Wavi 要更新") : error
     }

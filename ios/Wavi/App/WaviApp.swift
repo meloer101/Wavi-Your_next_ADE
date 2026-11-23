@@ -101,8 +101,10 @@ struct RootView: View {
     .onAppear { Orientation.apply(allowsLandscape) }
   }
 
+  /// A `wavi://pair` sheet may be up over 进度 (the phone was linked from elsewhere while the board was open): that sheet
+  /// is portrait like the rest of PairView.
   private var allowsLandscape: Bool {
-    model.pairing != nil && tab == .board && boardPath.isEmpty && boardPage == .progress
+    model.pairing != nil && linked == nil && tab == .board && boardPath.isEmpty && boardPage == .progress
   }
 
   @ViewBuilder private func destination(_ route: Route) -> some View {
@@ -119,10 +121,22 @@ struct RootView: View {
 
   /// The session on screen in the tab that is open (nil: that tab's list): the phone watches only that one.
   private func syncWatch() {
-    let open = (tab == .sessions ? path : boardPath).compactMap { if case .session(let id) = $0 { id } else { nil } }.last
-    if let watching = model.watching, open != watching { Task { await model.watch(open) } }
-    if open == nil, model.watching != nil { Task { await model.watch(nil) } }
+    let open = openSession(tab: tab, path: path, boardPath: boardPath)
+    // One call, comparing against `open` alone (nil too): switching from a session to 看板 stops the watch, and switching
+    // back to the session starts it again — `watching` being nil then must not skip the second part (the session page
+    // would stay empty and frozen). SessionView's own `.task(id:)` sees `watching` already set here and does not ask
+    // again, whichever of the two runs first.
+    guard open != model.watching else { return }
+    Task { await model.watch(open) }
   }
+}
+
+/// The session the tab on screen shows — the last one pushed in that tab's stack (nil: the tab's list). Each tab has its
+/// own stack (RootView), so exactly one of the two paths can hold the session being read.
+func openSession(tab: RootTab, path: [Route], boardPath: [Route]) -> String? {
+  (tab == .sessions ? path : boardPath).compactMap { route in
+    if case .session(let id) = route { id } else { nil }
+  }.last
 }
 
 extension PairingOffer: Identifiable {

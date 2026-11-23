@@ -155,6 +155,28 @@ enum BoardScope: String, CaseIterable, Sendable {
   }
 }
 
+/// 看板 · GitHub's loading state: the scope last asked for and whether its answer is still wanted. Two taps in a row (全部
+/// then 请我审阅) leave two requests in flight, and the Mac may answer them in either order: the answer to a scope that is
+/// no longer on screen is dropped, and settling it leaves the spinner up for the request the screen is waiting for.
+struct BoardRequest: Equatable {
+  /// The scope of the request whose answer the screen wants; nil before the first one.
+  private(set) var asked: String?
+  private(set) var loading = false
+
+  /// A request for `scope` starts: from here its answer is the one that belongs on screen.
+  mutating func begin(_ scope: String) {
+    asked = scope
+    loading = true
+  }
+
+  /// `scope` answered: true when the answer still belongs on screen (false: the scope changed meanwhile — drop it).
+  @discardableResult mutating func settle(_ scope: String) -> Bool {
+    guard asked == scope else { return false }
+    loading = false
+    return true
+  }
+}
+
 /// A row of a project's list. `pr` is set for a PR (its own fields); `session` is the session working on it, if any.
 struct BoardRow: Identifiable, Sendable {
   let projectId: String
@@ -325,11 +347,17 @@ func checkRightText(_ check: BoardDetailPr.Check, now: Double) -> String {
 }
 
 // MARK: - An old Mac
-
 /// Whether the Mac answered that it does not know a command: what a Mac older than 看板 says (src/main/remote/
 /// server.ts: `parsePhoneRequest` returns null for a type it does not parse, and the server answers the `invalid` message
 /// of its own language). The phone then says the Mac's Wavi needs an update instead of showing the Mac's text.
 func isInvalidRequest(_ error: String) -> Bool {
   // The server's two texts, `pick(M).invalid` in src/main/remote/server.ts: 无效的请求 / Invalid request.
   error == "无效的请求" || error == "Invalid request"
+}
+
+/// The line for an `ok:false` answer: the old-Mac line only for the server's invalid-request text, the Mac's own words
+/// otherwise, and a plain failure when it said nothing.
+func detailFailure(_ message: String?) -> String {
+  guard let message, !message.isEmpty else { return String(localized: "没有读到") }
+  return isInvalidRequest(message) ? String(localized: "Mac 上的 Wavi 要更新") : message
 }
