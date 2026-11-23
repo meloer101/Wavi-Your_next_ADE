@@ -983,7 +983,7 @@ Orca：IME 处理、AskUserQuestion 按键序列、worktree porcelain 解析、`
 规划在 `src/shared/send-protocol.ts`；脚本 `scripts/spikes/harness.mjs`、`22-ask-user-question.mjs`。
 - 每个 PTY 一个串行发送队列。正文用 `ESC[200~ … ESC[201~` 包起来写入，先清除会提前结束粘贴的控制字符；在 xterm buffer 里看到正文开头或占位符后才进入下一步，超时按 UTF-8 字节数计算。
 - 回车 `\r` 单独写一次（Claude 等 60 ms，Codex 等 150 ms）。
-- 占位符阈值：Claude 超过 800 字符或含 3 个以上换行；Codex 超过 1000 字符。
+- 占位符阈值：Claude 超过 800 字符或含 3 个以上换行；Codex 超过 1000 字符；Pi 1.5.2 超过 1000 字符或超过 10 行，写成 `[paste #N +K lines]` / `[paste #N K chars]`（读 pi-tui `Editor.handlePaste`，没在终端实测）。其他 CLI 没有已知的占位符，只认正文开头；会折叠长粘贴的 CLI 不在这里登记时，长消息会等到超时、不按回车。
 - `/` 命令首字符单独按键；Claude 里长到会变成占位符的 `/cmd` 必须逐字输入，否则不再被识别为命令；Codex 不带参数的 slash 命令末尾补空格，防止误执行模糊匹配项。`#` 不用特殊处理。
 - agent 正忙时发送 = **排队**（Claude 依次处理；Codex 会把多条合并），不是打断。
 - **菜单开着时不打字**：每次点击发给 agent（错误条、审阅、评论、浏览器错误、插入路径、冲突交给 agent、/compact 按钮、预约的“继续”）先看屏幕。有启动弹窗（信任、更新），或 agent 的输入行上盖着选择框（Claude 的 `/rate-limit-options`、权限框，Codex 的换模型弹窗；判断同 F11，只看底部 12 行非空行，不认“Do you want to”这类正文）时什么都不写，提示“终端里有确认框 / 选择框，请先在终端中处理”，写在被点的地方：错误条、合并面板的失败行（面板不关，处理完菜单再按一次“交给 … 解决”）、文件视图标题下的一行（几秒后消失）、/compact 按钮下的小浮层，预约的“继续”则发通知。只拦认出来的菜单，认不出输入行（普通 shell、假 agent）不因此拦。原因见 §6.7：往 Codex 的换模型弹窗里打“继续”回车换掉了模型。拖入、粘贴文件是用户自己在终端里的输入，不拦。
