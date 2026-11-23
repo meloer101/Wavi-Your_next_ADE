@@ -3,10 +3,13 @@
 // (src/main/remote); the phone app speaks the same messages inside them.
 import { isCliAgent, type CliAgent } from './agents'
 import type { PendingPrompt } from './agent-events'
+import { parseGitHubLink, type BoardScope, type GitHubItemKind } from './github-board'
 import { GUI_MODEL_ID } from './gui-chat'
+import { isStartAt } from './new-session'
 import { isSettingKind, parseSessionSettings, settingValue, type SessionSettings, type SettingKind } from './session-settings'
 import type { ChatItem } from './transcript-chat'
-import type { AgentKind, SessionStatus } from './types'
+import type { CheckKind, KindStatus } from './turn-checks'
+import type { AgentKind, GitHubLink, SessionStatus } from './types'
 
 export const REMOTE_IPC = {
   /** main → renderer: RemoteStatus whenever it changes. */
@@ -222,6 +225,24 @@ export interface RemoteSession {
   shipNotice?: string
   /** Model, effort and permission for this session (Figma 64B–64F). */
   settings?: SessionSettings
+  /** What the agent ran this turn (the desktop card's checks line, F9); absent when there is nothing to say. */
+  checks?: RemoteChecks
+  /** `+N −M` of its worktree against the base; absent when both are 0 or unknown. */
+  stat?: RemoteStat
+  /** The issue or PR the session works on (F9 · 交给 agent). */
+  github?: GitHubLink
+}
+
+/** 这一轮跑过的检查 as the phone's 看板 · 进度 row shows it: the view's kinds, without their runs. */
+export interface RemoteChecks {
+  turn: 'current' | 'previous'
+  edited: boolean
+  kinds: { kind: CheckKind; status: KindStatus }[]
+}
+
+export interface RemoteStat {
+  added: number
+  removed: number
 }
 
 export interface RemoteSessionList {
@@ -253,6 +274,15 @@ export interface RemotePhoto {
   data: string
 }
 
+/** 看板 · GitHub's 交给 agent (PRD F22 v1.229 ⑤): the item a new session works on. */
+export interface RemoteTask {
+  link: GitHubLink
+  /** `#139 结算页在 Safari 17 上白屏`: the session's title. */
+  title: string
+  /** A PR's head, where the worktree starts (WorktreeCreateRequest.startAt). */
+  startAt?: string
+}
+
 export type PhoneCommand =
   | { type: 'snapshot' }
   /** The phone opened a session (null: left it): answers with the newest page; what is appended is pushed after it. */
@@ -277,7 +307,16 @@ export type PhoneCommand =
   /** The agent's models for 新建会话's 模型 row (RemoteAgentModels; none for an agent that runs only in a terminal). */
   | { type: 'agent-models'; agent: CliAgent }
   /** `model`: picked under the agent (PRD F22 v1.161); the agent's own id, used when the session runs as GUI. */
-  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string }
+  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask }
+  /**
+   * 看板 · GitHub (PRD F22 v1.229 ⑤, F9): every project's open issues and PRs from gh, one entry per project in the
+   * list's order. Answers `{ gh }` when gh cannot answer at all (not installed, signed out), else the projects.
+   */
+  | { type: 'github-board'; scope: BoardScope; force?: boolean }
+  /** One item's body, comments and (for a PR) branches, size and checks (BoardDetailResult). */
+  | { type: 'github-detail'; project: string; kind: GitHubItemKind; number: number }
+  /** What 交给 agent's form needs for the item (BoardStart); a PR's head is fetched first, as on the desktop. */
+  | { type: 'github-start'; project: string; kind: GitHubItemKind; number: number }
   | { type: 'changes'; session: string }
   /** One file of `changes`: its unified diff (Git · 变更's own groups, PRD F5). */
   | { type: 'diff'; session: string; path: string; scope: 'uncommitted' | 'committed'; oldPath?: string; untracked?: boolean }
@@ -294,6 +333,8 @@ export type PhoneRequest = PhoneCommand & { id: number }
 const record = (raw: unknown): Record<string, unknown> | null => (typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null)
 const ID = /^[A-Za-z0-9_-]{1,128}$/
 const isId = (v: unknown): v is string => typeof v === 'string' && ID.test(v)
+/** An issue or PR number, as gh accepts it. */
+const isItemNumber = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0 && v < 1e9
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 const cleanText = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length <= max && !v.includes('\0') ? v : null)
 const BRANCH = /^[A-Za-z0-9._/-]{1,200}$/
@@ -367,6 +408,19 @@ function answers(raw: unknown): Record<string, string> | null {
   return out
 }
 
+/** `null`: present but invalid; `undefined`: not sent. */
+function task(raw: unknown): RemoteTask | null | undefined {
+  if (raw === undefined) return undefined
+  const t = record(raw)
+  const link = parseGitHubLink(t?.link)
+  const title = cleanText(t?.title, 300)
+  const startAt = t?.startAt === undefined ? undefined : cleanText(t.startAt, 500)
+  // Where a PR's worktree starts is main's own finding (prStart): a fetched remote-tracking branch, or a fork's PR
+  // head under refs/wavi/pull/. Anything else from the phone is refused, as worktree creation would refuse it.
+  if (!t || !link || !title || startAt === null || (startAt !== undefined && !isStartAt(startAt))) return null
+  return { link, title, ...(startAt ? { startAt } : {}) }
+}
+
 /** A decrypted message from the phone → a request, or null when anything about it is off. */
 export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
   const v = record(raw)
@@ -421,6 +475,8 @@ export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
       if (v.branch !== undefined && (typeof v.branch !== 'string' || !BRANCH.test(v.branch))) return null
       const prompt = v.prompt === undefined ? undefined : cleanText(v.prompt, REMOTE_LIMITS.textChars)
       if (prompt === null) return null
+      const handed = task(v.task)
+      if (handed === null) return null
       return {
         id,
         type: 'new-session',
@@ -430,8 +486,19 @@ export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
         ...(typeof v.base === 'string' ? { base: v.base } : {}),
         ...(typeof v.branch === 'string' ? { branch: v.branch } : {}),
         ...(prompt && prompt.trim() ? { prompt } : {}),
-        ...(typeof v.model === 'string' ? { model: v.model } : {})
+        ...(typeof v.model === 'string' ? { model: v.model } : {}),
+        ...(handed ? { task: handed } : {})
       }
+    }
+    case 'github-board': {
+      if (v.scope !== 'all' && v.scope !== 'assigned' && v.scope !== 'mine' && v.scope !== 'review') return null
+      if (v.force !== undefined && typeof v.force !== 'boolean') return null
+      return { id, type: 'github-board', scope: v.scope, ...(v.force === true ? { force: true } : {}) }
+    }
+    case 'github-detail':
+    case 'github-start': {
+      if (!isId(v.project) || (v.kind !== 'issue' && v.kind !== 'pr') || !isItemNumber(v.number)) return null
+      return { id, type: v.type, project: v.project, kind: v.kind, number: v.number }
     }
     case 'changes':
       return isId(v.session) ? { id, type: 'changes', session: v.session } : null
@@ -515,7 +582,7 @@ export type RemoteWindowCommand =
   /** Photos are files main already wrote (HEIC turned into JPEG). */
   | { type: 'send'; session: string; text: string; paths: string[] }
   | { type: 'interrupt'; session: string }
-  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string }
+  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask }
   | { type: 'agent-models'; agent: CliAgent }
   | { type: 'exits'; session: string }
   | { type: 'ship'; session: string; action: RemoteShipAction }
@@ -535,6 +602,29 @@ const optTime = (v: unknown): number | undefined | null => (v === undefined ? un
 
 const STEP_STATES: ReadonlySet<unknown> = new Set<RemoteStepState>(['pending', 'working', 'done', 'failed'])
 const SHIP_FIELDS: ReadonlySet<unknown> = new Set<RemoteShipField>(['commit', 'title', 'body', 'draft'])
+const CHECK_KINDS: ReadonlySet<unknown> = new Set<CheckKind>(['test', 'lint', 'typecheck', 'build'])
+const KIND_STATUSES: ReadonlySet<unknown> = new Set<KindStatus>(['pass', 'fail', 'unknown', 'not-run'])
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v < 1e9
+
+/** The turn's checks as the phone may show them; null when it does not validate (the session still shows). */
+function windowChecks(raw: unknown): RemoteChecks | null {
+  const c = record(raw)
+  if (!c || (c.turn !== 'current' && c.turn !== 'previous') || typeof c.edited !== 'boolean') return null
+  if (!Array.isArray(c.kinds) || c.kinds.length > CHECK_KINDS.size) return null
+  const kinds: RemoteChecks['kinds'] = []
+  for (const item of c.kinds) {
+    const k = record(item)
+    if (!k || !CHECK_KINDS.has(k.kind) || !KIND_STATUSES.has(k.status)) return null
+    kinds.push({ kind: k.kind as CheckKind, status: k.status as KindStatus })
+  }
+  return { turn: c.turn, edited: c.edited, kinds }
+}
+
+function windowStat(raw: unknown): RemoteStat | null {
+  const s = record(raw)
+  if (!s || !isCount(s.added) || !isCount(s.removed) || s.added + s.removed === 0) return null
+  return { added: s.added, removed: s.removed }
+}
 
 /** The window's exit in progress; null when it does not validate. */
 function windowShip(raw: unknown): RemoteShip | null {
@@ -590,6 +680,19 @@ function windowSession(raw: unknown): RemoteSession | null {
   // Settings that do not validate are left off; the session still shows.
   const settings = s.settings === undefined ? null : parseSessionSettings(s.settings)
   if (settings) out.settings = settings
+  // The same for the turn's checks, the worktree's size and the item it works on.
+  if (s.checks !== undefined) {
+    const checks = windowChecks(s.checks)
+    if (checks) out.checks = checks
+  }
+  if (s.stat !== undefined) {
+    const stat = windowStat(s.stat)
+    if (stat) out.stat = stat
+  }
+  if (s.github !== undefined) {
+    const link = parseGitHubLink(s.github)
+    if (link) out.github = link
+  }
   return out
 }
 

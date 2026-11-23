@@ -23,6 +23,7 @@ const MARKS = join(IOS, 'Assets.xcassets/Agents')
 const ICONS = join(IOS, 'Assets.xcassets/Icons')
 /** The icons the app draws, by asset name (`Image("Icons/git-branch")`): the desktop's glyphs (ui/glyphs.ts) by name. */
 const ICON_NAMES: Record<string, GlyphName> = {
+  'arrow-left': 'ArrowLeft',
   'arrow-up': 'ArrowUp',
   bot: 'Bot',
   camera: 'Camera',
@@ -30,10 +31,16 @@ const ICON_NAMES: Record<string, GlyphName> = {
   'chevron-down': 'ChevronDown',
   'chevron-left': 'ChevronLeft',
   'chevron-right': 'ChevronRight',
+  circle: 'Circle',
+  'circle-dot': 'CircleDot',
+  'external-link': 'ExternalLink',
   file: 'File',
   'git-branch': 'GitBranch',
   'git-pull-request': 'GitPullRequest',
+  'git-pull-request-draft': 'GitPullRequestDraft',
   image: 'Image',
+  'layout-list': 'LayoutList',
+  'message-square': 'MessageSquare',
   plus: 'Plus',
   smartphone: 'Smartphone',
   square: 'Square',
@@ -45,7 +52,34 @@ const ICON_NAMES: Record<string, GlyphName> = {
 const WRITE = process.env.WAVI_WRITE_PHONE_ASSETS === '1'
 const TOKENS = join(__dirname, '../../renderer/styles/tokens.css')
 /** The colours that mean something (status, diff): the phone reads them from Shared.json so the two apps agree. */
-const MEANING_TOKENS = ['status-working', 'status-attention', 'status-attention-bg', 'status-done', 'status-error', 'status-idle', 'diff-add-fg', 'diff-add-bg', 'diff-del-fg', 'diff-del-bg']
+const MEANING_TOKENS = [
+  'status-working',
+  'status-attention',
+  'status-attention-bg',
+  'status-done',
+  'status-error',
+  'status-idle',
+  'diff-add-fg',
+  'diff-add-bg',
+  'diff-del-fg',
+  'diff-del-bg',
+  // 看板 · 进度's cards take the desktop board's fills and their quieter line colour (PRD F22 v1.229 ②).
+  'card-attention',
+  'card-attention-hover',
+  'card-attention-meta',
+  'card-error',
+  'card-error-hover',
+  'card-error-meta',
+  'card-review',
+  'card-review-hover',
+  'card-review-meta',
+  'card-working',
+  'card-working-hover',
+  'card-working-meta',
+  'card-idle',
+  'card-idle-hover',
+  'card-idle-meta'
+]
 
 /** `--name: #rrggbb[aa]` from the dark (`:root[data-theme='dark']`) and light (`:root[data-theme='light']`) blocks of tokens.css. */
 function meaningColors(): Record<string, { dark: string; light: string }> {

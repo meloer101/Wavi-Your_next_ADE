@@ -255,8 +255,10 @@ final class AppModel {
     syncActivity()
   }
 
-  func call(_ command: PhoneCommand) async -> RemoteResult {
-    await client?.request(command) ?? .failed(String(localized: "没有连上 Mac"))
+  /// One request to the Mac; `timeout` for the ones that may take longer than the usual 20 s (看板 · GitHub asks gh for
+  /// every project, or fetches a PR before answering; a session made from an item waits for the Mac's window).
+  func call(_ command: PhoneCommand, timeout: Double = Link.requestSeconds) async -> RemoteResult {
+    await client?.request(command, timeout: timeout) ?? .failed(String(localized: "没有连上 Mac"))
   }
 
   /// The link is open, or opened within `seconds` (the app was just woken in the background).
