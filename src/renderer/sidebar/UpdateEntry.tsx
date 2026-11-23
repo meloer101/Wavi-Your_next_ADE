@@ -4,7 +4,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { CircleArrowUp } from '../ui/icons'
 import { defineMessages } from '@shared/i18n'
-import type { UpdateInfo } from '@shared/ipc'
+import type { UpdateCheck, UpdateInfo } from '@shared/ipc'
 import { useMessages } from '../ui/i18n'
 import { Popover } from '../session-meta/Popover'
 import { NavItem } from './NavItem'
@@ -15,6 +15,7 @@ const M = defineMessages({
     update: '更新',
     checking: '正在检查…',
     latest: '已是最新版本',
+    failed: '无法检查更新',
     available: (version: string) => `有新版本 ${version}`,
     download: (version: string) => `下载 ${version}`,
     check: '检查更新'
@@ -23,13 +24,19 @@ const M = defineMessages({
     update: 'Update',
     checking: 'Checking…',
     latest: "You're up to date",
+    failed: "Couldn't check for updates",
     available: (version: string) => `New version ${version}`,
     download: (version: string) => `Download ${version}`,
     check: 'Check for updates'
   }
 })
 
-type UpdateState = { phase: 'idle' } | { phase: 'checking' } | { phase: 'latest' } | { phase: 'available'; info: UpdateInfo }
+type UpdateState =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'latest' }
+  | { phase: 'failed' }
+  | { phase: 'available'; info: UpdateInfo }
 
 export function UpdateEntry() {
   const m = useMessages(M)
@@ -40,10 +47,14 @@ export function UpdateEntry() {
 
   const check = (): void => {
     setState({ phase: 'checking' })
+    const apply = (result: UpdateCheck): void => {
+      if (result.status === 'available') setState({ phase: 'available', info: result.info })
+      else setState({ phase: result.status })
+    }
     void window.tr.app
       .checkForUpdates()
-      .then((info) => setState(info ? { phase: 'available', info } : { phase: 'latest' }))
-      .catch(() => setState({ phase: 'idle' }))
+      .then(apply)
+      .catch(() => setState({ phase: 'failed' }))
   }
 
   return (
@@ -69,6 +80,7 @@ export function UpdateEntry() {
             <p className={styles.status} role="status" aria-live="polite" data-new={state.phase === 'available'}>
               {state.phase === 'checking' && m.checking}
               {state.phase === 'latest' && m.latest}
+              {state.phase === 'failed' && m.failed}
               {state.phase === 'available' && m.available(state.info.version)}
             </p>
           )}

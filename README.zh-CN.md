@@ -3,15 +3,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/meloer101/Wavi-Ultraterminal/releases/latest"><img src="https://img.shields.io/github/v/release/meloer101/Wavi-Ultraterminal?style=flat-square&label=release&labelColor=1a1a1a&color=3a3a3a" alt="最新版本"></a>
+  <a href="https://github.com/meloer101/Wavi-Your_next_ADE/releases/latest"><img src="https://img.shields.io/github/v/release/meloer101/Wavi-Your_next_ADE?style=flat-square&label=release&labelColor=1a1a1a&color=3a3a3a" alt="最新版本"></a>
   <img src="https://img.shields.io/badge/macOS-13%2B-3a3a3a?style=flat-square&logo=apple&logoColor=white&labelColor=1a1a1a" alt="macOS 13+">
   <img src="https://img.shields.io/badge/agents-19-3a3a3a?style=flat-square&labelColor=1a1a1a" alt="19 家 agent">
   <img src="https://img.shields.io/badge/telemetry-none-3a3a3a?style=flat-square&labelColor=1a1a1a" alt="没有遥测">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/meloer101/Wavi-Ultraterminal?style=flat-square&labelColor=1a1a1a&color=3a3a3a" alt="MIT 许可证"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/meloer101/Wavi-Your_next_ADE?style=flat-square&labelColor=1a1a1a&color=3a3a3a" alt="MIT 许可证"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/meloer101/Wavi-Ultraterminal/releases/latest"><b>下载 macOS 版</b></a>
+  <a href="https://github.com/meloer101/Wavi-Your_next_ADE/releases/latest"><b>下载 macOS 版</b></a>
   &nbsp;·&nbsp; <a href="https://wavi.autos/zh/">官网</a>
   &nbsp;·&nbsp; <a href="CHANGELOG.md">更新日志</a>
   &nbsp;·&nbsp; <a href="docs/ROADMAP.md">路线图</a>
@@ -109,7 +109,7 @@ Claude Code · Codex · OpenCode · Gemini CLI · Qwen Code · Pi · Copilot CLI
 
 ## 安装
 
-1. 在 [Releases](https://github.com/meloer101/Wavi-Ultraterminal/releases/latest) 下载 dmg：Apple 芯片选 `arm64`，Intel 选 `x64`。
+1. 在 [Releases](https://github.com/meloer101/Wavi-Your_next_ADE/releases/latest) 下载 dmg：Apple 芯片选 `arm64`，Intel 选 `x64`。
 2. 打开后把 Wavi 拖进「应用程序」。安装包用 Developer ID 签名，并经过 Apple 公证。
 3. 至少装好并登录一家 agent，例如 [Claude Code](https://docs.claude.com/en/docs/claude-code) 或 [Codex](https://github.com/openai/codex)。一家都没有时，Wavi 仍然可以当终端用。
 
@@ -153,7 +153,7 @@ npm run test:e2e     # 构建并运行 Electron 端到端测试
 npm run dist         # 打包 arm64 / x64 的 dmg 和 zip 到 release/
 ```
 
-产品规格在 [docs/PRD.md](docs/PRD.md)，进度在 [docs/ROADMAP.md](docs/ROADMAP.md)，其余见 [CONTRIBUTING.md](CONTRIBUTING.md)。发现 bug 或想要新功能，请[提 issue](https://github.com/meloer101/Wavi-Ultraterminal/issues/new/choose)。
+产品规格在 [docs/PRD.md](docs/PRD.md)，进度在 [docs/ROADMAP.md](docs/ROADMAP.md)，其余见 [CONTRIBUTING.md](CONTRIBUTING.md)。发现 bug 或想要新功能，请[提 issue](https://github.com/meloer101/Wavi-Your_next_ADE/issues/new/choose)。
 
 ## 许可证
 

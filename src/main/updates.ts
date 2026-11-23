@@ -5,31 +5,39 @@ import { app, ipcMain, Notification, shell } from 'electron'
 import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { IPC, type UpdateInfo } from '@shared/ipc'
-import { isDeveloperBuild } from './source-checkout'
+import { IPC, type UpdateCheck, type UpdateInfo } from '@shared/ipc'
+import { isDeveloperBuild, sourceRoot } from './source-checkout'
 import { defineMessages, pick } from '@shared/i18n'
 
 const M = defineMessages({
   zh: { released: (name: string, version: string) => `${name} ${version} 已发布`, body: '点击查看更新内容并下载。' },
   en: { released: (name: string, version: string) => `${name} ${version} is out`, body: "Click to see what's new and download it." }
 })
-import { checkLatestRelease, parseRepository, type FetchLike, type Repo } from './update-check'
+import { checkLatestRelease, parseRepository, type FetchLike } from './update-check'
 
 const FIRST_CHECK_DELAY_MS = 10_000
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
-function repository(): Repo | null {
+// The package.json of the code that runs. The linked app's shell has one of its own, written once by
+// `npm run app:install` with neither later version bumps nor `repository`, so it reads the checkout's.
+function runningPackage(): { version?: unknown; repository?: unknown } | null {
   try {
-    const pkg: unknown = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8'))
-    return parseRepository(typeof pkg === 'object' && pkg !== null ? (pkg as { repository?: unknown }).repository : undefined)
+    const pkg: unknown = JSON.parse(readFileSync(join(sourceRoot() ?? app.getAppPath(), 'package.json'), 'utf8'))
+    return typeof pkg === 'object' && pkg !== null ? pkg : null
   } catch {
     return null
   }
 }
 
-/** Latest GitHub release if newer than the running app, else null. Never throws. */
-export function checkForUpdates(): Promise<UpdateInfo | null> {
-  return checkLatestRelease(repository(), app.getVersion(), fetch as FetchLike)
+/** The running version: the checkout's for the linked app, else `app.getVersion()`. */
+export function appVersion(): string {
+  const version = runningPackage()?.version
+  return typeof version === 'string' ? version : app.getVersion()
+}
+
+/** Latest GitHub release if newer than the running app: `latest`, `available` or `failed`. Never throws. */
+export function checkForUpdates(): Promise<UpdateCheck> {
+  return checkLatestRelease(parseRepository(runningPackage()?.repository), appVersion(), fetch as FetchLike)
 }
 
 // The last version we notified about survives restarts, so a user who ignores it is not nagged on every launch.
@@ -75,8 +83,8 @@ function notify(update: UpdateInfo): void {
 }
 
 async function checkAndNotify(): Promise<void> {
-  const update = await checkForUpdates()
-  if (update) notify(update)
+  const result = await checkForUpdates()
+  if (result.status === 'available') notify(result.info)
 }
 
 export function registerUpdateHandlers(): void {

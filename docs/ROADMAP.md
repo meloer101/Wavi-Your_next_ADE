@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-22：侧栏「更新」检查失败时写「无法检查更新」，不再误报「已是最新版本」（PRD v1.228）。
 - 2026-11-20：官网分享封面换成新首屏的样子（Figma「官网·新风格探究‘」`OG · 分享封面 C · 英文` `1811:18007`：朱红底、`Run ALL coding agents on your Mac.`、协作句、GitHub「Open source · Totally free」、点阵翻花绳），导出成 `site/public/og-2.png`（2400×1260），删掉杂志封面 `og.png`；换文件名是为了让 X 等按图片地址缓存的卡片重新抓图，中英文两页仍是同一张。
 - 2026-11-19：官网从翻页杂志换成滚动落地页（PRD v1.224，Figma「官网·新风格探究‘」frame O `1794:15463`）：一页一语言（英文 `/`、中文 `/zh/`），静态 HTML + CSS，页头 → 朱红首屏（`Run ALL coding agents on your Mac.`）→ 19 家 agent 条 → 01 Agents → 02 Board → 03 GitHub → 04 Windows + Appearance → FAQ → 下载与页脚合成一块；`site/src/components/Home.astro` 加 `home/` 下每段一个组件，文案在 `i18n.ts`，字体换成 DM Sans / Source Serif 4 Italic / JetBrains Mono / Noto Sans SC 的自托管子集，翻页脚本、杂志组件和图片删掉。
 - 2026-11-19：手机的离线缓存和重连（PRD v1.220 ④，Figma 62B / 62F / 63B3，只做手机端）：`ios/Wavi/Store/Cache.swift` —— 会话列表带 Mac 发来的时刻、每个会话最近 200 条对话，写成 `Application Support/Wavi/Remote/<配对密钥摘要>/` 下的 JSON，首解锁后可读（后台唤醒还能连）、不进备份、1 s 防抖、写文件不在主线程；取消配对后整个目录删掉（Mac 说不认识这台手机时配对和缓存都留着，v1.223），Mac 的完整列表里没有的会话删掉它的对话。`AppModel` 冷启动先读它再连，连上后照旧用快照和 feed 替换，`watch` 打开会话时没连上就用缓存里的对话（62F），没有缓存时列表是 63B3。重连：`RemoteClient` 里新的 `Reconnect`（前台 1 秒、之后每 2 秒一次，连上并站住后从 1 开始；Mac 不认识这台手机、协议对不上或连开连断三次时 30 秒），网络变化和回到前台仍立即重连。测试 `WaviTests/CacheTests.swift`；截图 `test-results/offline/offline-{list,session}-{dark,light}.png`（`WaviTests/OfflineShots.swift`）

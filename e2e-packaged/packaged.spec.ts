@@ -105,14 +105,26 @@ test('is the packaged build with the right version and resources', async () => {
   for (const region of ['sidebar', 'main', 'terminal']) await expect(page.locator(`[data-region="${region}"]`)).toBeVisible()
 })
 
-test('the update check resolves without throwing (null while the repo has no newer release)', async () => {
+test('the update check resolves to latest, available or failed without throwing', async () => {
   const result = await page.evaluate(async () => {
-    const api = (globalThis as unknown as { tr: { app: { version: string; checkForUpdates(): Promise<{ version: string } | null> } } }).tr.app
+    const api =
+      (globalThis as unknown as {
+        tr: {
+          app: {
+            version: string
+            checkForUpdates(): Promise<
+              { status: 'latest' } | { status: 'available'; info: { version: string } } | { status: 'failed' }
+            >
+          }
+        }
+      }).tr.app
     return { version: api.version, update: await api.checkForUpdates() }
   })
   expect(result.version).toBe(version)
-  // The live repo may legitimately have a newer release by the time this runs; only the shape matters.
-  expect(result.update === null || typeof result.update.version === 'string').toBe(true)
+  // The live repo may legitimately have a newer release by the time this runs, and an offline run gives 'failed';
+  // only the shape matters.
+  expect(['latest', 'available', 'failed']).toContain(result.update.status)
+  if (result.update.status === 'available') expect(typeof result.update.info.version).toBe('string')
 })
 
 test('a shell session runs through pty-host and node-pty', async () => {
