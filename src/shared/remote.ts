@@ -279,6 +279,8 @@ export type PhoneCommand =
   /** `model`: picked under the agent (PRD F22 v1.161); the agent's own id, used when the session runs as GUI. */
   | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string }
   | { type: 'changes'; session: string }
+  /** The file a reply's chip names (PRD v1.229 ②): `path` as written, relative to the session folder or absolute inside it; the Mac checks. */
+  | { type: 'file'; session: string; path: string }
   /** One file of `changes`: its unified diff (Git · 变更's own groups, PRD F5). */
   | { type: 'diff'; session: string; path: string; scope: 'uncommitted' | 'committed'; oldPath?: string; untracked?: boolean }
   /** Git · 变更's exits for the session's worktree (RemoteExits). */
@@ -441,6 +443,10 @@ export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
       if (!isId(v.session) || !path || oldPath === null || (v.scope !== 'uncommitted' && v.scope !== 'committed')) return null
       if (v.untracked !== undefined && typeof v.untracked !== 'boolean') return null
       return { id, type: 'diff', session: v.session, path, scope: v.scope, ...(oldPath ? { oldPath } : {}), ...(v.untracked === true ? { untracked: true } : {}) }
+    }
+    case 'file': {
+      const path = cleanText(v.path, 1000)
+      return isId(v.session) && path ? { id, type: 'file', session: v.session, path } : null
     }
     case 'exits':
       return isId(v.session) ? { id, type: 'exits', session: v.session } : null

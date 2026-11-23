@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import type { CliAgent } from '@shared/agents'
 import { parsePhoneRequest, type PhoneCommand, type PhoneEvent, type RemoteAgentModels, type RemoteExits, type RemotePrompt, type RemoteSession, type RemoteSessionList, type RemoteShipAction } from '@shared/remote'
 import type { ChatItem } from '@shared/transcript-chat'
+import type { FilePreview } from '@shared/worktree-files'
 import type { changes, fileDiff } from '../git-graph'
 import type { newSessionInfo } from '../worktree-create'
 import type { FeedHub } from './feed'
@@ -33,6 +34,8 @@ interface Results {
   'new-session': { session: string }
   changes: NonNullable<Awaited<ReturnType<typeof changes>>>
   diff: { text: Awaited<ReturnType<typeof fileDiff>> }
+  /** readSessionFile: the same FilePreview the desktop's file view reads. */
+  file: FilePreview
   exits: RemoteExits
 }
 
@@ -62,6 +65,7 @@ const commands: Commands = {
   'new-session': { type: 'new-session', project: 'proj1', workdir: 'worktree', agent: 'claude', base: 'main', branch: 'jacoy/fix-login', prompt: '修好登录', model: 'claude-opus-5-5' },
   changes: { type: 'changes', session: 's1' },
   diff: { type: 'diff', session: 's1', path: 'src/new.ts', scope: 'uncommitted', oldPath: 'src/old.ts', untracked: true },
+  file: { type: 'file', session: 's1', path: 'src/a.ts' },
   exits: { type: 'exits', session: 's1' },
   ship: { type: 'ship', session: 's1', action: shipActions.edit },
   archive: { type: 'archive', session: 's1' },
@@ -230,6 +234,7 @@ const results: Results = {
     committed: [{ path: 'src/auth.ts', status: 'M', added: 10, removed: 2 }]
   },
   diff: { text: 'diff --git a/src/new.ts b/src/new.ts\n@@ -1 +1 @@\n-a\n+b\n' },
+  file: { kind: 'text', text: 'export const a = 1\n', size: 19 },
   exits: {
     primary: { kind: 'push-pr', label: '推送并创建 PR', blocker: '有未提交的改动' },
     secondary: { kind: 'open-pr', label: '打开 PR #12', blocker: '正在读取 PR…', url: 'https://github.com/o/r/pull/12' },

@@ -75,6 +75,11 @@
       "oldPath": "src/old.ts",
       "untracked": true
     },
+    "file": {
+      "type": "file",
+      "session": "s1",
+      "path": "src/a.ts"
+    },
     "exits": {
       "type": "exits",
       "session": "s1"
@@ -983,6 +988,11 @@
     },
     "diff": {
       "text": "diff --git a/src/new.ts b/src/new.ts\n@@ -1 +1 @@\n-a\n+b\n"
+    },
+    "file": {
+      "kind": "text",
+      "text": "export const a = 1\n",
+      "size": 19
     },
     "exits": {
       "primary": {

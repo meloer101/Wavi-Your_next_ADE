@@ -61,6 +61,7 @@ describe('parsePhoneRequest', () => {
       base: 'main',
       branch: 'jacob/x'
     })
+    expect(parsePhoneRequest({ id: 2, type: 'file', session: 's1', path: '/Users/m/p/src/a.ts' })).toEqual({ id: 2, type: 'file', session: 's1', path: '/Users/m/p/src/a.ts' })
     expect(parsePhoneRequest({ id: 8, type: 'diff', session: 's1', path: 'src/a.ts', scope: 'committed' })).toEqual({ id: 8, type: 'diff', session: 's1', path: 'src/a.ts', scope: 'committed' })
     expect(parsePhoneRequest({ id: 9, type: 'diff', session: 's1', path: 'b.ts', oldPath: 'a.ts', scope: 'uncommitted', untracked: false })).toEqual({ id: 9, type: 'diff', session: 's1', path: 'b.ts', oldPath: 'a.ts', scope: 'uncommitted' })
     expect(parsePhoneRequest({ id: 10, type: 'set-setting', session: 's1', kind: 'permission', value: 'plan' })).toEqual({ id: 10, type: 'set-setting', session: 's1', kind: 'permission', value: 'plan' })
@@ -86,6 +87,10 @@ describe('parsePhoneRequest', () => {
     expect(parsePhoneRequest({ id: 1, type: 'diff', session: 's1', path: '../etc/passwd', scope: 'committed' })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'diff', session: 's1', path: '/etc/passwd', scope: 'committed' })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'diff', session: 's1', path: 'a.ts', scope: 'all' })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'file', session: 's1', path: 'a'.repeat(1001) })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'file', session: 's1', path: 'a\0b' })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'file', session: 's1', path: '' })).toBeNull()
+    expect(parsePhoneRequest({ id: 1, type: 'file', session: 's1', path: 42 })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'permission', prompt: 'p', decision: 'yes' })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'permission', prompt: 'p', decision: 'deny', message: 42 })).toBeNull()
     expect(parsePhoneRequest({ id: 1, type: 'permission', prompt: 'p', decision: 'deny', message: 'x'.repeat(REMOTE_LIMITS.answerChars + 1) })).toBeNull()

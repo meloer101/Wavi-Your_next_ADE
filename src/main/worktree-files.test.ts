@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
 vi.mock('./workspace-store', () => ({ isWorkspaceDir: (path: string) => workspaceDirs.has(path) }))
 
 const { IPC } = await import('@shared/ipc')
-const { classifyChange, inGeneratedFolder, isInside, normalizeRelative, openAction, openWorktreeEntry, registerWorktreeFileHandlers, resolveFileLinks, walkFiles, watchesRecursively } =
+const { readSessionFile, classifyChange, inGeneratedFolder, isInside, normalizeRelative, openAction, openWorktreeEntry, registerWorktreeFileHandlers, resolveFileLinks, walkFiles, watchesRecursively } =
   await import('./worktree-files')
 
 describe('normalizeRelative', () => {
@@ -222,5 +222,31 @@ describe('用默认编辑器打开 never runs what it opens', () => {
     const openers = { openPath: async (p: string) => (calls.push(`open ${p}`), ''), openText: async (p: string) => (calls.push(`text ${p}`), ''), reveal: (p: string) => void calls.push(`reveal ${p}`) }
     for (const path of [script, bundle, plain]) await openWorktreeEntry(path, openers)
     expect(calls).toEqual([`text ${script}`, `reveal ${bundle}`, `open ${plain}`])
+  })
+})
+
+describe('readSessionFile (a phone chip’s path)', () => {
+  const outside = mkdtempSync(join(tmpdir(), 'tr-file-out-'))
+  writeFileSync(join(outside, 'secret.txt'), 'x')
+  const root = mkdtempSync(join(tmpdir(), 'tr-file-'))
+  mkdirSync(join(root, 'src'))
+  writeFileSync(join(root, 'src', 'a.ts'), 'hello\n')
+  symlinkSync(join(outside, 'secret.txt'), join(root, 'escape.txt'))
+
+  it('reads relative and absolute paths inside the folder', async () => {
+    expect(await readSessionFile(root, 'src/a.ts')).toMatchObject({ kind: 'text', text: 'hello\n' })
+    expect(await readSessionFile(root, './src/a.ts')).toMatchObject({ kind: 'text' })
+    expect(await readSessionFile(root, join(root, 'src', 'a.ts'))).toMatchObject({ kind: 'text' })
+    expect(await readSessionFile(root, join(realpathSync(root), 'src', 'a.ts'))).toMatchObject({ kind: 'text' })
+  })
+
+  it('says missing for a missing file, ../, paths outside the folder', async () => {
+    for (const path of ['nope.ts', '../x.ts', 'src/../../x.ts', join(outside, 'secret.txt'), '/etc/hosts', root, '']) {
+      expect(await readSessionFile(root, path)).toEqual({ kind: 'missing' })
+    }
+  })
+
+  it('refuses a symlink leading out', async () => {
+    await expect(readSessionFile(root, 'escape.txt')).rejects.toThrow()
   })
 })

@@ -128,6 +128,24 @@ async function listDir(root: unknown, dir: unknown): Promise<DirEntry[]> {
   return entries.sort(compareEntries)
 }
 
+/**
+ * The file a phone's chip names (PRD F22 v1.229 ②): `path` as the agent wrote it, relative to the session folder or
+ * absolute and inside it. A path that climbs out, or an absolute one elsewhere, is `missing` — the phone says the file is
+ * not in the session folder; symlinks leading out are refused by `readPreview` itself.
+ */
+export async function readSessionFile(root: string, path: string): Promise<FilePreview> {
+  let rel = path
+  if (isAbsolute(path)) {
+    const realRoot = await resolveRoot(root)
+    const inside = [root, realRoot].map((base) => relative(base, path)).find((r) => r !== '' && !isAbsolute(r) && r.split(sep)[0] !== '..')
+    if (!inside) return { kind: 'missing' }
+    rel = inside.split(sep).join('/')
+  }
+  const normalized = normalizeRelative(rel)
+  if (!normalized || rel.split('/').includes('..')) return { kind: 'missing' }
+  return readPreview(root, normalized)
+}
+
 async function readPreview(root: unknown, path: unknown): Promise<FilePreview> {
   const realRoot = await resolveRoot(root)
   let abs: string

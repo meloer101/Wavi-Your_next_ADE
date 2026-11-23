@@ -342,8 +342,16 @@ private func chip(_ ref: FileRef) -> Text {
   name.backgroundColor = .fillSubtle
   name.foregroundColor = .textPrimary
   if let url = ref.url { name.link = url }
-  return Text(Image("Icons/file")).foregroundColor(.textSecondary) + Text(" ") + Text(name) + Text(" ")
+  return Text(Image(uiImage: fileChipIcon)).foregroundColor(.textSecondary) + Text(" ") + Text(name) + Text(" ")
 }
+
+/// The file icon at 14 pt: an image inside `Text` keeps its own size, and the asset is far larger than a line of text.
+private let fileChipIcon: UIImage = {
+  let size = CGSize(width: 14, height: 14)
+  guard let source = UIImage(named: "Icons/file") else { return UIImage() }
+  let drawn = UIGraphicsImageRenderer(size: size).image { _ in source.draw(in: CGRect(origin: .zero, size: size)) }
+  return drawn.withRenderingMode(.alwaysTemplate)
+}()
 
 // MARK: - Chips open a file
 
@@ -460,7 +468,15 @@ private struct MarkdownBlockView: View {
       .padding(.leading, indent)
     } else if let marker = block.marker {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(marker).font(.ui(.callout)).foregroundStyle(Color.textSecondary).frame(minWidth: 16, alignment: .leading)
+        Group {
+          if marker == "▪" {
+            // The UI font has no ▪ glyph (it drew a missing-glyph box): a 5 pt square on the text's centre line.
+            Rectangle().fill(Color.textSecondary).frame(width: 5, height: 5).alignmentGuide(.firstTextBaseline) { $0[.bottom] + 5 }
+          } else {
+            Text(marker).font(.ui(.callout)).foregroundStyle(Color.textSecondary)
+          }
+        }
+        .frame(minWidth: 16, alignment: .leading)
         text
       }
       .padding(.leading, indent)

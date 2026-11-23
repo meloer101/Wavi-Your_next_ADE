@@ -34,6 +34,7 @@ import { answerFromRemote, promptHeld, respondFromRemote, setRemoteHooks, transc
 import { claudeTranscriptPath, defaultAgentDataDirs } from '../hooks/agent-title'
 import { getSettings, onSettingsChange } from '../settings'
 import { newSessionInfo } from '../worktree-create'
+import { readSessionFile } from '../worktree-files'
 import { identityFromPem, identityToPem, newIdentity, type Identity } from './crypto'
 import { DeviceStore, type StoredDevice } from './devices'
 import { FeedHub, type FeedSource } from './feed'
@@ -369,6 +370,11 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
       }
       const text = await fileDiff({ root: folder.cwd, path: request.path, oldPath: request.oldPath, scope: request.scope, baseRef, untracked: request.untracked })
       return { ok: true, data: { text } }
+    }
+    case 'file': {
+      const folder = windowSessions.folders[request.session]
+      if (!folder) return notFound()
+      return { ok: true, data: await readSessionFile(folder.cwd, request.path) }
     }
     // Exits and 归档 run in the main window, through Git · 变更's own code (PRD F16 / F15): it is the window whose session
     // list (with the runs' progress) the phone gets, and none of them needs the session's terminal to be open.
