@@ -2,7 +2,7 @@
 // tables, task lists and strikethrough, Apache-2.0, THIRD_PARTY_NOTICES.md) and drawn block by block here — the library
 // only parses, a page of the feed is redrawn too often to parse again on every body call (see `parsedBlocks`).
 //
-// A path in inline code (`src/a.ts:42`) is a chip that opens the file (PRD v1.229 ②): its line suffix is not shown, the
+// A path in inline code (`src/a.ts:42`) is a chip that opens the file (PRD v1.230): its line suffix is not shown, the
 // tap is a link with a scheme of our own (`wavi-file:`), answered by `openFileRef` — the push happens in RootView.
 import Foundation
 import Markdown
@@ -38,7 +38,7 @@ private let bareFileExtensions: Set<String> = [
   "txt", "lock", "plist", "xcstrings", "gradle", "vue", "svelte", "astro"
 ]
 
-/// The file a whole inline code span names, or nil when it is not one (PRD v1.229 ②, after the desktop's
+/// The file a whole inline code span names, or nil when it is not one (PRD v1.230, after the desktop's
 /// `findPathCandidates` narrowed to paths with a file extension — Orca's rule: miss one rather than link prose).
 /// A path has no spaces, keeps a `:line[:col]` or `#Lline` suffix that the chip hides, and is shown as the file.
 func fileRef(inCode code: String) -> FileRef? {

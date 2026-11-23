@@ -18,11 +18,11 @@ let markdownSample = """
 | 检查 | 结果 |
 |---|---|
 | `npm run check`（typecheck、lint、依赖规则、全量单测） | 已验证：296 个测试文件、3945 passed、1 skipped |
-| `docs/PRD.md` 里 v1.229 那一条 | 已核对：② 只加不改协议 |
+| `docs/PRD.md` 里 v1.230 那一条 | 已核对：② 只加不改协议 |
 
 ### 待办
 
-- [x] 读 `docs/PRD.md` 的 v1.229 一行
+- [x] 读 `docs/PRD.md` 的 v1.230 一行
 - [ ] 把 `ios/project.yml` 的依赖补上
 - [ ] 跑 `xcodebuild test`（iPhone 17 Pro）
 

@@ -22,7 +22,7 @@ settings:
 packages:
   Ristretto255:
     path: Packages/Ristretto255
-  # An agent's reply is GFM (PRD F22 v1.229 ②): CommonMark + tables, task lists and strikethrough, from cmark-gfm.
+  # An agent's reply is GFM (PRD F22 v1.230): CommonMark + tables, task lists and strikethrough, from cmark-gfm.
   # Apache-2.0, attributed in THIRD_PARTY_NOTICES.md. Drawn by ios/Wavi/Views/Markdown.swift, not by the library.
   swift-markdown:
     url: https://github.com/swiftlang/swift-markdown
@@ -62,7 +62,9 @@ targets:
         UIAppFonts: [JetBrainsMono_400Regular.ttf, JetBrainsMono_500Medium.ttf]
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # 看板 · 进度 turns sideways (PRD F22 v1.229 ②, Figma 103′C); the app itself keeps every other screen portrait
+        # (`Orientation`, App/Orientation.swift), so both landscape entries are needed here for that one screen.
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

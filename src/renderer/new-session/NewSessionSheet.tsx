@@ -23,9 +23,7 @@ import {
 } from '@shared/new-session'
 import { AGENT_SPECS, agentName, CLI_AGENTS } from '@shared/agents'
 import { canLead, leaderBlock, type LeaderCheck } from '@shared/dispatch'
-import { promptOnCommandLine } from '@shared/agent-launch'
-import { itemBranch } from '@shared/github-board'
-import type { SessionId } from '@shared/types'
+import { startBranch } from '@shared/github-board'
 import type { AgentAvailability, AgentVersions } from '@shared/ipc'
 import type { AgentKind, ProjectId, SessionUi } from '@shared/types'
 import { defineMessages, pick } from '@shared/i18n'
@@ -34,9 +32,8 @@ import { Toggle } from '../settings/controls'
 import { Segmented } from '../ui/Segmented'
 import { useWorkspace } from '../state/workspace'
 import { leaderOf } from '../state/workspace-model'
-import { setLaunch } from '../dispatch/store'
-import { submitPrompt, whenAgentReady } from '../session-io'
 import { runCreatePlan } from './creation'
+import { handTask } from './hand-task'
 import { binaryInstalled, branchProblemText, folderFor, isElsewhere, listedAgents, planCreate, prepareText, selectedBase, tilde, uiRow, type UiRow } from './model'
 import { closeNewSessionSheet, useNewSessionSheet, type SheetTask } from './sheet-store'
 import { SheetMenu, type SheetMenuSection } from './SheetMenu'
@@ -247,7 +244,7 @@ function Sheet() {
   const generated = useMemo(() => {
     if (!info?.repo) return ''
     const taken = new Set(info.branches.filter((b) => !b.remote).map((b) => b.name))
-    if (task) return task.branch && !taken.has(task.branch) ? task.branch : itemBranch(info.prefix, task.branchFrom.kind, task.branchFrom.number, task.branchFrom.title, taken)
+    if (task) return startBranch(info.prefix, task.branchFrom, task.branch, taken)
     return generateBranchName(info.prefix, taken)
   }, [info, task])
 
@@ -619,22 +616,6 @@ function Sheet() {
       )}
     </div>
   )
-}
-
-/**
- * The new session takes the item's title and link, and its first message: on the CLI's command line or the GUI's
- * launch where the agent has one, else typed in once the agent is ready (as 一题多解 does).
- */
-function handTask(id: SessionId, task: SheetTask, kind: AgentKind, ui: SessionUi, text: string | null): void {
-  useWorkspace.getState().patchSession(id, { title: task.title, titleSource: 'prompt', github: task.link })
-  if (text === null || kind === 'shell') return
-  if (ui === 'gui' || promptOnCommandLine(kind)) {
-    setLaunch(id, { initialPrompt: text })
-    return
-  }
-  void whenAgentReady(id)
-    .then(() => submitPrompt(id, text))
-    .catch((error: unknown) => console.error('[new-session] the task did not reach the agent:', error))
 }
 
 function notRepoText(loaded: LoadedInfo | undefined): string {

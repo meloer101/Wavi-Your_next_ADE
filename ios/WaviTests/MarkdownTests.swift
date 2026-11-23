@@ -1,5 +1,5 @@
 // Views/Markdown.swift: a reply parsed by swift-markdown into the blocks the views draw, and the file paths in its inline
-// code (PRD F22 v1.229 ②). MyAvatar.swift: the middle square.
+// code (PRD F22 v1.230). MyAvatar.swift: the middle square.
 import Foundation
 import Testing
 @testable import Wavi

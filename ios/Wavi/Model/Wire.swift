@@ -70,6 +70,47 @@ struct RemoteSession: Codable, Hashable, Sendable, Identifiable {
   let shipNotice: String?
   /// Model, effort and permission for this session (src/shared/session-settings.ts, Figma 64B–64F).
   var settings: SessionSettings? = nil
+  /// What the agent ran this turn: 看板 · 进度's checks line (src/shared/turn-checks.ts).
+  var checks: RemoteChecks? = nil
+  /// The worktree's `+N −M` against its base; absent when both are 0 or unknown.
+  var stat: RemoteStat? = nil
+  /// The issue or PR the session works on (看板 · GitHub · 交给 agent).
+  var github: GitHubLink? = nil
+}
+
+/// 这一轮跑过的检查 as the phone shows it (turn-checks.ts `TurnCheckView`): the turns, without the runs.
+struct RemoteChecks: Codable, Hashable, Sendable {
+  enum Turn: String, Codable, Sendable { case current, previous }
+  struct Kind: Codable, Hashable, Sendable {
+    /// test / lint / typecheck / build
+    let kind: String
+    /// pass / fail / unknown / not-run
+    let status: String
+  }
+  let turn: Turn
+  let edited: Bool
+  let kinds: [Kind]
+}
+
+struct RemoteStat: Codable, Hashable, Sendable {
+  let added: Int
+  let removed: Int
+}
+
+/// An issue or PR of a repository (`host/owner/name`); src/shared/types.ts `GitHubLink`.
+struct GitHubLink: Codable, Hashable, Sendable {
+  let repo: String
+  /// issue / pr
+  let kind: String
+  let number: Int
+}
+
+/// 看板 · GitHub's 交给 agent (PRD F22 v1.229 ⑤): the item a new session works on.
+struct GitHubTask: Codable, Hashable, Sendable {
+  let link: GitHubLink
+  let title: String
+  /// A PR's head: where its worktree starts.
+  let startAt: String?
 }
 
 struct SessionSettings: Codable, Hashable, Sendable {
@@ -228,6 +269,158 @@ struct NewSessionInfo: Codable, Hashable, Sendable {
   let prefix: String
 }
 
+// MARK: - 看板 · GitHub (PRD F22 v1.229 ⑤, src/shared/github-board.ts)
+
+/// `host/owner/name`, as gh and the branch names have it.
+struct GitHubRepo: Codable, Hashable, Sendable {
+  let host: String
+  let owner: String
+  let name: String
+}
+
+struct CheckSummaryFailure: Codable, Hashable, Sendable {
+  let name: String
+  /// The GitHub Actions run and job behind it; null for other CI.
+  let runId: Double?
+  let jobId: Double?
+}
+
+/// What a list row says about a PR's checks (pull-requests.ts `ChecksSummary`).
+struct ChecksSummary: Codable, Hashable, Sendable {
+  /// none / pending / passing / failing
+  let state: String
+  let total: Int
+  let passed: Int
+  let pending: Int
+  let failing: [CheckSummaryFailure]
+}
+
+/// One row of a project's GitHub list (issue or PR).
+struct BoardItem: Codable, Hashable, Sendable {
+  /// issue / pr
+  let kind: String
+  let number: Int
+  let title: String
+  let url: String
+  let author: String
+  let labels: [String]
+  let comments: Int
+  /// Epoch ms.
+  let updatedAt: Double
+}
+
+/// A PR row: an item plus what only a PR has.
+struct BoardPr: Codable, Hashable, Sendable {
+  let kind: String
+  let number: Int
+  let title: String
+  let url: String
+  let author: String
+  let labels: [String]
+  let comments: Int
+  let updatedAt: Double
+  let draft: Bool
+  /// approved / changes-requested / review-required; null when GitHub has no verdict.
+  let review: String?
+  /// The gh user is among the requested reviewers.
+  let reviewRequestedFromMe: Bool
+  let checks: ChecksSummary
+}
+
+/// One project's board: `state` is ok / not-github / error (an error carries `message`).
+struct BoardProject: Codable, Hashable, Sendable {
+  let state: String
+  let repo: GitHubRepo?
+  let issues: [BoardItem]?
+  let prs: [BoardPr]?
+  let fetchedAt: Double?
+  let message: String?
+}
+
+/// The `github-board` answer: gh's own state when it cannot answer at all (not installed, signed out), else each
+/// project's board in the session list's order.
+struct GitHubBoard: Codable, Hashable, Sendable {
+  struct Project: Codable, Hashable, Sendable {
+    let project: String
+    let board: BoardProject
+  }
+  /// ready / checking / missing / signed-out
+  let gh: String
+  let projects: [Project]?
+}
+
+struct BoardComment: Codable, Hashable, Sendable {
+  let author: String
+  /// Epoch ms.
+  let createdAt: Double
+  /// Markdown as written on GitHub, capped. Untrusted.
+  let body: String
+}
+
+/// A PR's branched side of a detail (github-board.ts `BoardDetail.pr`).
+struct BoardDetailPr: Codable, Hashable, Sendable {
+  struct Check: Codable, Hashable, Sendable {
+    let name: String
+    /// passed / failed / pending
+    let verdict: String
+    let startedAt: Double?
+    let completedAt: Double?
+  }
+  let draft: Bool
+  let headRef: String
+  let baseRef: String
+  /// The PR comes from a fork: nothing is pushed back to it.
+  let crossRepo: Bool
+  let additions: Int
+  let deletions: Int
+  let changedFiles: Int
+  let review: String?
+  let checks: [Check]
+}
+
+/// One item's body and comments (github-board.ts `BoardDetail`).
+struct BoardDetail: Codable, Hashable, Sendable {
+  /// issue / pr
+  let kind: String
+  let repo: GitHubRepo
+  let number: Int
+  let title: String
+  let url: String
+  /// open / closed / merged
+  let state: String
+  let author: String
+  let createdAt: Double
+  let labels: [String]
+  let assignees: [String]
+  let body: String
+  /// The newest comments, oldest first.
+  let comments: [BoardComment]
+  let commentCount: Int
+  let pr: BoardDetailPr?
+}
+
+/// The `github-detail` answer: `ok` with `detail`, or the reason it could not be read.
+struct BoardDetailResult: Codable, Hashable, Sendable {
+  let ok: Bool
+  let detail: BoardDetail?
+  let message: String?
+}
+
+/// The `github-start` answer: what the phone's 交给 agent form fills in.
+struct GitHubStart: Codable, Hashable, Sendable {
+  let link: GitHubLink
+  /// `#139 …`: the session's title.
+  let title: String
+  /// The first message (`taskPrompt`), editable in the form.
+  let prompt: String
+  /// The branch the new worktree gets.
+  let branch: String
+  /// What it merges into: a PR's base; null = the project's default.
+  let base: String?
+  /// A PR's head, where the worktree starts.
+  let startAt: String?
+}
+
 struct Hello: Codable, Sendable {
   let name: String
   let version: String
@@ -289,16 +482,26 @@ enum PhoneCommand: Sendable {
   case plan(prompt: String, decision: String)
   case answer(prompt: String, answers: [String: String])
   case newSessionInfo(project: String)
-  case newSession(project: String, workdir: String, agent: String, base: String?, branch: String?, prompt: String?, model: String?)
+  case newSession(project: String, workdir: String, agent: String, base: String?, branch: String?, prompt: String?, model: String?, task: GitHubTask?)
+  /// The same command without a 看板 · GitHub task (the phone's own 新建会话): what every call site but the board's uses.
+  static func newSession(project: String, workdir: String, agent: String, base: String?, branch: String?, prompt: String?, model: String?) -> PhoneCommand {
+    .newSession(project: project, workdir: workdir, agent: agent, base: base, branch: branch, prompt: prompt, model: model, task: nil)
+  }
   case agentModels(agent: String)
   case changes(session: String)
   case diff(session: String, path: String, scope: String, oldPath: String?, untracked: Bool)
-  /// The file a reply's chip names (PRD F22 v1.229 ②): the path as written, inside the session's folder.
+  /// The file a reply's chip names (PRD F22 v1.230): the path as written, inside the session's folder.
   case file(session: String, path: String)
   case exits(session: String)
   case ship(session: String, action: ShipAction)
   case archive(session: String)
   case setSetting(session: String, kind: String, value: String)
+  /// 看板 · GitHub (PRD F22 v1.229 ⑤): every project's open issues and PRs; `force` skips the Mac's minute of cache.
+  case githubBoard(scope: String, force: Bool)
+  /// One item's body, comments and (for a PR) branches, size and checks.
+  case githubDetail(project: String, kind: String, number: Int)
+  /// What 交给 agent's form needs for the item (GitHubStart); a PR's head is fetched first.
+  case githubStart(project: String, kind: String, number: Int)
 
   /// A permission answer's decision (for the receipt it leaves).
   var decision: String? { if case .permission(_, let d) = self { return d } else { return nil } }
@@ -314,12 +517,13 @@ enum PhoneCommand: Sendable {
     case .plan(let p, let d): return ["type": .string("plan"), "prompt": .string(p), "decision": .string(d)]
     case .answer(let p, let a): return ["type": .string("answer"), "prompt": .string(p), "answers": .object(a.mapValues { .string($0) })]
     case .newSessionInfo(let p): return ["type": .string("new-session-info"), "project": .string(p)]
-    case .newSession(let project, let workdir, let agent, let base, let branch, let prompt, let model):
+    case .newSession(let project, let workdir, let agent, let base, let branch, let prompt, let model, let task):
       var f: [String: JSONValue] = ["type": .string("new-session"), "project": .string(project), "workdir": .string(workdir), "agent": .string(agent)]
       if let base { f["base"] = .string(base) }
       if let branch { f["branch"] = .string(branch) }
       if let prompt { f["prompt"] = .string(prompt) }
       if let model { f["model"] = .string(model) }
+      if let task { f["task"] = .from(task) }
       return f
     case .agentModels(let agent): return ["type": .string("agent-models"), "agent": .string(agent)]
     case .changes(let s): return ["type": .string("changes"), "session": .string(s)]
@@ -333,6 +537,14 @@ enum PhoneCommand: Sendable {
     case .ship(let s, let action): return ["type": .string("ship"), "session": .string(s), "action": action.json]
     case .archive(let s): return ["type": .string("archive"), "session": .string(s)]
     case .setSetting(let s, let kind, let value): return ["type": .string("set-setting"), "session": .string(s), "kind": .string(kind), "value": .string(value)]
+    case .githubBoard(let scope, let force):
+      var f: [String: JSONValue] = ["type": .string("github-board"), "scope": .string(scope)]
+      if force { f["force"] = .bool(true) }
+      return f
+    case .githubDetail(let project, let kind, let number):
+      return ["type": .string("github-detail"), "project": .string(project), "kind": .string(kind), "number": .number(Double(number))]
+    case .githubStart(let project, let kind, let number):
+      return ["type": .string("github-start"), "project": .string(project), "kind": .string(kind), "number": .number(Double(number))]
     }
   }
 }

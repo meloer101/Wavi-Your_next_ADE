@@ -1,4 +1,4 @@
-// The file an agent's reply points at, read-only (PRD F22 v1.229 ②, Figma 104A): the Mac reads it inside the session's
+// The file an agent's reply points at, read-only (PRD F22 v1.230, Figma 104A): the Mac reads it inside the session's
 // folder and the phone draws it with its line numbers, both ways, at the line the chip named.
 import SwiftUI
 

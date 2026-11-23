@@ -133,7 +133,7 @@ const UNREADABLE_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR', 'EACCES', 'EPER
 const UNREADABLE_MESSAGES = new Set(['path outside the worktree', 'not a file'])
 
 /**
- * The file a phone's chip names (PRD F22 v1.229 ②): `path` as the agent wrote it, relative to the session folder or
+ * The file a phone's chip names (PRD F22 v1.230): `path` as the agent wrote it, relative to the session folder or
  * absolute and inside it. A path that climbs out, an absolute one elsewhere, one in Desktop / Documents / Downloads of a
  * home-directory session (reading it would raise macOS's folder prompt), a folder, a missing file, no permission or a
  * symlink leading out is `missing`; any other failure (EIO, EMFILE, …) is thrown, and the caller answers with an error.
