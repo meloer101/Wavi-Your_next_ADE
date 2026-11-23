@@ -21,7 +21,7 @@ interface Hooks {
   tr: {
     settings: { update(patch: unknown): Promise<unknown> }
     ui: { openSettings(): void }
-    remote: { status(): Promise<RemoteStatus> }
+    remote: { status(): Promise<RemoteStatus>; publishSessions(list: unknown): void }
   }
   __trWorkspace: { getState(): { addProject(path: string): string; addSession(projectId: string, kind: 'claude'): string | null; setActiveSession(id: string): void } }
 }
@@ -127,6 +127,34 @@ test.describe('手机远程', () => {
     const answer = await phone.request({ type: 'send', session: sessionId, text: 'hello from the phone', photos: [] }, 20_000)
     expect(answer).toMatchObject({ ok: true })
     expect(typed()).toContain('hello from the phone<ENTER>')
+  })
+
+  test('the context and the plan windows reach the phone in the snapshot and in the sessions push (PRD F22 v1.230 ④)', async () => {
+    const snapshot = async () => {
+      const answer = await phone.request({ type: 'snapshot' })
+      return answer.ok ? (answer.data as { projects: unknown[]; sessions: { id: string; projectId: string }[]; usage?: unknown }) : null
+    }
+    const before = await snapshot()
+    expect(before?.usage).toBeUndefined()
+    const cwd = realpathSync(folder.path)
+    const projectId = before!.sessions[0]!.projectId
+    const publish = (extra: Record<string, unknown>, usage?: unknown) =>
+      page.evaluate(
+        ([list]) => (globalThis as unknown as Hooks).tr.remote.publishSessions(list),
+        [{ projects: before!.projects, sessions: before!.sessions.map((s) => ({ ...s, ...extra })), folders: { [sessionId]: { cwd } }, roots: { [projectId]: cwd }, ...(usage ? { usage } : {}) }] as const
+      )
+    const context = { percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true }
+    const usage = [{ vendor: 'claude', plan: 'Max', windows: [{ minutes: 300, percent: 42 }] }]
+    await publish({ context, usageVendor: 'claude' }, usage)
+    // The push the phone gets when the window publishes ...
+    const pushed = await phone.next((e) => e.event === 'sessions' && Array.isArray((e.data as { usage?: unknown }).usage))
+    expect(pushed).toMatchObject({ data: { usage, sessions: [expect.objectContaining({ id: sessionId, context, usageVendor: 'claude' })] } })
+    // ... and the snapshot it asks for.
+    const after = await snapshot()
+    expect(after).toMatchObject({ usage, sessions: [expect.objectContaining({ id: sessionId, context, usageVendor: 'claude' })] })
+    // Back to the plain list for the tests below.
+    await publish({ context: undefined, usageVendor: undefined })
+    await expect.poll(async () => (await snapshot())?.usage, WITHIN).toBeUndefined()
   })
 
   test('a photo becomes a file whose path goes in before the text (F19)', async () => {

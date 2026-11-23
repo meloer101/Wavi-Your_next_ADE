@@ -124,8 +124,15 @@ struct SessionView: View {
     .safeAreaBar(edge: .bottom) {
       VStack(spacing: 8) {
         PromptBar(prompts: prompts)
-        if let settings = session.settings, !settings.items.isEmpty {
-          SettingsPill(session: session, settings: settings).padding(.horizontal, Metric.margin)
+        // 104C1: the session's settings, and at the right end of the same row its context ring.
+        let settings = session.settings.flatMap { $0.items.isEmpty ? nil : $0 }
+        if settings != nil || session.context != nil {
+          HStack(spacing: 8) {
+            if let settings { SettingsPill(session: session, settings: settings) }
+            Spacer(minLength: 0)
+            if let context = session.context { ContextRing(session: id, context: context) }
+          }
+          .padding(.horizontal, Metric.margin)
         }
         Composer(session: id, running: session.status == .running)
       }

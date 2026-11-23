@@ -76,6 +76,41 @@ struct RemoteSession: Codable, Hashable, Sendable, Identifiable {
   var stat: RemoteStat? = nil
   /// The issue or PR the session works on (看板 · GitHub · 交给 agent).
   var github: GitHubLink? = nil
+  /// The context window as the desktop's ring shows it (PRD F22 v1.230 ④); absent when the session has no reading.
+  var context: RemoteContext? = nil
+  /// The vendor (claude / codex) whose plan windows in `RemoteSessionList.usage` apply to this session, as the Mac picks it;
+  /// absent when none applies, so the sheet shows no plan windows.
+  var usageVendor: String? = nil
+}
+
+/// One session's context window (src/shared/remote.ts `RemoteContext`). `high` is worked out on the Mac; the phone never
+/// re-derives the 20k / 80 % rule.
+struct RemoteContext: Codable, Hashable, Sendable {
+  /// 0–100.
+  let percent: Double
+  let usedTokens: Double?
+  let windowTokens: Double?
+  /// The agent's compaction point on the 0–100 scale; absent when it is not known.
+  let markPercent: Double?
+  let high: Bool
+}
+
+/// A vendor's plan windows (`RemoteVendorUsage`): the phone matches a session to it by its agent (`usageVendor`).
+struct RemoteVendorUsage: Codable, Hashable, Sendable {
+  struct Window: Codable, Hashable, Sendable, Identifiable {
+    let minutes: Int
+    let scope: String?
+    /// 0–100.
+    let percent: Double
+    /// Epoch ms.
+    let resetsAt: Double?
+
+    var id: String { scope.map { "\(minutes):\($0)" } ?? String(minutes) }
+  }
+  /// claude / codex
+  let vendor: String
+  let plan: String?
+  let windows: [Window]
 }
 
 /// 这一轮跑过的检查 as the phone shows it (turn-checks.ts `TurnCheckView`): the turns, without the runs.
@@ -137,6 +172,8 @@ struct SessionSettings: Codable, Hashable, Sendable {
 struct RemoteSessionList: Codable, Hashable, Sendable {
   var projects: [RemoteProject]
   var sessions: [RemoteSession]
+  /// The plan windows of each vendor that has any (PRD F22 v1.230 ④).
+  var usage: [RemoteVendorUsage]? = nil
   static let empty = RemoteSessionList(projects: [], sessions: [])
 }
 
