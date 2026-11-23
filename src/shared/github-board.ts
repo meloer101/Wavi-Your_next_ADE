@@ -378,6 +378,35 @@ export function itemBranch(prefix: string, kind: GitHubItemKind, number: number,
 /** The session's title: `#139 结算页在 Safari 17 上白屏`. */
 export const itemTitle = (item: Pick<BoardDetail, 'number' | 'title'>): string => `#${item.number} ${item.title}`.slice(0, 120)
 
+/**
+ * The new branch an item gets: a same-repository PR's own head branch while no local branch has it (a push then updates
+ * the PR), else the branch named after the item (`itemBranch`). 新建会话's 高级 · 分支名 and the phone's 交给 agent both
+ * start from this name.
+ */
+export function startBranch(
+  prefix: string,
+  item: Pick<BoardDetail, 'kind' | 'number' | 'title'>,
+  headRef: string | null,
+  taken: ReadonlySet<string>
+): string {
+  return headRef && !taken.has(headRef) ? headRef : itemBranch(prefix, item.kind, item.number, item.title, taken)
+}
+
+/** 交给 agent as the phone's form asks for it (PRD F22 v1.227 ⑤): the new session the item starts in. */
+export interface BoardStart {
+  link: GitHubLink
+  /** `#139 结算页在 Safari 17 上白屏`, the session's title. */
+  title: string
+  /** `taskPrompt`: the first message, editable in the form. */
+  prompt: string
+  /** What the worktree's branch will be called (`startBranch`). */
+  branch: string
+  /** What the branch merges into: a PR's base branch; null = the project's default. */
+  base: string | null
+  /** A PR's head, where the worktree starts (`WorktreeCreateRequest.startAt`). */
+  startAt?: string
+}
+
 /** The whole task text is kept under this (it goes on the agent's command line or is typed into its input). */
 export const MAX_TASK = 24 * 1024
 const MAX_TASK_BODY = 12 * 1024

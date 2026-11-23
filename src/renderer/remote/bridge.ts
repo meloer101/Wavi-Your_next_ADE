@@ -31,7 +31,7 @@ export function startRemoteBridge(): () => void {
     if (!enabled || timer !== null) return
     timer = window.setTimeout(() => {
       timer = null
-      const list = remoteSessions(useWorkspace.getState(), { ships: useShips.getState().byWorktree, endings }, sessionSettings)
+      const list = remoteSessions(useWorkspace.getState(), { ships: useShips.getState().byWorktree, endings }, sessionSettings, (s) => useSessionMeta.getState().bySession[s.id]?.checks)
       const text = JSON.stringify(list)
       if (text === last) return
       last = text
@@ -52,9 +52,10 @@ export function startRemoteBridge(): () => void {
   const offGui = useGuiSessions.subscribe((state, before) => {
     if (Object.keys(state.states).some((id) => state.states[id]?.config !== before.states[id]?.config)) publish()
   })
-  // What a terminal agent reports of its model, effort and permission (hooks, statusLine).
+  // What a terminal agent reports of its model, effort and permission (hooks, statusLine), and what it ran this turn
+  // (看板 · 进度's checks line, PRD F22 v1.227 ②).
   const offMeta = useSessionMeta.subscribe((state, before) => {
-    if (Object.keys(state.bySession).some((id) => state.bySession[id]?.settings !== before.bySession[id]?.settings)) publish()
+    if (Object.keys(state.bySession).some((id) => state.bySession[id]?.settings !== before.bySession[id]?.settings || state.bySession[id]?.checks !== before.bySession[id]?.checks)) publish()
   })
   // An exit's steps and how it ended show on the phone (Figma 45J).
   const offShips = useShips.subscribe((state, before) => {

@@ -29,6 +29,29 @@ describe('remoteSessions', () => {
     expect(list.folders).toEqual({ s1: { cwd: '/wt/refresh', base: 'main', agentSession: 'abc-1' }, s4: { cwd: '/code/acme' } })
     expect(list.roots).toEqual({ p1: '/code/acme' })
   })
+
+  it('carries the turn\'s checks, the worktree\'s size and the item it works on (PRD F22 v1.227 ⑤)', () => {
+    const sized = { ...tree, added: 12, removed: 3 }
+    const checks = { since: 1, edited: true, runs: [{ kind: 'test' as const, command: 'pnpm test', outcome: 'pass' as const, basis: 'exit' as const, full: true, at: 2 }], known: ['lint' as const] }
+    const link = { repo: 'github.com/acme/web', kind: 'issue' as const, number: 139 }
+    const list = remoteSessions(
+      { projects: [project], worktrees: [sized], sessions: [session({ id: 's1', github: link })] },
+      undefined,
+      undefined,
+      (s) => (s.id === 's1' ? checks : undefined)
+    )
+    expect(list.sessions[0]).toMatchObject({
+      checks: { turn: 'current', edited: true, kinds: [{ kind: 'test', status: 'pass' }, { kind: 'lint', status: 'not-run' }] },
+      stat: { added: 12, removed: 3 },
+      github: link
+    })
+    // Nothing to say: no checks, no edits, no size and no item → the fields stay off.
+    const quiet = remoteSessions({ projects: [project], worktrees: [tree], sessions: [session({ id: 's1' })] }, undefined, undefined, () => ({ since: 0, edited: false, runs: [], known: [] }))
+    expect(quiet.sessions[0]).toMatchObject({ id: 's1' })
+    expect(quiet.sessions[0]!.checks).toBeUndefined()
+    expect(quiet.sessions[0]!.stat).toBeUndefined()
+    expect(quiet.sessions[0]!.github).toBeUndefined()
+  })
 })
 
 describe('remoteShip', () => {
