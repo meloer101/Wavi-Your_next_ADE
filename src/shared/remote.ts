@@ -274,7 +274,7 @@ export interface RemotePhoto {
   data: string
 }
 
-/** 看板 · GitHub's 交给 agent (PRD F22 v1.227 ⑤): the item a new session works on. */
+/** 看板 · GitHub's 交给 agent (PRD F22 v1.229 ⑤): the item a new session works on. */
 export interface RemoteTask {
   link: GitHubLink
   /** `#139 结算页在 Safari 17 上白屏`: the session's title. */
@@ -309,7 +309,7 @@ export type PhoneCommand =
   /** `model`: picked under the agent (PRD F22 v1.161); the agent's own id, used when the session runs as GUI. */
   | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask }
   /**
-   * 看板 · GitHub (PRD F22 v1.227 ⑤, F9): every project's open issues and PRs from gh, one entry per project in the
+   * 看板 · GitHub (PRD F22 v1.229 ⑤, F9): every project's open issues and PRs from gh, one entry per project in the
    * list's order. Answers `{ gh }` when gh cannot answer at all (not installed, signed out), else the projects.
    */
   | { type: 'github-board'; scope: BoardScope; force?: boolean }

@@ -117,7 +117,7 @@ describe('parsePhoneRequest', () => {
     expect(parsePhoneRequest({ id: 4, type: 'agent-models', agent: 'shell' })).toBeNull()
   })
 
-  it('takes 看板 · GitHub\'s three commands and a new session\'s task (PRD F22 v1.227 ⑤)', () => {
+  it('takes 看板 · GitHub\'s three commands and a new session\'s task (PRD F22 v1.229 ⑤)', () => {
     expect(parsePhoneRequest({ id: 1, type: 'github-board', scope: 'review' })).toEqual({ id: 1, type: 'github-board', scope: 'review' })
     expect(parsePhoneRequest({ id: 2, type: 'github-board', scope: 'all', force: true })).toEqual({ id: 2, type: 'github-board', scope: 'all', force: true })
     expect(parsePhoneRequest({ id: 3, type: 'github-detail', project: 'p1', kind: 'pr', number: 140 })).toEqual({ id: 3, type: 'github-detail', project: 'p1', kind: 'pr', number: 140 })
@@ -189,7 +189,7 @@ describe('window messages', () => {
     expect(parseWindowSessions({ ...good, sessions: 'all' })).toBeNull()
   })
 
-  it('carries 看板 · 进度\'s checks and size and 看板 · GitHub\'s link, and leaves a bad one off (PRD F22 v1.227 ⑤)', () => {
+  it('carries 看板 · 进度\'s checks and size and 看板 · GitHub\'s link, and leaves a bad one off (PRD F22 v1.229 ⑤)', () => {
     const row = {
       projects: [{ id: 'p1', name: 'acme-web' }],
       sessions: [{ id: 's1', projectId: 'p1', title: '修好登录', agent: 'claude', status: 'running', activity: 1 }],

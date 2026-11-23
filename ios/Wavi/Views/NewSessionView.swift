@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct NewSessionView: View {
-  /// 看板 · GitHub's 交给 agent (PRD F22 v1.227 ④): the project is fixed and the Mac's hand-off fills in the branch, its base
+  /// 看板 · GitHub's 交给 agent (PRD F22 v1.229 ④): the project is fixed and the Mac's hand-off fills in the branch, its base
   /// and the first message, which the form calls 任务 and which is sent with the session's `task`.
   struct Handoff: Identifiable {
     let project: String
@@ -91,7 +91,7 @@ struct NewSessionView: View {
         if let loadError { Text(loadError).foregroundStyle(Color.noticeDanger) }
         if let data {
           Section {
-            // 交给 agent always starts a new worktree (PRD F22 v1.227 ④): no 当前目录 to pick.
+            // 交给 agent always starts a new worktree (PRD F22 v1.229 ④): no 当前目录 to pick.
             if handoff == nil {
               Picker("工作目录", selection: $workdir) {
                 Text("新 worktree").tag("worktree")

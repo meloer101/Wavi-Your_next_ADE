@@ -1,16 +1,16 @@
 ---
 /* Screen 4: 01 Agents, part two — the intro as the lead, then the six diagrams, one per way of running several
-   agents. The diagrams scale with the viewport height. */
-import { Image } from 'astro:assets'
-import { pic } from '../../home-art'
+   agents. Each diagram is inlined (AgentDiagram.astro) so it can loop through its own architecture while the screen is
+   in the viewport (PRD v1.227 ②); the diagrams scale with the viewport height. */
 import { copy, type Lang } from '../../i18n'
+import AgentDiagram, { type DiagramKind } from './AgentDiagram.astro'
 
 interface Props {
   lang: Lang
 }
 const { lang } = Astro.props
 const t = copy[lang]
-const diagrams = ['dispatch', 'leader', 'subagents', 'teams', 'workflows', 'same-task']
+const diagrams: DiagramKind[] = ['dispatch', 'leader', 'subagents', 'teams', 'workflows', 'same-task']
 ---
 
 <section class="screen section-light">
@@ -19,14 +19,7 @@ const diagrams = ['dispatch', 'leader', 'subagents', 'teams', 'workflows', 'same
     <div class="cells3">
       {t.agents.cells.map(([label, text], i) => (
         <div class="cell" data-reveal style={`--i:${i}`}>
-          <Image
-            class="cell-art"
-            src={pic(lang, `diagram-${diagrams[i]}.svg`)}
-            width={384}
-            height={176}
-            loading="lazy"
-            alt=""
-          />
+          <AgentDiagram kind={diagrams[i]} />
           <h3 class="cell-title">{label}</h3>
           <p class="cell-text">{text}</p>
         </div>

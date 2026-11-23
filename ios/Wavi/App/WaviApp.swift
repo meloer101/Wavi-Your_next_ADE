@@ -1,5 +1,5 @@
 // Wavi on the iPhone (PRD F22): the sessions running in Wavi on the Mac, to follow, answer and steer from wherever the
-// Mac can be reached (the same Wi-Fi or Tailscale). Two tabs (PRD v1.227 ①, Figma 103A): 会话 — the list and the screens
+// Mac can be reached (the same Wi-Fi or Tailscale). Two tabs (PRD v1.229 ①, Figma 103A): 会话 — the list and the screens
 // opened from it — and 看板, the desktop board's 进度 and GitHub pages.
 import SwiftUI
 
@@ -29,7 +29,7 @@ enum Route: Hashable {
   /// The files one turn changed (its TurnChange's tool calls).
   case turn(session: String, tools: [String])
   case diff(session: String, path: String, scope: String, oldPath: String?, untracked: Bool)
-  /// One issue or PR of 看板 · GitHub (PRD F22 v1.227 ③): its body, comments and 交给 agent.
+  /// One issue or PR of 看板 · GitHub (PRD F22 v1.229 ③): its body, comments and 交给 agent.
   case github(project: String, kind: String, number: Int)
 }
 
@@ -42,7 +42,7 @@ struct RootView: View {
   @State private var tab: RootTab = .sessions
   @State private var path: [Route] = []
   @State private var boardPath: [Route] = []
-  /// 看板's page, remembered on this phone (PRD v1.227 ①).
+  /// 看板's page, remembered on this phone (PRD v1.229 ①).
   @AppStorage("board.page") private var boardPage: BoardPage = .progress
   /// A `wavi://pair` link opened from elsewhere (the Camera app, a message): confirmed before it pairs.
   @State private var linked: PairingOffer?
@@ -95,7 +95,7 @@ struct RootView: View {
       tab = .sessions
       path.append(.session(id))
     }
-    // 只有看板 · 进度能横屏 (PRD v1.227 ②): the app delegate answers iOS with this, and a change turns the screen when the
+    // 只有看板 · 进度能横屏 (PRD v1.229 ②): the app delegate answers iOS with this, and a change turns the screen when the
     // phone is already held sideways. Pushing a session or an item, or the GitHub page, is portrait again.
     .onChange(of: allowsLandscape) { _, allowed in Orientation.apply(allowed) }
     .onAppear { Orientation.apply(allowsLandscape) }

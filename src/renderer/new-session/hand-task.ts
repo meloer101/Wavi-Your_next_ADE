@@ -1,4 +1,4 @@
-// 看板 · GitHub's 交给 agent (PRD F9 v1.184, Figma 77E; the phone's new-session with a task, PRD F22 v1.227 ④): the
+// 看板 · GitHub's 交给 agent (PRD F9 v1.184, Figma 77E; the phone's new-session with a task, PRD F22 v1.229 ④): the
 // new session takes the item's title and link, and its first message — on the CLI's command line or the GUI's launch
 // where the agent has one, else typed in once the agent is ready (as 一题多解 does). One function for the desktop's
 // 新建会话 sheet and the phone, so the session they build is the same.

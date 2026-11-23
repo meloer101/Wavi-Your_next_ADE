@@ -63,7 +63,7 @@ const MEANING_TOKENS = [
   'diff-add-bg',
   'diff-del-fg',
   'diff-del-bg',
-  // 看板 · 进度's cards take the desktop board's fills and their quieter line colour (PRD F22 v1.227 ②).
+  // 看板 · 进度's cards take the desktop board's fills and their quieter line colour (PRD F22 v1.229 ②).
   'card-attention',
   'card-attention-hover',
   'card-attention-meta',

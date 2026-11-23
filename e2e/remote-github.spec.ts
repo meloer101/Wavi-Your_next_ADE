@@ -1,4 +1,4 @@
-// 手机看板 · GitHub end to end (PRD F22 v1.227 ⑤, F9): a stand-in phone (src/main/remote/test-phone.ts) asks the Mac for
+// 手机看板 · GitHub end to end (PRD F22 v1.229 ⑤, F9): a stand-in phone (src/main/remote/test-phone.ts) asks the Mac for
 // each project's board and for one issue's detail through a fake `gh` (e2e/fake-gh.ts), gets 交给 agent's answer, and
 // starts the session with the same `new-session` + task the phone's form sends. The session the Mac builds is the
 // desktop's: the item's title in the sidebar, its link in workspace.json, the item's branch, and the task as the agent's

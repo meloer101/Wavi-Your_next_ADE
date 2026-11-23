@@ -1,4 +1,4 @@
-// 看板 (PRD F22 v1.227, Figma 103 / 103′): 进度's groups and cards in the desktop board's order and colours
+// 看板 (PRD F22 v1.229, Figma 103 / 103′): 进度's groups and cards in the desktop board's order and colours
 // (src/renderer/overview/model.ts), and 看板 · GitHub's projects, rows and an item's page (src/renderer/overview/
 // github-model.ts, GitHubBoard.tsx, GitHubDetail.tsx). Pure; WaviTests/BoardTests.swift.
 import SwiftUI

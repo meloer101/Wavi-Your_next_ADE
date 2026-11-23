@@ -107,22 +107,37 @@ describe('checkLatestRelease (injected fetch, no network)', () => {
       seen.push(url, init.headers['Accept'] ?? '')
       return { ok: true, json: async () => payload }
     }
-    expect(await checkLatestRelease(repo, '0.1.0', fetchImpl)).toEqual({ version: '0.2.0', url: payload.html_url })
+    expect(await checkLatestRelease(repo, '0.1.0', fetchImpl)).toEqual({
+      status: 'available',
+      info: { version: '0.2.0', url: payload.html_url }
+    })
     expect(seen).toEqual(['https://api.github.com/repos/o/r/releases/latest', 'application/vnd.github+json'])
   })
 
-  it('returns null when up to date, without a repo, or on a non-2xx response', async () => {
-    expect(await checkLatestRelease(repo, '0.2.0', ok(payload))).toBeNull()
-    expect(await checkLatestRelease(null, '0.1.0', ok(payload))).toBeNull()
-    expect(await checkLatestRelease(repo, '0.1.0', async () => ({ ok: false, json: async () => payload }))).toBeNull()
+  it('reports latest when the release is not newer', async () => {
+    expect(await checkLatestRelease(repo, '0.2.0', ok(payload))).toEqual({ status: 'latest' })
   })
 
-  it('never throws: network errors and bad JSON become null', async () => {
+  it('reports latest for a draft release', async () => {
+    expect(await checkLatestRelease(repo, '0.1.0', ok({ ...payload, draft: true }))).toEqual({ status: 'latest' })
+  })
+
+  it('reports failed without a repo', async () => {
+    expect(await checkLatestRelease(null, '0.1.0', ok(payload))).toEqual({ status: 'failed' })
+  })
+
+  it('reports failed on a non-2xx response', async () => {
+    expect(await checkLatestRelease(repo, '0.1.0', async () => ({ ok: false, json: async () => payload }))).toEqual({
+      status: 'failed'
+    })
+  })
+
+  it('never throws: network errors and bad JSON become failed', async () => {
     expect(
       await checkLatestRelease(repo, '0.1.0', async () => {
         throw new Error('offline')
       })
-    ).toBeNull()
+    ).toEqual({ status: 'failed' })
     expect(
       await checkLatestRelease(repo, '0.1.0', async () => ({
         ok: true,
@@ -130,12 +145,12 @@ describe('checkLatestRelease (injected fetch, no network)', () => {
           throw new SyntaxError('bad json')
         }
       }))
-    ).toBeNull()
+    ).toEqual({ status: 'failed' })
   })
 
-  it('aborts a request that outlives the timeout', async () => {
+  it('reports failed when the request outlives the timeout', async () => {
     const hang: FetchLike = (_url, init) =>
       new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
-    expect(await checkLatestRelease(repo, '0.1.0', hang, 20)).toBeNull()
+    expect(await checkLatestRelease(repo, '0.1.0', hang, 20)).toEqual({ status: 'failed' })
   })
 })

@@ -3,15 +3,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/meloer101/Wavi-Ultraterminal/releases/latest"><img src="https://img.shields.io/github/v/release/meloer101/Wavi-Ultraterminal?style=flat-square&label=release&labelColor=1a1a1a&color=3a3a3a" alt="Latest release"></a>
+  <a href="https://github.com/meloer101/Wavi-Your_next_ADE/releases/latest"><img src="https://img.shields.io/github/v/release/meloer101/Wavi-Your_next_ADE?style=flat-square&label=release&labelColor=1a1a1a&color=3a3a3a" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-13%2B-3a3a3a?style=flat-square&logo=apple&logoColor=white&labelColor=1a1a1a" alt="macOS 13+">
   <img src="https://img.shields.io/badge/agents-19-3a3a3a?style=flat-square&labelColor=1a1a1a" alt="19 agents">
   <img src="https://img.shields.io/badge/telemetry-none-3a3a3a?style=flat-square&labelColor=1a1a1a" alt="No telemetry">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/meloer101/Wavi-Ultraterminal?style=flat-square&labelColor=1a1a1a&color=3a3a3a" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/meloer101/Wavi-Your_next_ADE?style=flat-square&labelColor=1a1a1a&color=3a3a3a" alt="MIT license"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/meloer101/Wavi-Ultraterminal/releases/latest"><b>Download for macOS</b></a>
+  <a href="https://github.com/meloer101/Wavi-Your_next_ADE/releases/latest"><b>Download for macOS</b></a>
   &nbsp;·&nbsp; <a href="https://wavi.autos">Website</a>
   &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
   &nbsp;·&nbsp; <a href="docs/ROADMAP.md">Roadmap</a>
@@ -109,7 +109,7 @@ All 19 can dispatch work and be dispatched to. Claude Code and Codex have the de
 
 ## Install
 
-1. Download the dmg from [Releases](https://github.com/meloer101/Wavi-Ultraterminal/releases/latest): `arm64` for Apple silicon, `x64` for Intel.
+1. Download the dmg from [Releases](https://github.com/meloer101/Wavi-Your_next_ADE/releases/latest): `arm64` for Apple silicon, `x64` for Intel.
 2. Open it and drag Wavi into Applications. Builds are signed with a Developer ID and notarized by Apple.
 3. Have at least one agent installed and signed in, for example [Claude Code](https://docs.claude.com/en/docs/claude-code) or [Codex](https://github.com/openai/codex). Without any, Wavi still works as a terminal.
 
@@ -153,7 +153,7 @@ npm run test:e2e     # build and run the Electron end-to-end tests
 npm run dist         # package arm64 / x64 dmg and zip into release/
 ```
 
-The product spec is [docs/PRD.md](docs/PRD.md), progress is in [docs/ROADMAP.md](docs/ROADMAP.md), and [CONTRIBUTING.md](CONTRIBUTING.md) covers the rest. Found a bug or want a feature? [Open an issue](https://github.com/meloer101/Wavi-Ultraterminal/issues/new/choose).
+The product spec is [docs/PRD.md](docs/PRD.md), progress is in [docs/ROADMAP.md](docs/ROADMAP.md), and [CONTRIBUTING.md](CONTRIBUTING.md) covers the rest. Found a bug or want a feature? [Open an issue](https://github.com/meloer101/Wavi-Your_next_ADE/issues/new/choose).
 
 ## License
 

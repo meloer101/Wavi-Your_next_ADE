@@ -108,7 +108,7 @@ async function newSession(command: Extract<RemoteWindowCommand, { type: 'new-ses
       if (planned.problem === 'loading') return remoteFail(pick(M).loading)
       return remoteFail(branchProblemText(planned.problem, branch) ?? pick(M).badBranch)
     }
-    // 交给 agent (PRD F22 v1.227 ④): a PR's worktree starts at the head main fetched; the chosen base stays what it
+    // 交给 agent (PRD F22 v1.229 ④): a PR's worktree starts at the head main fetched; the chosen base stays what it
     // merges into (as the desktop sheet's `create` does).
     const plan =
       command.task?.startAt && planned.plan.type === 'worktree' ? { ...planned.plan, request: { ...planned.plan.request, startAt: command.task.startAt } } : planned.plan

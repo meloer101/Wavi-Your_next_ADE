@@ -22,7 +22,7 @@ import { registerSettingsHandlers } from './settings'
 import { registerLanguage } from './language'
 import { registerThemeImportHandler } from './theme-import'
 import { registerUiHandlers } from './ui'
-import { registerUpdateHandlers } from './updates'
+import { appVersion, registerUpdateHandlers } from './updates'
 import { registerUsageStatsHandlers } from './usage-stats'
 import { registerLiveRebuilds } from './live-rebuilds'
 import { createMainWindow, getMainWindow, installAppMenu, showMainWindow, showSettings } from './windows'
@@ -56,7 +56,7 @@ process.on('unhandledRejection', (reason) => console.error('[main] unhandledReje
 
 function registerAppHandlers(): void {
   ipcMain.on(IPC.appVersion, (event) => {
-    event.returnValue = app.getVersion()
+    event.returnValue = appVersion()
   })
   ipcMain.on(IPC.uiOpenSettings, (event) => showSettings(BrowserWindow.fromWebContents(event.sender)))
 }

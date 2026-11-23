@@ -38,9 +38,10 @@ const { lang } = Astro.props
 <Footer lang={lang} />
 
 <script is:inline>
-  // Reveals and the ⌘J keycap (PRD v1.225). Hidden states live under html.js only, so the page shows everything
-  // without JavaScript; a browser without IntersectionObserver shows every element at once. Inline and classic so the
-  // js class lands before the first paint (a deferred module would flash the page first).
+  // Reveals, the agent diagrams' loop control and the ⌘J keycap (PRD v1.225, v1.227 ②). Hidden states live under
+  // html.js only, so the page shows everything without JavaScript; a browser without IntersectionObserver shows every
+  // element at once. Inline and classic so the js class lands before the first paint (a deferred module would flash the
+  // page first).
   ;(function () {
     var root = document.documentElement
     var all = document.querySelectorAll('[data-reveal]')
@@ -78,17 +79,36 @@ const { lang } = Astro.props
         })
       })
     }
+    // The six diagrams loop while they are on screen and hold where they are otherwise (PRD v1.227 ②); the class also
+    // gets them going for the first time. The board runs its own loop, in Board.astro.
+    var diagrams = document.querySelectorAll('[data-loop]')
+    var loop = 'IntersectionObserver' in window && diagrams.length
+      ? new IntersectionObserver(
+          function (entries) {
+            for (var n = 0; n < entries.length; n++) {
+              entries[n].target.classList.toggle('in-view', entries[n].isIntersecting)
+            }
+          },
+          { threshold: 0.2 }
+        )
+      : null
+    for (var m = 0; m < diagrams.length; m++) {
+      if (loop) loop.observe(diagrams[m])
+      else diagrams[m].classList.add('in-view')
+    }
+
     var jump = document.querySelector('[data-jump]')
     if (!jump) return
-    var cards = []
-    var at = -1
+    var last = null
     jump.addEventListener('click', function () {
-      if (!cards.length) cards = [].slice.call(document.querySelectorAll('.card-needs'))
+      // Look the cards up on every press: the board's loop moves them between columns, so the needs-you card changes.
+      var cards = [].slice.call(document.querySelectorAll('.card-needs'))
       if (!cards.length) return
-      if (at >= 0) cards[at].classList.remove('target')
-      at = (at + 1) % cards.length
-      cards[at].classList.add('target')
-      cards[at].scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      var at = last ? cards.indexOf(last) : -1
+      if (last) last.classList.remove('target')
+      last = cards[(at + 1) % cards.length]
+      last.classList.add('target')
+      last.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     })
   })()
 </script>

@@ -1,4 +1,4 @@
-// 看板 (PRD F22 v1.227, Figma 103 / 103′): the second tab. A segmented 进度 | GitHub at the top — remembered on this phone
+// 看板 (PRD F22 v1.229, Figma 103 / 103′): the second tab. A segmented 进度 | GitHub at the top — remembered on this phone
 // — and under it the desktop board's two pages. 进度 is the sessions grouped by status, each a card in its status colour:
 // sections one under the other on a phone, five equal columns in landscape. GitHub is each project's open issues and PRs
 // through the Mac's gh: a row opens the item, and from there the item can be opened on GitHub or handed to an agent.
@@ -152,7 +152,7 @@ struct ProgressBoard: View {
   /// The Mac is not reachable: the cards are what it last said (62B), so they are dimmed.
   var stale = false
 
-  /// Folded sections by key; 空闲 starts folded (PRD F22 v1.227 ②). Landscape always shows every card: a column has room,
+  /// Folded sections by key; 空闲 starts folded (PRD F22 v1.229 ②). Landscape always shows every card: a column has room,
   /// and folding one there would hide a whole column.
   @State private var folded: Set<String> = [BoardGroupKey.idle.rawValue]
 
@@ -276,7 +276,7 @@ struct ProgressCardView: View {
 
 /// A card in 进度 · landscape (Figma 103′C): the status glyph and exactly three single lines, truncated — title, 项目 › 分支,
 /// and what it is doing or, when this turn ran checks, the checks. No time and no `+N −M`: a short screen has no room for
-/// them (PRD v1.227 ②).
+/// them (PRD v1.229 ②).
 struct CompactCardView: View {
   let card: BoardCard
   var stale = false

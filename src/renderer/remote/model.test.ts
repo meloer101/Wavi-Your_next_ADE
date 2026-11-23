@@ -30,7 +30,7 @@ describe('remoteSessions', () => {
     expect(list.roots).toEqual({ p1: '/code/acme' })
   })
 
-  it('carries the turn\'s checks, the worktree\'s size and the item it works on (PRD F22 v1.227 ⑤)', () => {
+  it('carries the turn\'s checks, the worktree\'s size and the item it works on (PRD F22 v1.229 ⑤)', () => {
     const sized = { ...tree, added: 12, removed: 3 }
     const checks = { since: 1, edited: true, runs: [{ kind: 'test' as const, command: 'pnpm test', outcome: 'pass' as const, basis: 'exit' as const, full: true, at: 2 }], known: ['lint' as const] }
     const link = { repo: 'github.com/acme/web', kind: 'issue' as const, number: 139 }

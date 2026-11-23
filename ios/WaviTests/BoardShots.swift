@@ -1,4 +1,4 @@
-// 看板's screenshots (Figma 103 / 103′, PRD F22 v1.227). The repo has no stand-in Mac, so this test is the host: the
+// 看板's screenshots (Figma 103 / 103′, PRD F22 v1.229). The repo has no stand-in Mac, so this test is the host: the
 // board drawn over a written cache, with the Mac's GitHub answers handed in (BoardFixture) — `test-results/board/` when the
 // shell names it (`WAVI_SHOT_DIR`), the simulator's temporary folder otherwise, the paths in the test log. Dark and light
 // each: 进度 portrait, 进度 landscape (874×402), the GitHub list, an issue, a PR, 交给 agent, gh not logged in and GitHub

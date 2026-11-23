@@ -1,4 +1,4 @@
-// Which way the interface may turn (PRD F22 v1.227 ②): 看板 · 进度 is the one screen that may be landscape (Figma 103′C,
+// Which way the interface may turn (PRD F22 v1.229 ②): 看板 · 进度 is the one screen that may be landscape (Figma 103′C,
 // five columns side by side); the session list, a session, the GitHub pages, pairing, settings and every sheet stay
 // portrait. The app delegate answers iOS with `mask`, and `apply` makes the interface follow when the phone is already
 // held sideways — iOS 26 has no SwiftUI modifier for this, so the mask comes from UIKit.

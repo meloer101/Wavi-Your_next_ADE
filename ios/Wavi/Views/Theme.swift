@@ -64,7 +64,7 @@ extension Color {
   static let diffAddBg = shared("diff-add-bg")
   static let diffDelFg = shared("diff-del-fg")
   static let diffDelBg = shared("diff-del-bg")
-  /// 看板 · 进度's cards (PRD F22 v1.227 ②): the desktop board's `--card-<tone>` fill and its quieter line colour, so a
+  /// 看板 · 进度's cards (PRD F22 v1.229 ②): the desktop board's `--card-<tone>` fill and its quieter line colour, so a
   /// status has the same colour on the phone and on the Mac.
   static func card(_ tone: CardTone) -> Color { shared("card-\(tone.rawValue)") }
   static func cardMeta(_ tone: CardTone) -> Color { shared("card-\(tone.rawValue)-meta") }

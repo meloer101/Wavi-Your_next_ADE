@@ -1,4 +1,4 @@
-// 看板 · GitHub's 交给 agent as the phone asks for it (PRD F22 v1.227 ⑤): the name, the first message, the branch and a
+// 看板 · GitHub's 交给 agent as the phone asks for it (PRD F22 v1.229 ⑤): the name, the first message, the branch and a
 // PR's start point, worked out from the item the same way 看板 · GitHub's own 交给 agent does on the Mac
 // (src/renderer/overview/GitHubDetail.tsx `taskFor`) and 新建会话 names its branch. Pure: main reads the item, fetches a
 // PR's head (src/main/github-board.ts) and the project's branches, and hands them in.

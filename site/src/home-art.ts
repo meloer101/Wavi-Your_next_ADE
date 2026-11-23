@@ -1,5 +1,5 @@
 /* One of the page's images, by name. A name with an en-/zh- file takes the language's own (the product windows and
-   the appearance looks); an unprefixed one (the cradle art, the diagrams) serves both languages. */
+   the appearance looks); an unprefixed one (the cradle art) serves both languages. */
 import type { ImageMetadata } from 'astro'
 import type { Lang } from './i18n'
 

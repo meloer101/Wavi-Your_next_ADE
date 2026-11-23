@@ -1,4 +1,4 @@
-// One issue or PR of 看板 · GitHub (PRD F22 v1.227 ③④, Figma 103E / 103F): its body, a PR's branch, size and checks, and
+// One issue or PR of 看板 · GitHub (PRD F22 v1.229 ③④, Figma 103E / 103F): its body, a PR's branch, size and checks, and
 // the latest comments. 在 GitHub 打开 hands it to the system browser; 交给 agent asks the Mac for the hand-off (the task,
 // branch and start point it works out the same way the desktop does) and opens 新建会话 with it.
 import SwiftUI

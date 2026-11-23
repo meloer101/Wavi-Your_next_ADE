@@ -105,7 +105,7 @@ struct GitHubLink: Codable, Hashable, Sendable {
   let number: Int
 }
 
-/// 看板 · GitHub's 交给 agent (PRD F22 v1.227 ⑤): the item a new session works on.
+/// 看板 · GitHub's 交给 agent (PRD F22 v1.229 ⑤): the item a new session works on.
 struct GitHubTask: Codable, Hashable, Sendable {
   let link: GitHubLink
   let title: String
@@ -269,7 +269,7 @@ struct NewSessionInfo: Codable, Hashable, Sendable {
   let prefix: String
 }
 
-// MARK: - 看板 · GitHub (PRD F22 v1.227 ⑤, src/shared/github-board.ts)
+// MARK: - 看板 · GitHub (PRD F22 v1.229 ⑤, src/shared/github-board.ts)
 
 /// `host/owner/name`, as gh and the branch names have it.
 struct GitHubRepo: Codable, Hashable, Sendable {
@@ -486,7 +486,7 @@ enum PhoneCommand: Sendable {
   case ship(session: String, action: ShipAction)
   case archive(session: String)
   case setSetting(session: String, kind: String, value: String)
-  /// 看板 · GitHub (PRD F22 v1.227 ⑤): every project's open issues and PRs; `force` skips the Mac's minute of cache.
+  /// 看板 · GitHub (PRD F22 v1.229 ⑤): every project's open issues and PRs; `force` skips the Mac's minute of cache.
   case githubBoard(scope: String, force: Bool)
   /// One item's body, comments and (for a PR) branches, size and checks.
   case githubDetail(project: String, kind: String, number: Int)

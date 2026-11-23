@@ -1,4 +1,4 @@
-// 看板's view models (PRD F22 v1.227, Figma 103 / 103′): 进度's groups, card colours, checks line and the landscape card's
+// 看板's view models (PRD F22 v1.229, Figma 103 / 103′): 进度's groups, card colours, checks line and the landscape card's
 // third row; 看板 · GitHub's projects, rows, review tags, checks marks and an item's page; and the old Mac's answer. Pure,
 // so the phone's screens only place what these return.
 import Foundation

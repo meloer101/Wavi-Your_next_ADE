@@ -367,7 +367,7 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
     case 'new-session':
       if (!windowSessions.roots[request.project]) return remoteFail(pickLang(M).noProject)
       return askWindow(mainWindow(), { type: 'new-session', project: request.project, workdir: request.workdir, agent: request.agent, ...pick(request) })
-    // 看板 · GitHub (PRD F22 v1.227 ⑤, F9): gh's whole answer is read here, as the Mac's own tab reads it — the phone
+    // 看板 · GitHub (PRD F22 v1.229 ⑤, F9): gh's whole answer is read here, as the Mac's own tab reads it — the phone
     // never runs gh, and the project's root comes from the session list's roots.
     case 'github-board': {
       // All projects ask at once, as the Mac's own tab does (src/renderer/overview/github-store.ts): one gh call each,

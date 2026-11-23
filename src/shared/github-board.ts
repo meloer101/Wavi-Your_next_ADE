@@ -392,7 +392,7 @@ export function startBranch(
   return headRef && !taken.has(headRef) ? headRef : itemBranch(prefix, item.kind, item.number, item.title, taken)
 }
 
-/** 交给 agent as the phone's form asks for it (PRD F22 v1.227 ⑤): the new session the item starts in. */
+/** 交给 agent as the phone's form asks for it (PRD F22 v1.229 ⑤): the new session the item starts in. */
 export interface BoardStart {
   link: GitHubLink
   /** `#139 结算页在 Safari 17 上白屏`, the session's title. */

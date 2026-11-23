@@ -266,7 +266,7 @@ const results: Results = {
     baseProtected: true,
     archive: { blocker: '还有未推送的提交' }
   } satisfies Required<RemoteExits>,
-  // 看板 · GitHub (PRD F22 v1.227 ⑤): two projects, one on GitHub and one with no remote there.
+  // 看板 · GitHub (PRD F22 v1.229 ⑤): two projects, one on GitHub and one with no remote there.
   'github-board': {
     gh: 'ready',
     projects: [

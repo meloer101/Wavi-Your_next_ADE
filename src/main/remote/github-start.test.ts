@@ -1,4 +1,4 @@
-// 看板 · GitHub's 交给 agent for the phone (PRD F22 v1.227 ④, F9): the answer's title, first message, branch and start
+// 看板 · GitHub's 交给 agent for the phone (PRD F22 v1.229 ④, F9): the answer's title, first message, branch and start
 // point, for an issue, a same-repository PR whose head branch is free, one whose branch is taken, and a fork's PR.
 import { describe, expect, it } from 'vitest'
 import { itemBranch, itemTitle, taskPrompt, type BoardDetail, type BoardPrStart } from '@shared/github-board'

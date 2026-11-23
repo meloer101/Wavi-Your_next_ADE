@@ -53,7 +53,7 @@ export function startRemoteBridge(): () => void {
     if (Object.keys(state.states).some((id) => state.states[id]?.config !== before.states[id]?.config)) publish()
   })
   // What a terminal agent reports of its model, effort and permission (hooks, statusLine), and what it ran this turn
-  // (看板 · 进度's checks line, PRD F22 v1.227 ②).
+  // (看板 · 进度's checks line, PRD F22 v1.229 ②).
   const offMeta = useSessionMeta.subscribe((state, before) => {
     if (Object.keys(state.bySession).some((id) => state.bySession[id]?.settings !== before.bySession[id]?.settings || state.bySession[id]?.checks !== before.bySession[id]?.checks)) publish()
   })

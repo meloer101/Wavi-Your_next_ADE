@@ -83,7 +83,7 @@ export function remoteSessions(
     if (s.lastReply) row.reply = s.lastReply
     const own = settings(s)
     if (own) row.settings = own
-    // 看板 · 进度's third line (PRD F22 v1.227 ②): the desktop card's checks and `+N −M`, as the phone draws them.
+    // 看板 · 进度's third line (PRD F22 v1.229 ②): the desktop card's checks and `+N −M`, as the phone draws them.
     const view = turnCheckView(checks(s))
     if (view) row.checks = { turn: view.turn, edited: view.edited, kinds: view.kinds.map((k) => ({ kind: k.kind, status: k.status })) }
     const added = w.added ?? 0
