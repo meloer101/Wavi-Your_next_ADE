@@ -19,9 +19,11 @@ func tokenText(_ count: Double) -> String {
   return String(Int(n.rounded()))
 }
 
-/// One decimal, without a trailing `.0` (JavaScript's `Number(x.toFixed(1))`).
+/// One decimal, without a trailing `.0`, as JavaScript's `Number(x.toFixed(1))`: the nearest, and the larger of two equally
+/// near ones (`%.1f` takes the even one: 1.25 would read 1.2). Only x.25 and x.75 are exactly between two tenths in binary.
 private func oneDecimal(_ value: Double) -> String {
-  let text = String(format: "%.1f", value)
+  let exactTie = (value * 4).rounded() == value * 4 && (value * 2).rounded() != value * 2
+  let text = String(format: "%.1f", exactTie ? value + 0.05 : value)
   return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
 }
 
@@ -67,21 +69,13 @@ func resetText(_ resetsAt: Double, now: Double, calendar: Calendar = .current, l
   return String(localized: "\(format("MMMd"))重置")
 }
 
-/// The plan vendor of an agent, as `usageVendor` in src/shared/agents.ts: only Claude Code and Codex have plan windows.
-func usageVendor(_ agent: String) -> String? {
-  switch agent {
-  case "claude", "codex": agent
-  default: nil
-  }
-}
-
 /// `Claude`, `Codex` (session-meta.ts `VENDOR_LABEL`): the vendor's name, not the agent's (`Claude Code`).
 func vendorName(_ vendor: String) -> String { vendor.prefix(1).uppercased() + vendor.dropFirst() }
 
-/// The plan windows the sheet shows for a session: its agent's vendor's. A session off its vendor's plan (a third-party
-/// endpoint) has no share of the account's windows, so it shows none (the desktop's ContextButton does the same).
+/// The plan windows the sheet shows for a session: those of the vendor the Mac named for it (`usageVendor`), none when it
+/// named none. The phone does not work out which vendor an agent belongs to.
 func planUsage(for session: RemoteSession, in list: RemoteSessionList) -> RemoteVendorUsage? {
-  guard session.offPlan != true, let vendor = usageVendor(session.agent) else { return nil }
+  guard let vendor = session.usageVendor else { return nil }
   return list.usage?.first { $0.vendor == vendor }
 }
 

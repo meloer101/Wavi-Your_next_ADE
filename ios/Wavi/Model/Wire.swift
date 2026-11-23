@@ -78,8 +78,9 @@ struct RemoteSession: Codable, Hashable, Sendable, Identifiable {
   var github: GitHubLink? = nil
   /// The context window as the desktop's ring shows it (PRD F22 v1.230 ④); absent when the session has no reading.
   var context: RemoteContext? = nil
-  /// Runs off its vendor's plan (a third-party endpoint): the sheet leaves the account's plan windows out. Only ever true.
-  var offPlan: Bool? = nil
+  /// The vendor (claude / codex) whose plan windows in `RemoteSessionList.usage` apply to this session, as the Mac picks it;
+  /// absent when none applies, so the sheet shows no plan windows.
+  var usageVendor: String? = nil
 }
 
 /// One session's context window (src/shared/remote.ts `RemoteContext`). `high` is worked out on the Mac; the phone never

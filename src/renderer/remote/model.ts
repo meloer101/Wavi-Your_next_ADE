@@ -2,9 +2,9 @@
 // in one), the agent sessions of worktrees that are not archived with what the phone list shows, and for main only each
 // session's folder and each project's root. Pure.
 import type { GuiModelCatalog, GuiPicks } from '@shared/gui-chat'
-import { USAGE_VENDORS } from '@shared/agents'
+import { USAGE_VENDORS, usageVendor } from '@shared/agents'
 import type { RemoteAgentModels, RemoteContext, RemoteSession, RemoteShip, RemoteShipField, RemoteVendorUsage, RemoteWindowSessions } from '@shared/remote'
-import { contextHigh, contextMark, planLabel, vendorStatus, type ContextUsage, type UsageAccount, type UsageVendor, type VendorUsage } from '@shared/session-meta'
+import { contextHigh, contextMark, planLabel, vendorStatus, windowKey, type ContextUsage, type UsageAccount, type UsageVendor, type VendorUsage } from '@shared/session-meta'
 import type { SessionSettings } from '@shared/session-settings'
 import { turnCheckView, type TurnChecks } from '@shared/turn-checks'
 import type { Project, Session, Worktree } from '@shared/types'
@@ -65,9 +65,20 @@ export function remoteContext(context: ContextUsage): RemoteContext {
     percent: Math.min(100, Math.max(0, context.percent)),
     ...(context.usedTokens !== undefined ? { usedTokens: context.usedTokens } : {}),
     ...(context.windowTokens !== undefined ? { windowTokens: context.windowTokens } : {}),
-    ...(context.compactPercent !== undefined ? { markPercent: Math.min(100, Math.max(0, contextMark(context))) } : {}),
+    // Always the desktop's mark: the agent's compaction point, else 80 % (the bar draws the same on both).
+    markPercent: Math.min(100, Math.max(0, contextMark(context))),
     high: contextHigh(context)
   }
+}
+
+/**
+ * The vendor whose plan windows apply to a session, as the desktop picks it (ContextButton.tsx): the agent actually
+ * running in it (`bySession[id].agent`), else its own kind. None while it runs off the vendor's plan (a third-party
+ * endpoint: the account's usage is not this session's).
+ */
+export function sessionUsageVendor(session: Pick<Session, 'kind'>, metrics?: { agent?: UsageVendor; plan?: false }): UsageVendor | undefined {
+  if (metrics?.plan === false) return undefined
+  return metrics?.agent ?? usageVendor(session.kind) ?? undefined
 }
 
 /** One entry per plan vendor with live windows, as the 额度 page lists them (`vendorStatus`). */
@@ -81,10 +92,13 @@ export function remoteUsage(
     const status = vendorStatus(usage[vendor], accounts[vendor], now)
     if (status.windows.length === 0) continue
     const plan = accounts[vendor]?.plan ? planLabel(accounts[vendor].plan) : ''
+    // One window per identity (minutes and scope), the first.
+    const seen = new Set<string>()
+    const windows = status.windows.filter((w) => !seen.has(windowKey(w)) && seen.add(windowKey(w)))
     out.push({
       vendor,
       ...(plan ? { plan } : {}),
-      windows: status.windows.slice(0, 8).map((w) => ({ minutes: w.minutes, ...(w.scope ? { scope: w.scope.slice(0, 40) } : {}), percent: Math.min(100, Math.max(0, w.percent)), ...(w.resetsAt !== undefined ? { resetsAt: w.resetsAt } : {}) }))
+      windows: windows.slice(0, 8).map((w) => ({ minutes: w.minutes, ...(w.scope ? { scope: w.scope.slice(0, 40) } : {}), percent: Math.min(100, Math.max(0, w.percent)), ...(w.resetsAt !== undefined ? { resetsAt: w.resetsAt } : {}) }))
     })
   }
   return out
@@ -103,7 +117,7 @@ export function remoteSessions(
   settings: (session: Session) => SessionSettings | undefined = () => undefined,
   checks: (session: Session) => TurnChecks | undefined = () => undefined,
   context: (session: Session) => ContextUsage | undefined = () => undefined,
-  offPlan: (session: Session) => boolean = () => false
+  vendor: (session: Session) => UsageVendor | undefined = () => undefined
 ): RemoteWindowSessions {
   const worktrees = new Map(data.worktrees.map((w) => [w.id, w]))
   const out: RemoteWindowSessions = { projects: [], sessions: [], folders: {}, roots: {} }
@@ -123,7 +137,8 @@ export function remoteSessions(
     if (view) row.checks = { turn: view.turn, edited: view.edited, kinds: view.kinds.map((k) => ({ kind: k.kind, status: k.status })) }
     const ring = context(s)
     if (ring) row.context = remoteContext(ring)
-    if (offPlan(s)) row.offPlan = true
+    const owner = vendor(s)
+    if (owner) row.usageVendor = owner
     const added = w.added ?? 0
     const removed = w.removed ?? 0
     if (added + removed > 0) row.stat = { added, removed }

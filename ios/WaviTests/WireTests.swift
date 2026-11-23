@@ -242,7 +242,7 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
     let context = try #require(list.sessions.first?.context)
     #expect(context == RemoteContext(percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true))
     #expect(list.sessions.last?.context == nil)
-    #expect(list.sessions.first?.offPlan == true && list.sessions.last?.offPlan == nil)
+    #expect(list.sessions.first?.usageVendor == "claude" && list.sessions.last?.usageVendor == nil)
     let claude = try #require(list.usage?.first { $0.vendor == "claude" })
     #expect(claude.plan == "Max")
     #expect(claude.windows.map(\.id) == ["300", "10080:Sonnet"])

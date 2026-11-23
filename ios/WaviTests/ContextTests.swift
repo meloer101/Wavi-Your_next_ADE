@@ -19,24 +19,30 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int, month: Int = 11) -> Doub
   return calendar.date(from: parts)!.timeIntervalSince1970 * 1000
 }
 
+private final class Marker {}
+
+/// A list of the vectors the Mac writes into remote-wire-samples.json.
+private func vectors(_ key: String) throws -> [JSONValue] {
+  let url = try #require(Bundle(for: Marker.self).url(forResource: "remote-wire-samples", withExtension: "json"))
+  let root = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: url))
+  guard case .object(let all)? = root["vectors"], case .array(let list)? = all[key] else { throw VectorMissing(key: key) }
+  return list
+}
+
+private struct VectorMissing: Error { let key: String }
+
 /// 2026-11-23 (Monday) 10:00 in Shanghai.
 private let now = at(23, 10, 0)
 
 @Suite struct ContextTests {
-  @Test func tokensReadAsTheDesktopsFormatTokensDoes() {
-    // session-meta.ts formatTokens: whole k from 1000, M with one decimal below 10M, whole M from 10M.
-    #expect(tokenText(850) == "850")
-    #expect(tokenText(1_000) == "1k")
-    #expect(tokenText(1_500) == "2k")
-    #expect(tokenText(2_049) == "2k")
-    #expect(tokenText(9_949) == "10k")
-    #expect(tokenText(172_400) == "172k")
-    #expect(tokenText(200_000) == "200k")
-    #expect(tokenText(999_499) == "999k")
-    #expect(tokenText(1_000_000) == "1M")
-    #expect(tokenText(1_200_000) == "1.2M")
-    #expect(tokenText(9_960_000) == "10M")
-    #expect(tokenText(12_000_000) == "12M")
+  /// The desktop's own outputs (src/main/remote/wire-samples.test.ts writes them from `formatTokens`).
+  @Test func tokensReadAsTheDesktopsFormatTokensDoes() throws {
+    let tokens = try vectors("tokens")
+    #expect(tokens.count >= 10)
+    for sample in tokens {
+      guard case .number(let count)? = sample["count"], let text = sample["text"]?.string else { Issue.record("bad vector \(sample)"); continue }
+      #expect(tokenText(count) == text, "tokenText(\(count))")
+    }
     #expect(tokenText(-5) == "0")
   }
 
@@ -48,13 +54,14 @@ private let now = at(23, 10, 0)
     #expect(percentText(-3) == "0%")
   }
 
-  @Test func windowLabelsFollowTheDesktops() {
-    #expect(windowLabel(vendor: "claude", minutes: 300, scope: nil) == "5 小时")
-    #expect(windowLabel(vendor: "claude", minutes: 10_080, scope: nil) == "7 天")
-    #expect(windowLabel(vendor: "codex", minutes: 10_080, scope: nil) == "每周")
-    #expect(windowLabel(vendor: "codex", minutes: 300, scope: nil) == "5 小时")
-    #expect(windowLabel(vendor: "claude", minutes: 10_080, scope: "Sonnet") == "7 天 · Sonnet")
-    #expect(windowLabel(vendor: "claude", minutes: 90, scope: nil) == "90 分钟")
+  /// The desktop's `windowLabel` in Chinese (the scheme runs the tests in Chinese, as the Mac's tests do).
+  @Test func windowLabelsAreTheDesktops() throws {
+    let labels = try vectors("windowLabels")
+    #expect(labels.count >= 6)
+    for sample in labels {
+      guard let vendor = sample["vendor"]?.string, case .number(let minutes)? = sample["minutes"], let label = sample["label"]?.string else { Issue.record("bad vector \(sample)"); continue }
+      #expect(windowLabel(vendor: vendor, minutes: Int(minutes), scope: sample["scope"]?.string) == label, "\(vendor) \(minutes)")
+    }
   }
 
   @Test func aResetIsTodayThisWeekOrADate() {
@@ -73,24 +80,22 @@ private let now = at(23, 10, 0)
     #expect(vendorName("codex") == "Codex")
   }
 
-  @Test func onlyClaudeAndCodexHavePlanWindows() {
-    #expect(usageVendor("claude") == "claude")
-    #expect(usageVendor("codex") == "codex")
-    #expect(usageVendor("gemini") == nil)
-    #expect(usageVendor("shell") == nil)
-  }
-
-  @Test func aSessionOffItsPlanShowsNoPlanWindows() {
+  @Test func theSheetShowsTheWindowsOfTheVendorTheMacNamed() {
     let claude = RemoteVendorUsage(vendor: "claude", plan: "Max", windows: [.init(minutes: 300, scope: nil, percent: 42, resetsAt: nil)])
-    let list = RemoteSessionList(projects: [], sessions: [], usage: [claude])
-    func row(_ agent: String, offPlan: Bool?) -> RemoteSession {
+    let codex = RemoteVendorUsage(vendor: "codex", plan: "Plus", windows: [.init(minutes: 10_080, scope: nil, percent: 12, resetsAt: nil)])
+    let list = RemoteSessionList(projects: [], sessions: [], usage: [claude, codex])
+    func row(_ agent: String, vendor: String?) -> RemoteSession {
       RemoteSession(id: "s", projectId: "p", title: "t", agent: agent, status: .idle, action: nil, since: nil, activity: 0,
-        branch: nil, model: nil, reply: nil, ship: nil, shipNotice: nil, offPlan: offPlan)
+        branch: nil, model: nil, reply: nil, ship: nil, shipNotice: nil, usageVendor: vendor)
     }
-    #expect(planUsage(for: row("claude", offPlan: nil), in: list) == claude)
-    #expect(planUsage(for: row("claude", offPlan: true), in: list) == nil)
-    #expect(planUsage(for: row("codex", offPlan: nil), in: list) == nil)
-    #expect(planUsage(for: row("shell", offPlan: nil), in: list) == nil)
+    #expect(planUsage(for: row("claude", vendor: "claude"), in: list) == claude)
+    // The Mac's word, not the agent's name: a terminal where codex runs by hand is a shell session.
+    #expect(planUsage(for: row("shell", vendor: "codex"), in: list) == codex)
+    // Named none (off the plan, or no windows): none shown, whatever the agent.
+    #expect(planUsage(for: row("claude", vendor: nil), in: list) == nil)
+    // Named a vendor the list has no windows for.
+    #expect(planUsage(for: row("claude", vendor: "claude"), in: RemoteSessionList(projects: [], sessions: [], usage: [codex])) == nil)
+    #expect(planUsage(for: row("claude", vendor: "claude"), in: RemoteSessionList(projects: [], sessions: [])) == nil)
   }
 
   @Test func insertingReplacesAnEmptyDraftAndAppendsOnANewLineToAWrittenOne() {

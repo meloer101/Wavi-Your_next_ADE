@@ -268,7 +268,7 @@
               "markPercent": 92,
               "high": true
             },
-            "offPlan": true,
+            "usageVendor": "claude",
             "github": {
               "repo": "github.com/acme/web",
               "kind": "issue",
@@ -649,7 +649,7 @@
             "markPercent": 92,
             "high": true
           },
-          "offPlan": true,
+          "usageVendor": "claude",
           "github": {
             "repo": "github.com/acme/web",
             "kind": "issue",
@@ -1299,5 +1299,90 @@
       "base": "main",
       "startAt": "refs/remotes/origin/jacoy/vite-7"
     }
+  },
+  "vectors": {
+    "tokens": [
+      {
+        "count": 0,
+        "text": "0"
+      },
+      {
+        "count": 999,
+        "text": "999"
+      },
+      {
+        "count": 1000,
+        "text": "1k"
+      },
+      {
+        "count": 1499,
+        "text": "1k"
+      },
+      {
+        "count": 1500,
+        "text": "2k"
+      },
+      {
+        "count": 9949,
+        "text": "10k"
+      },
+      {
+        "count": 172000,
+        "text": "172k"
+      },
+      {
+        "count": 999499,
+        "text": "999k"
+      },
+      {
+        "count": 1000000,
+        "text": "1M"
+      },
+      {
+        "count": 1250000,
+        "text": "1.3M"
+      },
+      {
+        "count": 9960000,
+        "text": "10M"
+      },
+      {
+        "count": 12000000,
+        "text": "12M"
+      }
+    ],
+    "windowLabels": [
+      {
+        "vendor": "claude",
+        "minutes": 300,
+        "label": "5 小时"
+      },
+      {
+        "vendor": "claude",
+        "minutes": 10080,
+        "label": "7 天"
+      },
+      {
+        "vendor": "codex",
+        "minutes": 10080,
+        "label": "每周"
+      },
+      {
+        "vendor": "claude",
+        "minutes": 1440,
+        "label": "1 天"
+      },
+      {
+        "vendor": "claude",
+        "minutes": 90,
+        "label": "90 分钟"
+      },
+      {
+        "vendor": "claude",
+        "minutes": 10080,
+        "scope": "Sonnet",
+        "label": "7 天 · Sonnet"
+      }
+    ]
   }
 }

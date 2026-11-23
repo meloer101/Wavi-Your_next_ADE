@@ -8,7 +8,7 @@ import { useSessionMeta } from '../session-meta/store'
 import { sessionSettings } from '../session-settings'
 import { useWorkspace } from '../state/workspace'
 import { handleRemoteCommand } from './handler'
-import { remoteSessions, remoteUsage } from './model'
+import { remoteSessions, remoteUsage, sessionUsageVendor } from './model'
 
 /** Status lines change several times a second while agents run; the phone list does not need every one. */
 const PUBLISH_MS = 300
@@ -32,7 +32,7 @@ export function startRemoteBridge(): () => void {
     timer = window.setTimeout(() => {
       timer = null
       const meta = useSessionMeta.getState()
-      const list = remoteSessions(useWorkspace.getState(), { ships: useShips.getState().byWorktree, endings }, sessionSettings, (s) => meta.bySession[s.id]?.checks, (s) => meta.bySession[s.id]?.context, (s) => meta.bySession[s.id]?.plan === false)
+      const list = remoteSessions(useWorkspace.getState(), { ships: useShips.getState().byWorktree, endings }, sessionSettings, (s) => meta.bySession[s.id]?.checks, (s) => meta.bySession[s.id]?.context, (s) => sessionUsageVendor(s, meta.bySession[s.id]))
       // The vendors' plan windows for the phone's context sheet (PRD F22 v1.230 ④).
       const usage = remoteUsage(meta.usage, meta.accounts, Date.now())
       if (usage.length > 0) list.usage = usage
@@ -60,8 +60,8 @@ export function startRemoteBridge(): () => void {
   // (看板 · 进度's checks line, PRD F22 v1.229 ②), its context window, and the plan usage (the phone's context sheet, v1.230 ④).
   const offMeta = useSessionMeta.subscribe((state, before) => {
     if (state.usage !== before.usage || state.accounts !== before.accounts) return publish()
-    const changed = (id: string, key: 'settings' | 'checks' | 'context' | 'plan') => state.bySession[id]?.[key] !== before.bySession[id]?.[key]
-    if (Object.keys(state.bySession).some((id) => changed(id, 'settings') || changed(id, 'checks') || changed(id, 'context') || changed(id, 'plan'))) publish()
+    const changed = (id: string, key: 'settings' | 'checks' | 'context' | 'plan' | 'agent') => state.bySession[id]?.[key] !== before.bySession[id]?.[key]
+    if (Object.keys(state.bySession).some((id) => changed(id, 'settings') || changed(id, 'checks') || changed(id, 'context') || changed(id, 'plan') || changed(id, 'agent'))) publish()
   })
   // An exit's steps and how it ended show on the phone (Figma 45J).
   const offShips = useShips.subscribe((state, before) => {

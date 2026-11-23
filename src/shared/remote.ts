@@ -233,8 +233,11 @@ export interface RemoteSession {
   github?: GitHubLink
   /** The context window as the desktop's ring shows it (PRD F22 v1.230 ④); absent when the session has no reading. */
   context?: RemoteContext
-  /** Runs off its vendor's plan (a third-party endpoint): the account's plan windows are not this session's, so the sheet leaves them out. */
-  offPlan?: true
+  /**
+   * The vendor whose plan windows (`RemoteSessionList.usage`) apply to this session, as the desktop picks it: the agent
+   * actually running, else the session's own. Absent when none applies (no plan windows, or a third-party endpoint).
+   */
+  usageVendor?: UsageVendor
 }
 
 /** One session's context window. `high` is worked out on the Mac (`contextHigh`); the phone never re-derives it. */
@@ -777,7 +780,8 @@ function windowSession(raw: unknown): RemoteSession | null {
     const link = parseGitHubLink(s.github)
     if (link) out.github = link
   }
-  if (s.offPlan === true) out.offPlan = true
+  const vendor = usageVendor(s.usageVendor)
+  if (vendor) out.usageVendor = vendor
   if (s.context !== undefined) {
     const context = windowContext(s.context)
     if (context) out.context = context
