@@ -149,4 +149,47 @@ private func tool(_ id: String, _ name: String, _ arg: String, at: Double, state
     guard case .fold(let fold) = blocks[1], case .reply = blocks[2] else { Issue.record("shape"); return }
     #expect(fold.entries.map(\.id) == ["a", "r1"])
   }
+
+  private func system(_ id: String, at: Double) -> ChatItem { ChatItem(kind: "system", id: id, at: at, text: "interrupted") }
+
+  @Test func aTrailingSystemLineDoesNotHideTheAnswer() {
+    let blocks = transcriptBlocks([user("u", at: 1), text("t", at: 2), system("s", at: 3)], receipts: [], turnOpen: false)
+    #expect(blocks.map(\.id) == ["u", "fold-s", "t"])
+    guard case .fold(let fold) = blocks[1], case .reply = blocks[2] else { Issue.record("shape"); return }
+    #expect(fold.entries.map(\.id) == ["s"])
+  }
+
+  @Test func aSystemLineAndAReceiptAfterTheAnswerBothGoIntoTheFold() {
+    let receipt = Receipt(id: "r1", at: 9, onPhone: true, text: "x")
+    let blocks = transcriptBlocks([user("u", at: 1), tool("a", "Read", "a.ts", at: 2), text("t", at: 3), system("s", at: 4)], receipts: [receipt], turnOpen: false)
+    #expect(blocks.map(\.id) == ["u", "fold-a", "t"])
+    guard case .fold(let fold) = blocks[1] else { Issue.record("no fold"); return }
+    #expect(fold.entries.map(\.id) == ["a", "s", "r1"])
+  }
+
+  @Test func aTrailingThinkingMeansNoAnswer() {
+    let thinking = ChatItem(kind: "thinking", id: "k", at: 3, text: "hm", ms: 1000)
+    let blocks = transcriptBlocks([user("u", at: 1), text("t", at: 2), thinking], receipts: [], turnOpen: false)
+    #expect(blocks.map(\.id) == ["u", "fold-t"])
+    #expect(!blocks.contains { if case .reply = $0 { true } else { false } })
+  }
+
+  @Test func aTurnOfOnlyReceiptsIsNotFolded() {
+    let receipt = Receipt(id: "r1", at: 1, onPhone: false, text: "x")
+    #expect(transcriptBlocks([], receipts: [receipt], turnOpen: false).map(\.id) == ["r1"])
+    let blocks = transcriptBlocks([user("u", at: 2)], receipts: [Receipt(id: "r2", at: 3, onPhone: true, text: "y")], turnOpen: false)
+    #expect(blocks.map(\.id) == ["u", "r2"])
+    guard case .receipt = blocks[1] else { Issue.record("receipt kept as is"); return }
+  }
+
+  @Test func theTotalsCarryTheReplyWhenThereAreEdits() {
+    let edited = transcriptBlocks([user("u", at: 1), tool("a", "Edit", "a.ts", at: 2, added: 1), text("t", at: 3)], receipts: [], turnOpen: false)
+    guard case .reply(let answer, let meta) = edited[2], case .turn(let turn) = edited[3] else { Issue.record("shape"); return }
+    #expect(!meta)
+    #expect(turn.reply == answer)
+    let plain = transcriptBlocks([user("u", at: 1), tool("a", "Read", "a.ts", at: 2), text("t", at: 3)], receipts: [], turnOpen: false)
+    guard case .reply(_, let plainMeta) = plain[2] else { Issue.record("shape"); return }
+    #expect(plainMeta)
+    #expect(plain.count == 3)
+  }
 }

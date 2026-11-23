@@ -173,8 +173,9 @@ private func entryAt(_ entry: TranscriptBlock) -> Double {
 }
 
 /// A finished turn as: the user's message (if it has one), the fold of everything before the answer, the answer. The
-/// answer is the last item (receipts after it go into the fold) when that is a text. A turn that is only an answer has no
-/// fold; nil when the turn has no agent entry at all.
+/// answer is the last text once trailing receipts and system lines are skipped (they go into the fold); a trailing tool or
+/// thinking means no answer. A turn that is only an answer has no fold, and one with no agent item at all (only receipts)
+/// keeps its entries as they were. Nil when the turn has no agent entry.
 private func foldedTurn(_ turn: [TranscriptBlock], totals: Bool) -> (blocks: [TranscriptBlock], answer: ChatItem?)? {
   var head: [TranscriptBlock] = []
   var agent = turn
@@ -183,15 +184,27 @@ private func foldedTurn(_ turn: [TranscriptBlock], totals: Bool) -> (blocks: [Tr
     agent = Array(turn.dropFirst())
   }
   guard !agent.isEmpty else { return nil }
+  var answerIndex: Int?
+  scan: for index in agent.indices.reversed() {
+    guard case .item(let item) = agent[index] else { continue }
+    if item.kind == "system" { continue }
+    if item.kind == "text" { answerIndex = index }
+    break scan
+  }
   var answer: ChatItem?
+  if let answerIndex, case .item(let item) = agent[answerIndex] { answer = item }
   var process = agent
-  if let index = agent.lastIndex(where: { if case .item = $0 { true } else { false } }), case .item(let last) = agent[index], last.kind == "text" {
-    answer = last
-    process.remove(at: index)
+  if let answerIndex { process.remove(at: answerIndex) }
+  var out = head
+  guard process.contains(where: { if case .item = $0 { true } else { false } }) else {
+    // Nothing to fold: receipts only.
+    for (index, entry) in agent.enumerated() {
+      if index == answerIndex, let answer { out.append(.reply(answer, meta: !totals)) } else { out.append(entry) }
+    }
+    return (out, answer)
   }
   let start = (head.first.map(entryAt)) ?? entryAt(agent[0])
   let end = answer?.at ?? entryAt(agent[agent.count - 1])
-  var out = head
   if let first = process.first { out.append(.fold(TurnFold(id: "fold-\(first.id)", ms: max(0, end - start), entries: process))) }
   if let answer { out.append(.reply(answer, meta: !totals)) }
   return (out, answer)
