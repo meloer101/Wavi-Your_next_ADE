@@ -82,13 +82,15 @@ struct NewSessionView: View {
           Section {
             LabeledContent("项目", value: model.sessions.projects.first { $0.id == handoff.project }?.name ?? handoff.project)
           }
+          .listRowBackground(Color.bgGrouped)
         } else {
           Picker("项目", selection: $project) {
             ForEach(model.sessions.projects) { Text($0.name).tag(Optional($0.id)) }
           }
+          .listRowBackground(Color.bgGrouped)
         }
         if let error { Notice(tone: .danger, message: String(localized: "没有建成：\(error)")).listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
-        if let loadError { Text(loadError).foregroundStyle(Color.noticeDanger) }
+        if let loadError { Text(loadError).foregroundStyle(Color.noticeDanger).listRowBackground(Color.bgGrouped) }
         if let data {
           Section {
             // 交给 agent always starts a new worktree (PRD F22 v1.229 ④): no 当前目录 to pick.
@@ -114,6 +116,7 @@ struct NewSessionView: View {
               if let problem = branchProblem(data) { Text(problem).font(.ui(.footnote)).foregroundStyle(Color.noticeDanger) }
             }
           }
+          .listRowBackground(Color.bgGrouped)
           Section {
             if data.agents.isEmpty {
               LabeledContent("智能体") { Text("Mac 上没有安装").foregroundStyle(Color.noticeDanger) }
@@ -138,14 +141,17 @@ struct NewSessionView: View {
               modelRow
             }
           }
+          .listRowBackground(Color.bgGrouped)
           if handoff == nil {
             Section("首条消息") {
               TextField("", text: $prompt, axis: .vertical).lineLimit(4...8)
             }
+            .listRowBackground(Color.bgGrouped)
           } else {
             Section("任务") {
               TextField("", text: $task, axis: .vertical).lineLimit(6...16)
             }
+            .listRowBackground(Color.bgGrouped)
           }
         } else if loadError == nil {
           Spinner(color: .textSecondary).frame(maxWidth: .infinity).accessibilityLabel("正在读取项目")
