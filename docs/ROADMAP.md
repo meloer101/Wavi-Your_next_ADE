@@ -472,7 +472,7 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
   - [ ] Figma：通知的文字和按钮、设置 · 手机 的「推送」开关
 - [ ] 阶段 2 · TestFlight 外部测试（验收 ⑬；作者在 App Store Connect 建 App）
 - [ ] 手机看板（2026-11-22 定，PRD v1.227，Figma 103 `1853:9213`）
-  - [x] Figma：103A–103I 深浅各一（2026-11-22），待作者确认
+  - [x] Figma：103A–103I 深浅各一，进度以 103′ `1860:10582` 为准（卡片按状态上色，横屏卡片固定三行），作者 2026-11-22 确认
   - [x] Mac 端和线格式（2026-11-22）：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式。`src/shared/remote.ts`、`src/shared/github-board.ts`（新增 `startBranch` / `BoardStart`）、`src/main/remote/index.ts`、`src/main/remote/github-start.ts`、`src/renderer/remote/*`、`src/renderer/new-session/hand-task.ts`、`src/shared/remote-wire-samples.json`、`ios/Wavi/Model/Wire.swift`、`ios/WaviTests/WireTests.swift`；e2e `remote-github.spec.ts`。手机界面还没做
   - [ ] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
