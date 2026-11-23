@@ -669,7 +669,7 @@ private struct MarkdownCodeBlock: View {
           UIPasteboard.general.string = code
           copies += 1
         } label: {
-          CopyGlyph().foregroundStyle(Color.textSecondary).frame(width: 16, height: 16).contentShape(Rectangle())
+          Icon("copy", size: 16).foregroundStyle(Color.textSecondary).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "复制代码"))
@@ -684,25 +684,6 @@ private struct MarkdownCodeBlock: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .background(Color.bgGrouped, in: RoundedRectangle(cornerRadius: 12))
-  }
-}
-
-/// Two overlapped rounded squares, at the desktop's 1.75 stroke: the copy button's mark (the phone's icon set comes from
-/// the desktop's Hugeicons list, and has no copy glyph yet).
-private struct CopyGlyph: View {
-  var body: some View {
-    Path { path in
-      path.addRoundedRect(in: CGRect(x: 1, y: 4, width: 10, height: 11), cornerSize: CGSize(width: 2.5, height: 2.5))
-      path.move(to: CGPoint(x: 5, y: 4))
-      path.addLine(to: CGPoint(x: 5, y: 3))
-      path.addQuadCurve(to: CGPoint(x: 6.8, y: 1.2), control: CGPoint(x: 5, y: 1.2))
-      path.addLine(to: CGPoint(x: 12.8, y: 1.2))
-      path.addQuadCurve(to: CGPoint(x: 14.6, y: 3), control: CGPoint(x: 14.6, y: 1.2))
-      path.addLine(to: CGPoint(x: 14.6, y: 9))
-      path.addQuadCurve(to: CGPoint(x: 12.8, y: 10.8), control: CGPoint(x: 14.6, y: 10.8))
-      path.addLine(to: CGPoint(x: 11, y: 10.8))
-    }
-    .stroke(style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
   }
 }
 
