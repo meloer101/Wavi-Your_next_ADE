@@ -93,6 +93,20 @@ import Testing
     #expect(blocks[2].kind == .paragraph([.text("同一项的第二段")]))
   }
 
+  @Test func anItemThatOpensWithCodeKeepsItsMarker() {
+    let blocks = markdownBlocks("- ```ts\n  let a = 1\n  ```\n- [x] done")
+    #expect(blocks.map(\.marker) == ["•", nil, "•"])
+    #expect(blocks.map(\.level) == [0, 1, 0])
+    #expect(blocks[0].kind == .paragraph([]))
+    #expect(blocks[1].kind == .code(language: "ts", code: "let a = 1"))
+    #expect(blocks.map(\.checked) == [nil, nil, true])
+  }
+
+  @Test func aPathLongerThanTheMacTakesIsNotAFile() {
+    #expect(fileRef(inCode: String(repeating: "a/", count: 498) + "b.ts") != nil)
+    #expect(fileRef(inCode: String(repeating: "a/", count: 499) + "b.ts") == nil)
+  }
+
   @Test func aTableInAnItemIsOneLevelIn() {
     let blocks = markdownBlocks("1. 表：\n\n   | a | b |\n   |---|---|\n   | 1 | 2 |")
     #expect(blocks.map(\.level) == [0, 1])
@@ -160,6 +174,28 @@ import Testing
     #expect(url.scheme == "wavi-file")
     #expect(FileRef(url) == ref)
     #expect(FileRef(URL(string: "https://example.com")!) == nil)
+  }
+
+  // MARK: - The file page
+
+  @Test func wideCharactersCountTwoCells() {
+    #expect(displayWidth("abc") == 3)
+    #expect(displayWidth("汉字") == 4)
+    #expect(displayWidth("あア한") == 6)
+    #expect(displayWidth("ＡＢ") == 4)
+    // 40 汉字 take 80 cells and beat 60 ASCII characters.
+    let wide = String(repeating: "汉", count: 40), ascii = String(repeating: "a", count: 60)
+    #expect(displayWidth(wide) > displayWidth(ascii))
+    #expect(["x", ascii, wide].max { displayWidth($0) < displayWidth($1) } == wide)
+  }
+
+  @Test func aLongLineIsCutWithAnEllipsis() {
+    let lines = fileLines("short\n" + String(repeating: "x", count: 5000) + "\n")
+    #expect(lines.count == 3)
+    #expect(lines[0] == "short")
+    #expect(lines[1].count == maxFileLineLength + 1 && lines[1].hasSuffix("…"))
+    #expect(lines[2] == "")
+    #expect(fileLines(String(repeating: "x", count: maxFileLineLength)) == [String(repeating: "x", count: maxFileLineLength)])
   }
 
   @Test func theAvatarIsTheMiddleSquare() {

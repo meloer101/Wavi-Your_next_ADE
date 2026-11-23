@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
 vi.mock('./workspace-store', () => ({ isWorkspaceDir: (path: string) => workspaceDirs.has(path) }))
 
 const { IPC } = await import('@shared/ipc')
+const { MAX_PREVIEW_BYTES } = await import('@shared/worktree-files')
 const { readSessionFile, classifyChange, inGeneratedFolder, isInside, normalizeRelative, openAction, openWorktreeEntry, registerWorktreeFileHandlers, resolveFileLinks, walkFiles, watchesRecursively } =
   await import('./worktree-files')
 
@@ -246,7 +247,32 @@ describe('readSessionFile (a phone chip’s path)', () => {
     }
   })
 
-  it('says missing for a symlink leading out, a folder and a path through a file', async () => {
-    for (const path of ['escape.txt', 'src', 'src/a.ts/b']) expect(await readSessionFile(root, path)).toEqual({ kind: 'missing' })
+  it('says missing for a symlink leading out, one through a symlinked folder, a folder and a path through a file', async () => {
+    symlinkSync(outside, join(root, 'link'))
+    for (const path of ['escape.txt', 'link/secret.txt', 'src', 'src/a.ts/b']) expect(await readSessionFile(root, path)).toEqual({ kind: 'missing' })
+  })
+
+  it('says missing inside a protected folder of a home-directory session, and reads elsewhere', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'tr-file-home-'))
+    mkdirSync(join(home, 'Documents'))
+    writeFileSync(join(home, 'Documents', 'note.txt'), 'private')
+    writeFileSync(join(home, 'notes.txt'), 'ok')
+    const folders = [join(realpathSync(home), 'Documents')]
+    expect(await readSessionFile(home, 'Documents/note.txt', folders)).toEqual({ kind: 'missing' })
+    expect(await readSessionFile(home, join(home, 'Documents', 'note.txt'), folders)).toEqual({ kind: 'missing' })
+    expect(await readSessionFile(home, 'notes.txt', folders)).toMatchObject({ kind: 'text', text: 'ok' })
+    // A project that is itself in Documents is the user's choice.
+    expect(await readSessionFile(join(home, 'Documents'), 'note.txt', folders)).toMatchObject({ kind: 'text' })
+  })
+
+  it('answers binary and too-large files with their kind', async () => {
+    writeFileSync(join(root, 'bin.dat'), Buffer.from([0, 1, 2, 3, 0, 0]))
+    writeFileSync(join(root, 'big.txt'), Buffer.alloc(MAX_PREVIEW_BYTES + 1, 'a'))
+    expect(await readSessionFile(root, 'bin.dat')).toMatchObject({ kind: 'binary' })
+    expect(await readSessionFile(root, 'big.txt')).toMatchObject({ kind: 'too-large' })
+  })
+
+  it('throws what is not "unreadable" (a root that is gone)', async () => {
+    await expect(readSessionFile(join(root, 'gone'), 'a.ts')).rejects.toThrow()
   })
 })

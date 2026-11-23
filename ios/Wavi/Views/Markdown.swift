@@ -28,7 +28,8 @@ func fileRefName(_ path: String) -> String {
   path.split(separator: "/").last.map(String.init) ?? path
 }
 
-private let maxFileRefLength = 1024
+// The Mac takes a path up to 1000 characters (src/shared/remote.ts); a longer one is not sent.
+private let maxFileRefLength = 1000
 
 /// The extensions a bare name (`index.ts`, no `/`) must have to be a file; a path with a folder keeps any extension.
 private let bareFileExtensions: Set<String> = [
@@ -199,7 +200,8 @@ private func listBlocks(_ list: any ListItemContainer, level: Int) -> [MarkdownB
         first = false
       default:
         // A second paragraph, code, a quote, a table inside an item: its own block, aligned with the item's text (one level
-        // in), without the marker again.
+        // in), without the marker again. An item that opens with one of them still gets its marker, on an empty line.
+        if first { out.append(MarkdownBlock(kind: .paragraph([]), level: level, marker: marker, checked: checked)) }
         out += blocks(of: child, level: level + 1)
         first = false
       }

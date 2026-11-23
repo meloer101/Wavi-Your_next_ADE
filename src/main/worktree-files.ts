@@ -128,26 +128,34 @@ async function listDir(root: unknown, dir: unknown): Promise<DirEntry[]> {
   return entries.sort(compareEntries)
 }
 
+/** The errors that mean "this is not a file the phone may read": the phone shows "not in the session folder". */
+const UNREADABLE_CODES = new Set(['ENOENT', 'ENOTDIR', 'EISDIR', 'EACCES', 'EPERM', 'ELOOP'])
+const UNREADABLE_MESSAGES = new Set(['path outside the worktree', 'not a file'])
+
 /**
  * The file a phone's chip names (PRD F22 v1.229 ②): `path` as the agent wrote it, relative to the session folder or
- * absolute and inside it. A path that climbs out, or an absolute one elsewhere, is `missing` — the phone says the file is
- * not in the session folder; so is anything `readPreview` refuses (a folder, no permission, a symlink leading out).
+ * absolute and inside it. A path that climbs out, an absolute one elsewhere, one in Desktop / Documents / Downloads of a
+ * home-directory session (reading it would raise macOS's folder prompt), a folder, a missing file, no permission or a
+ * symlink leading out is `missing`; any other failure (EIO, EMFILE, …) is thrown, and the caller answers with an error.
+ * `folders` is the protected list (default: the home directory's three).
  */
-export async function readSessionFile(root: string, path: string): Promise<FilePreview> {
+export async function readSessionFile(root: string, path: string, folders?: readonly string[]): Promise<FilePreview> {
+  const realRoot = await resolveRoot(root)
   let rel = path
   if (isAbsolute(path)) {
-    const realRoot = await resolveRoot(root)
     const inside = [root, realRoot].map((base) => relative(base, path)).find((r) => r !== '' && !isAbsolute(r) && r.split(sep)[0] !== '..')
     if (!inside) return { kind: 'missing' }
     rel = inside.split(sep).join('/')
   }
   const normalized = normalizeRelative(rel)
   if (!normalized || rel.split('/').includes('..')) return { kind: 'missing' }
+  if (isGuarded(join(realRoot, normalized), protectedInside(realRoot, folders))) return { kind: 'missing' }
   try {
     return await readPreview(root, normalized)
-  } catch {
-    // A folder, ENOTDIR, no permission, a symlink leading out: the phone shows "not in the session folder".
-    return { kind: 'missing' }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if ((code && UNREADABLE_CODES.has(code)) || UNREADABLE_MESSAGES.has((error as Error).message)) return { kind: 'missing' }
+    throw error
   }
 }
 
