@@ -47,7 +47,7 @@ import Testing
 
   @Test func fencedCodeKeepsItsLanguageAndLines() {
     let blocks = markdownBlocks("```ts\nconst a = 1\n  const b = 2\n```")
-    #expect(blocks == [.init(kind: .code(language: "ts", code: "const a = 1\n  const b = 2\n"))])
+    #expect(blocks == [.init(kind: .code(language: "ts", code: "const a = 1\n  const b = 2"))])
   }
 
   @Test func inlineMarkdownIsRuns() {
@@ -67,6 +67,25 @@ import Testing
   @Test func aQuoteAndARuleAreTheirOwnBlocks() {
     let blocks = markdownBlocks("> 一句引用\n\n---\n")
     #expect(blocks == [.init(kind: .quote([.text("一句引用")])), .init(kind: .rule)])
+  }
+
+  @Test func aQuoteKeepsTheOrderOfWhatIsInsideIt() {
+    let blocks = markdownBlocks("> a\n>\n> - x\n>\n> b")
+    #expect(blocks.map(\.kind) == [.quote([.text("a")]), .paragraph([.text("x")]), .quote([.text("b")])])
+    #expect(blocks.map(\.marker) == [nil, "•", nil])
+  }
+
+  @Test func blocksInAnItemAlignWithItsText() {
+    let blocks = markdownBlocks("- 第一项\n\n  ```ts\n  let a = 1\n  ```\n\n  同一项的第二段\n- 第二项\n  - 嵌套\n\n    嵌套的第二段")
+    #expect(blocks.map(\.level) == [0, 1, 1, 0, 1, 2])
+    #expect(blocks.map(\.marker) == ["•", nil, nil, "•", "◦", nil])
+    #expect(blocks[1].kind == .code(language: "ts", code: "let a = 1"))
+    #expect(blocks[2].kind == .paragraph([.text("同一项的第二段")]))
+  }
+
+  @Test func aTableInAnItemIsOneLevelIn() {
+    let blocks = markdownBlocks("1. 表：\n\n   | a | b |\n   |---|---|\n   | 1 | 2 |")
+    #expect(blocks.map(\.level) == [0, 1])
   }
 
   @Test func softBreaksStayBreaks() {
@@ -89,12 +108,18 @@ import Testing
     #expect(fileRef(inCode: "  ./ios/project.yml  ") == FileRef(path: "./ios/project.yml", line: nil, column: nil))
     #expect(fileRef(inCode: "@src/a.ts") == FileRef(path: "src/a.ts", line: nil, column: nil))
     #expect(fileRef(inCode: "src/a.ts:42.") == FileRef(path: "src/a.ts", line: 42, column: nil))
+    #expect(fileRef(inCode: "src/a.ts:42-50") == FileRef(path: "src/a.ts", line: 42, column: nil))
+    #expect(fileRef(inCode: "src/a.ts#L10-L20") == FileRef(path: "src/a.ts", line: 10, column: nil))
+    #expect(fileRef(inCode: "src/a.ts#L10-20") == FileRef(path: "src/a.ts", line: 10, column: nil))
+    #expect(fileRef(inCode: "Package.swift") == FileRef(path: "Package.swift", line: nil, column: nil))
+    // A folder in front keeps any extension.
+    #expect(fileRef(inCode: "assets/logo.svg") == FileRef(path: "assets/logo.svg", line: nil, column: nil))
     // A path from the session's folder's top level is as long as it gets.
     #expect(fileRef(inCode: "docs/说明.md") == FileRef(path: "docs/说明.md", line: nil, column: nil))
   }
 
   @Test func proseInInlineCodeIsNotAFile() {
-    for code in ["npm run check", "and/or", "src/app", "error: not found", "localhost:3000", "a", "", "    ", "`" + "x".padding(toLength: 2000, withPad: "x", startingAt: 0) + "`", "~/notes.md", "../a.ts", "./"] {
+    for code in ["npm run check", "and/or", "src/app", "error: not found", "localhost:3000", "a", "", "    ", "`" + "x".padding(toLength: 2000, withPad: "x", startingAt: 0) + "`", "~/notes.md", "../a.ts", "./", "console.log", "user.name", "Array.map", "example.com:8080", "example.com", "foo.bar", "Foo.init", "e.g."] {
       #expect(fileRef(inCode: code) == nil, "\(code)")
     }
   }
@@ -103,6 +128,20 @@ import Testing
     #expect(fileRefName("src/main/remote/index.ts") == "index.ts")
     #expect(fileRefName("./ios/project.yml") == "project.yml")
     #expect(fileRefName("PRD.md") == "PRD.md")
+  }
+
+  @Test func aMarkdownLinkToAFileOpensIt() {
+    // Same rules as inline code, after percent-decoding; the web and mail go to the system; anything else is not a link.
+    #expect(markdownLinkURL("src/a.ts:12", files: true).flatMap(FileRef.init) == FileRef(path: "src/a.ts", line: 12, column: nil))
+    #expect(markdownLinkURL("docs/%E8%AF%B4%E6%98%8E.md", files: true).flatMap(FileRef.init) == FileRef(path: "docs/说明.md", line: nil, column: nil))
+    #expect(markdownLinkURL("docs/说明.md", files: true).flatMap(FileRef.init) == FileRef(path: "docs/说明.md", line: nil, column: nil))
+    // A path with a space is not a file by the same rules as inline code.
+    #expect(markdownLinkURL("docs/a%20b.md", files: true) == nil)
+    #expect(markdownLinkURL("https://example.com/a b", files: true)?.scheme == "https")
+    #expect(markdownLinkURL("mailto:a@b.c", files: true)?.scheme == "mailto")
+    #expect(markdownLinkURL("javascript:alert(1)", files: true) == nil)
+    #expect(markdownLinkURL("#section", files: true) == nil)
+    #expect(markdownLinkURL("src/a.ts", files: false) == nil)
   }
 
   @Test func aChipLinkRoundTrips() throws {

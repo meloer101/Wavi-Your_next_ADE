@@ -30,6 +30,13 @@ func fileRefName(_ path: String) -> String {
 
 private let maxFileRefLength = 1024
 
+/// The extensions a bare name (`index.ts`, no `/`) must have to be a file; a path with a folder keeps any extension.
+private let bareFileExtensions: Set<String> = [
+  "ts", "tsx", "js", "jsx", "mjs", "cjs", "json", "md", "mdx", "swift", "kt", "java", "py", "rb", "go", "rs", "c", "h", "cc",
+  "cpp", "hpp", "m", "mm", "cs", "php", "sh", "zsh", "bash", "yml", "yaml", "toml", "xml", "html", "css", "scss", "less", "sql",
+  "txt", "lock", "plist", "xcstrings", "gradle", "vue", "svelte", "astro"
+]
+
 /// The file a whole inline code span names, or nil when it is not one (PRD v1.229 ②, after the desktop's
 /// `findPathCandidates` narrowed to paths with a file extension — Orca's rule: miss one rather than link prose).
 /// A path has no spaces, keeps a `:line[:col]` or `#Lline` suffix that the chip hides, and is shown as the file.
@@ -41,7 +48,8 @@ func fileRef(inCode code: String) -> FileRef? {
   while let last = body.last, ".,;:!?".contains(last) { body.removeLast() }
   var line: Int?
   var column: Int?
-  if let suffix = body.wholeMatch(of: /^(.*?)(?::(\d+)(?::(\d+))?|#L(\d+))$/) {
+  // `:42`, `:42:5`, `:42-50`, `#L42`, `#L10-L20`: the line is the first number; a range's end is not kept.
+  if let suffix = body.wholeMatch(of: /^(.*?)(?::(\d+)(?::(\d+)|-\d+)?|#L(\d+)(?:-L?\d+)?)$/) {
     body = String(suffix.1)
     line = Int(suffix.2 ?? suffix.4 ?? "")
     column = suffix.3.flatMap { Int($0) }
@@ -51,7 +59,10 @@ func fileRef(inCode code: String) -> FileRef? {
   guard !body.contains(":"), body.contains(where: \.isLetter), !body.hasPrefix("~") else { return nil }
   let segments = body.split(separator: "/", omittingEmptySubsequences: true)
   guard !segments.contains(".."), segments.contains(where: { $0 != "." }) else { return nil }
-  guard body.firstMatch(of: /\.[A-Za-z0-9]{1,12}$/) != nil else { return nil }
+  guard let ext = body.firstMatch(of: /\.([A-Za-z0-9]{1,12})$/)?.1 else { return nil }
+  // `console.log`, `user.name`, `Array.map`, `example.com` have an extension too: without a folder in front, only a real
+  // source / config / doc extension makes a file.
+  guard body.contains("/") || bareFileExtensions.contains(ext.lowercased()) else { return nil }
   return FileRef(path: body, line: line.flatMap { $0 > 0 ? $0 : nil }, column: column.flatMap { $0 > 0 ? $0 : nil })
 }
 
@@ -103,18 +114,25 @@ private let bullets = ["•", "◦", "▪"]
 private func blocks(of markup: BlockMarkup, level: Int) -> [MarkdownBlock] {
   switch markup {
   case let paragraph as Paragraph:
-    return [MarkdownBlock(kind: .paragraph(inlines(of: paragraph)))]
+    return [MarkdownBlock(kind: .paragraph(inlines(of: paragraph)), level: level)]
   case let heading as Heading:
-    return [MarkdownBlock(kind: .heading(level: heading.level, inlines(of: heading)))]
+    return [MarkdownBlock(kind: .heading(level: heading.level, inlines(of: heading)), level: level)]
   case let code as CodeBlock:
-    return [MarkdownBlock(kind: .code(language: code.language?.isEmpty == false ? code.language : nil, code: code.code))]
+    // The parser's text ends with the newline of the last line; drawn, that is an empty line under the code.
+    let text = code.code.hasSuffix("\n") ? String(code.code.dropLast()) : code.code
+    return [MarkdownBlock(kind: .code(language: code.language?.isEmpty == false ? code.language : nil, code: text), level: level)]
   case let rule as ThematicBreak:
     _ = rule
-    return [MarkdownBlock(kind: .rule)]
+    return [MarkdownBlock(kind: .rule, level: level)]
   case let quote as BlockQuote:
-    // One bar around the quote's words; a block inside it it cannot hold as words (a table, code) follows the quote.
+    // One bar around each run of the quote's paragraphs and headings; a block inside it that cannot be words (a list, code,
+    // a table) is emitted where it stands, so the document order is kept.
+    var out: [MarkdownBlock] = []
     var words: [MarkdownInline] = []
-    var rest: [MarkdownBlock] = []
+    func flush() {
+      if !words.isEmpty { out.append(MarkdownBlock(kind: .quote(words), level: level)) }
+      words = []
+    }
     for child in quote.blockChildren {
       switch child {
       case let paragraph as Paragraph:
@@ -124,10 +142,12 @@ private func blocks(of markup: BlockMarkup, level: Int) -> [MarkdownBlock] {
         if !words.isEmpty { words.append(.lineBreak) }
         words += inlines(of: heading)
       default:
-        rest += blocks(of: child, level: level)
+        flush()
+        out += blocks(of: child, level: level)
       }
     }
-    return (words.isEmpty ? [] : [MarkdownBlock(kind: .quote(words), level: level)]) + rest
+    flush()
+    return out
   case let table as Markdown.Table:
     return [MarkdownBlock(kind: tableKind(table), level: level)]
   case let list as UnorderedList:
@@ -168,15 +188,12 @@ private func listBlocks(_ list: any ListItemContainer, level: Int) -> [MarkdownB
       case let nested as OrderedList:
         out += listBlocks(nested, level: level + 1)
       case let paragraph as Paragraph:
-        out.append(MarkdownBlock(kind: .paragraph(inlines(of: paragraph)), level: level, marker: first ? marker : nil, checked: first ? checked : nil))
+        out.append(MarkdownBlock(kind: .paragraph(inlines(of: paragraph)), level: first ? level : level + 1, marker: first ? marker : nil, checked: first ? checked : nil))
         first = false
       default:
-        // Code, a quote, a table inside an item: an indented block of its own, without the marker again.
-        for block in blocks(of: child, level: level) {
-          var indented = block
-          indented.level = block.level + level
-          out.append(indented)
-        }
+        // A second paragraph, code, a quote, a table inside an item: its own block, aligned with the item's text (one level
+        // in), without the marker again.
+        out += blocks(of: child, level: level + 1)
         first = false
       }
     }
@@ -260,12 +277,16 @@ private struct InlineStyle {
   var italic = false
   var strike = false
   var link: URL?
+  /// Whether a file path is a chip / a link to the file page: false where nothing answers the tap (no session).
+  var files = true
+  /// The chip's icon is drawn on its own background, which follows the colour scheme.
+  var dark = true
 }
 
 private enum InlinePiece {
   case runs(AttributedString)
   /// A path in inline code: drawn with its icon, tappable.
-  case chip(FileRef)
+  case chip(FileRef, dark: Bool)
 }
 
 private func runs(_ text: String, _ style: InlineStyle) -> AttributedString {
@@ -303,11 +324,12 @@ private func pieces(of node: MarkdownInline, _ style: InlineStyle) -> [InlinePie
     strike.strike = true
     return children.flatMap { pieces(of: $0, strike) }
   case .link(let destination, let children):
+    // Another destination than a web page, a mail address or a file in the session is drawn as plain text.
     var linked = style
-    linked.link = URL(string: destination)
+    linked.link = markdownLinkURL(destination, files: style.files)
     return children.flatMap { pieces(of: $0, linked) }
   case .code(let code):
-    if let ref = fileRef(inCode: code) { return [.chip(ref)] }
+    if style.files, let ref = fileRef(inCode: code) { return [.chip(ref, dark: style.dark)] }
     var inline = runs(code, style)
     inline.font = codeFont
     inline.backgroundColor = .fillSubtle
@@ -317,7 +339,7 @@ private func pieces(of node: MarkdownInline, _ style: InlineStyle) -> [InlinePie
 
 /// The inline runs of a paragraph, heading or cell as one `Text`, so they wrap as prose. A chip is a piece of its own:
 /// its icon is an image, which the text attributes cannot carry (a `Text(Image(…))` interpolation can).
-private func markdownText(_ inlines: [MarkdownInline]) -> Text {
+private func markdownText(_ inlines: [MarkdownInline], files: Bool, dark: Bool) -> Text {
   var out: [Text] = []
   var runs = AttributedString()
   func flush() {
@@ -326,32 +348,63 @@ private func markdownText(_ inlines: [MarkdownInline]) -> Text {
   func add(_ piece: InlinePiece) {
     switch piece {
     case .runs(let text): runs += text
-    case .chip(let ref):
+    case .chip(let ref, let dark):
       flush()
-      out.append(chip(ref))
+      out.append(chip(ref, dark: dark))
     }
   }
-  for node in inlines { pieces(of: node, InlineStyle()).forEach(add) }
+  for node in inlines { pieces(of: node, InlineStyle(files: files, dark: dark)).forEach(add) }
   flush()
   return out.isEmpty ? Text("") : out.dropFirst().reduce(out[0], +)
 }
 
-private func chip(_ ref: FileRef) -> Text {
-  var name = runs(fileRefName(ref.path), InlineStyle())
+/// A link's destination as a URL to open: web pages and mail go to the system, a file path in the session opens the file
+/// page (`[a.ts](src/a.ts:12)`), anything else is nil.
+func markdownLinkURL(_ destination: String, files: Bool) -> URL? {
+  let lowered = destination.lowercased()
+  if lowered.hasPrefix("http://") || lowered.hasPrefix("https://") || lowered.hasPrefix("mailto:") {
+    return URL(string: destination) ?? destination.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed).flatMap { URL(string: $0) }
+  }
+  guard files, let ref = fileRef(inCode: destination.removingPercentEncoding ?? destination) else { return nil }
+  return ref.url
+}
+
+/// A chip: the file icon and the name on one `fillSubtle` background. The icon is an image, which text attributes cannot
+/// paint a background behind, so the background is part of the image (one per colour scheme, 14 pt icon, as tall as the
+/// line); the name's run has the same background, with thin spaces for the padding. VoiceOver reads "文件 name".
+private func chip(_ ref: FileRef, dark: Bool) -> Text {
+  var name = runs("\u{2009}" + fileRefName(ref.path) + "\u{2009}", InlineStyle())
   name.font = codeFont
   name.backgroundColor = .fillSubtle
   name.foregroundColor = .textPrimary
   if let url = ref.url { name.link = url }
-  return Text(Image(uiImage: fileChipIcon)).foregroundColor(.textSecondary) + Text(" ") + Text(name) + Text(" ")
+  let icon = Image(fileChipIcon(dark: dark), scale: chipIconScale, label: Text("文件"))
+  return Text(icon).baselineOffset(-4) + Text(name)
 }
 
-/// The file icon at 14 pt: an image inside `Text` keeps its own size, and the asset is far larger than a line of text.
-private let fileChipIcon: UIImage = {
-  let size = CGSize(width: 14, height: 14)
-  guard let source = UIImage(named: "Icons/file") else { return UIImage() }
-  let drawn = UIGraphicsImageRenderer(size: size).image { _ in source.draw(in: CGRect(origin: .zero, size: size)) }
-  return drawn.withRenderingMode(.alwaysTemplate)
-}()
+private let chipIconScale: CGFloat = 3
+
+/// The icon on its background, drawn for one colour scheme (`Color.fillSubtle` and `textSecondary` are translucent, so the
+/// background is not baked into a single image for both).
+private func fileChipIcon(dark: Bool) -> CGImage {
+  cachedChipIcons[dark ? 1 : 0]
+}
+
+private let cachedChipIcons: [CGImage] = [UIUserInterfaceStyle.light, .dark].map { style in
+  let traits = UITraitCollection(userInterfaceStyle: style)
+  let size = CGSize(width: 22, height: 19)
+  let format = UIGraphicsImageRendererFormat()
+  format.scale = chipIconScale
+  let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+    UIColor(Color.fillSubtle).resolvedColor(with: traits).setFill()
+    UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), byRoundingCorners: [.topLeft, .bottomLeft], cornerRadii: CGSize(width: 6, height: 6)).fill()
+    if let source = UIImage(named: "Icons/file")?.withRenderingMode(.alwaysTemplate) {
+      let tint = UIColor(Color.textSecondary).resolvedColor(with: traits)
+      source.withTintColor(tint, renderingMode: .alwaysOriginal).draw(in: CGRect(x: 5, y: 2.5, width: 14, height: 14))
+    }
+  }
+  return image.cgImage ?? UIImage().cgImage!
+}
 
 // MARK: - Chips open a file
 
@@ -422,20 +475,26 @@ struct MarkdownText: View {
 
 private struct MarkdownBlockView: View {
   let block: MarkdownBlock
+  /// A path is a chip only where a tap can open it: a reply in a session, not the plan sheet over one.
+  @Environment(\.fileSession) private var session
+  @Environment(\.colorScheme) private var scheme
+
+  private func words(_ inlines: [MarkdownInline]) -> Text { markdownText(inlines, files: session != nil, dark: scheme == .dark) }
 
   var body: some View {
     switch block.kind {
     case .paragraph(let inlines):
-      row(markdownText(inlines))
+      row(words(inlines))
     case .heading(let level, let inlines):
-      markdownText(inlines)
+      words(inlines)
         .font(headingFont(level))
         .foregroundStyle(Color.textPrimary)
+        .padding(.top, 4)
         .padding(.leading, indent)
     case .quote(let inlines):
       HStack(alignment: .top, spacing: 10) {
         Rectangle().fill(Color.lineStrong).frame(width: 2)
-        markdownText(inlines).font(.ui(.callout)).lineSpacing(5).foregroundStyle(Color.textSecondary)
+        words(inlines).font(.ui(.callout)).lineSpacing(5).foregroundStyle(Color.textSecondary)
       }
       .fixedSize(horizontal: false, vertical: true)
       .padding(.leading, indent)
@@ -451,10 +510,11 @@ private struct MarkdownBlockView: View {
   private var indent: CGFloat { CGFloat(min(block.level, 6)) * 22 }
 
   private func headingFont(_ level: Int) -> Font {
+    // 20 / 18 / 16, each scaled with the text style it is nearest to.
     switch level {
-    case 1: .system(.title3, weight: .semibold)
-    case 2: .system(.body, weight: .semibold)
-    default: .system(.callout, weight: .semibold)
+    case 1: .system(size: UIFontMetrics(forTextStyle: .title3).scaledValue(for: 20), weight: .semibold)
+    case 2: .system(size: UIFontMetrics(forTextStyle: .body).scaledValue(for: 18), weight: .semibold)
+    default: .system(size: UIFontMetrics(forTextStyle: .callout).scaledValue(for: 16), weight: .semibold)
     }
   }
 
@@ -567,6 +627,10 @@ private struct MarkdownTable: View {
   /// Each column's widest cell on one line.
   @State private var natural: [Int: CGFloat] = [:]
   @State private var available: CGFloat = 0
+  /// Scrolled to the right end: the last column is then fully readable and the fade goes.
+  @State private var atEnd = false
+  @Environment(\.fileSession) private var session
+  @Environment(\.colorScheme) private var scheme
 
   private static let spacing: CGFloat = 12
 
@@ -600,12 +664,13 @@ private struct MarkdownTable: View {
     }
     // Wider than the reply: the right edge fades, so a cut cell reads as more to the right rather than as the end.
     .overlay(alignment: .trailing) {
-      if natural.count == columns.count && total > available {
+      if natural.count == columns.count && total > available && !atEnd {
         LinearGradient(colors: [Color.bgApp.opacity(0), Color.bgApp], startPoint: .leading, endPoint: .trailing)
           .frame(width: 32)
           .allowsHitTesting(false)
       }
     }
+    .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.x + $0.containerSize.width >= $0.contentSize.width - 1 } action: { _, end in atEnd = end }
     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
   }
 
@@ -619,6 +684,6 @@ private struct MarkdownTable: View {
   }
 
   private func cell(_ inlines: [MarkdownInline], header: Bool) -> some View {
-    markdownText(inlines).font(.ui(.subheadline, medium: header)).foregroundStyle(Color.textPrimary)
+    markdownText(inlines, files: session != nil, dark: scheme == .dark).font(.ui(.subheadline, medium: header)).foregroundStyle(Color.textPrimary)
   }
 }

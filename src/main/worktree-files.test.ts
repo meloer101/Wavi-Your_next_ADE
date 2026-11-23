@@ -246,7 +246,7 @@ describe('readSessionFile (a phone chip’s path)', () => {
     }
   })
 
-  it('refuses a symlink leading out', async () => {
-    await expect(readSessionFile(root, 'escape.txt')).rejects.toThrow()
+  it('says missing for a symlink leading out, a folder and a path through a file', async () => {
+    for (const path of ['escape.txt', 'src', 'src/a.ts/b']) expect(await readSessionFile(root, path)).toEqual({ kind: 'missing' })
   })
 })

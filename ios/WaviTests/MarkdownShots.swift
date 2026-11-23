@@ -11,6 +11,8 @@ import UIKit
 let markdownSample = """
 这次改名还有一个附带影响：`electron-builder.yml:68` 的 `publish: provider: github` 没有写 owner 和 repo，会从 `repository` 推断。读文件 `src/main/remote/index.ts:362` 里的 `case 'diff'`，或看[electron-builder 文档](https://www.electron.build/publish)和 ~~旧的 release 说明~~，**加粗的结论**和 *斜体备注* 都在这里。
 
+`console.log` 和 `user.name` 不是文件，[a.ts 第 12 行](src/a.ts:12)是文件链接，`src/a.ts#L10-L20` 是行范围。
+
 ## 验证
 
 | 检查 | 结果 |
@@ -40,7 +42,19 @@ export async function readPreview(root: unknown, path: unknown): Promise<FilePre
 }
 ```
 
-> 这是读配置得出的结论，还没有在真实发版中验证。
+> 引用的第一句。
+>
+> - 引用里的列表
+>
+> 引用的最后一句。
+
+- 带代码的一项
+
+  ```swift
+  let a = 1
+  ```
+
+  同一项的第二段。
 
 ---
 
@@ -73,7 +87,7 @@ private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name:
 
 @Suite @MainActor struct MarkdownShots {
   @Test func aLongReply() async throws {
-    let reply = ScrollView { MarkdownText(text: markdownSample).padding(.horizontal, Metric.margin).padding(.vertical, 16) }
+    let reply = ScrollView { MarkdownText(text: markdownSample).environment(\.fileSession, "s1").padding(.horizontal, Metric.margin).padding(.vertical, 16) }
       .background(Color.bgApp)
     for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
       try await shot(reply, style, named: name)

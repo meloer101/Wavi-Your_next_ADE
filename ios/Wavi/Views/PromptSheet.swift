@@ -206,7 +206,8 @@ struct PlanAsk: View {
       VStack(alignment: .leading, spacing: 12) {
         Head(label: String(localized: "等你确认计划"), since: prompt.createdAt)
         Text(parts.title).font(.ui(.title2)).foregroundStyle(Color.textPrimary)
-        if !parts.body.isEmpty { MarkdownText(text: parts.body) }
+        // A sheet inherits the session page's environment: a chip would push the file page behind the sheet.
+        if !parts.body.isEmpty { MarkdownText(text: parts.body).environment(\.fileSession, nil) }
       }
     } actions: {
       if prompt.answerable {
