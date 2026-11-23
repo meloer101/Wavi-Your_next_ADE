@@ -1,7 +1,7 @@
 // 手机远程 (PRD F22): what the phone and Wavi say to each other, what the window hands main about its sessions, and the
 // validation main applies to everything the phone sends. Pure. The transport and its encryption are main's
 // (src/main/remote); the phone app speaks the same messages inside them.
-import { isCliAgent, type CliAgent } from './agents'
+import { isCliAgent, usageVendor, type CliAgent, type UsageVendor } from './agents'
 import type { PendingPrompt } from './agent-events'
 import { parseGitHubLink, type BoardScope, type GitHubItemKind } from './github-board'
 import { GUI_MODEL_ID } from './gui-chat'
@@ -233,6 +233,8 @@ export interface RemoteSession {
   github?: GitHubLink
   /** The context window as the desktop's ring shows it (PRD F22 v1.230 ④); absent when the session has no reading. */
   context?: RemoteContext
+  /** Runs off its vendor's plan (a third-party endpoint): the account's plan windows are not this session's, so the sheet leaves them out. */
+  offPlan?: true
 }
 
 /** One session's context window. `high` is worked out on the Mac (`contextHigh`); the phone never re-derives it. */
@@ -258,7 +260,7 @@ export interface RemoteUsageWindow {
 
 /** A vendor that has live plan windows (PRD F22 v1.230 ④); the phone matches a session to it by its agent. */
 export interface RemoteVendorUsage {
-  vendor: 'claude' | 'codex'
+  vendor: UsageVendor
   /** `planLabel` of the account's plan. */
   plan?: string
   windows: RemoteUsageWindow[]
@@ -725,7 +727,8 @@ function windowUsage(raw: unknown): RemoteVendorUsage[] {
   const out: RemoteVendorUsage[] = []
   for (const item of raw.slice(0, 4)) {
     const v = record(item)
-    if (!v || (v.vendor !== 'claude' && v.vendor !== 'codex') || !Array.isArray(v.windows)) continue
+    const vendor = usageVendor(v?.vendor)
+    if (!v || !vendor || !Array.isArray(v.windows)) continue
     const plan = v.plan === undefined ? undefined : cleanText(v.plan, 40)
     const windows: RemoteUsageWindow[] = []
     for (const raw of v.windows.slice(0, 8)) {
@@ -736,7 +739,7 @@ function windowUsage(raw: unknown): RemoteVendorUsage[] {
       if (!w || percent === null || scope === null || resetsAt === null || typeof w.minutes !== 'number' || !Number.isSafeInteger(w.minutes) || w.minutes <= 0 || w.minutes > 525_600) continue
       windows.push({ minutes: w.minutes, ...(scope ? { scope } : {}), percent, ...(resetsAt !== undefined ? { resetsAt } : {}) })
     }
-    if (windows.length > 0) out.push({ vendor: v.vendor, ...(plan ? { plan } : {}), windows })
+    if (windows.length > 0) out.push({ vendor, ...(plan ? { plan } : {}), windows })
   }
   return out
 }
@@ -774,6 +777,7 @@ function windowSession(raw: unknown): RemoteSession | null {
     const link = parseGitHubLink(s.github)
     if (link) out.github = link
   }
+  if (s.offPlan === true) out.offPlan = true
   if (s.context !== undefined) {
     const context = windowContext(s.context)
     if (context) out.context = context

@@ -82,19 +82,26 @@ private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name:
     for (style, name) in styles { try await shot(Row(session: session(high, settings: nil)), style, named: "row-ring-only-\(name)", height: 64) }
   }
 
-  @Test func theSheetWithClaudeUsageAndCompact() async throws {
+  @Test func theSheetWithClaudeUsageAndCompact() async throws { try await sheetShots(high, named: "sheet") }
+
+  /// The fill has passed the compaction tick: the tick is drawn in the sheet's colour, so it still shows.
+  @Test func theSheetPastTheCompactionMark() async throws {
+    try await sheetShots(RemoteContext(percent: 95, usedTokens: 190_000, windowTokens: 200_000, markPercent: 92, high: true), named: "sheet-past-mark")
+  }
+
+  private func sheetShots(_ context: RemoteContext, named base: String) async throws {
     let now = Date().timeIntervalSince1970 * 1000
     let usage = RemoteVendorUsage(vendor: "claude", plan: "Max", windows: [
       .init(minutes: 300, scope: nil, percent: 42, resetsAt: now + 3 * 3_600_000),
       .init(minutes: 10_080, scope: nil, percent: 18, resetsAt: now + 4 * 24 * 3_600_000)
     ])
     for (style, name) in styles {
-      let sheet = ContextSheetContent(context: high, agent: "claude", usage: usage, now: now) {}
+      let sheet = ContextSheetContent(context: context, agent: "claude", usage: usage, now: now) {}
         .frame(width: 402, height: 340)
         .background(Color.bgSheet, in: UnevenRoundedRectangle(topLeadingRadius: Metric.radiusSheetTop, topTrailingRadius: Metric.radiusSheetTop))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .background(Color.bgApp)
-      try await shot(sheet, style, named: "sheet-\(name)", height: 400)
+      try await shot(sheet, style, named: "\(base)-\(name)", height: 400)
     }
   }
 }

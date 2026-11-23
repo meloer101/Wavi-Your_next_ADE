@@ -128,6 +128,7 @@ const session: RemoteSession = {
   },
   stat: { added: 12, removed: 3 },
   context: { percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true },
+  offPlan: true,
   github: { repo: 'github.com/acme/web', kind: 'issue', number: 139 },
   settings: {
     items: [

@@ -2,6 +2,7 @@
 // in one), the agent sessions of worktrees that are not archived with what the phone list shows, and for main only each
 // session's folder and each project's root. Pure.
 import type { GuiModelCatalog, GuiPicks } from '@shared/gui-chat'
+import { USAGE_VENDORS } from '@shared/agents'
 import type { RemoteAgentModels, RemoteContext, RemoteSession, RemoteShip, RemoteShipField, RemoteVendorUsage, RemoteWindowSessions } from '@shared/remote'
 import { contextHigh, contextMark, planLabel, vendorStatus, type ContextUsage, type UsageAccount, type UsageVendor, type VendorUsage } from '@shared/session-meta'
 import type { SessionSettings } from '@shared/session-settings'
@@ -76,7 +77,7 @@ export function remoteUsage(
   now: number
 ): RemoteVendorUsage[] {
   const out: RemoteVendorUsage[] = []
-  for (const vendor of ['claude', 'codex'] as const) {
+  for (const vendor of USAGE_VENDORS) {
     const status = vendorStatus(usage[vendor], accounts[vendor], now)
     if (status.windows.length === 0) continue
     const plan = accounts[vendor]?.plan ? planLabel(accounts[vendor].plan) : ''
@@ -101,7 +102,8 @@ export function remoteSessions(
   shipping: RemoteShipping = { ships: {}, endings: {} },
   settings: (session: Session) => SessionSettings | undefined = () => undefined,
   checks: (session: Session) => TurnChecks | undefined = () => undefined,
-  context: (session: Session) => ContextUsage | undefined = () => undefined
+  context: (session: Session) => ContextUsage | undefined = () => undefined,
+  offPlan: (session: Session) => boolean = () => false
 ): RemoteWindowSessions {
   const worktrees = new Map(data.worktrees.map((w) => [w.id, w]))
   const out: RemoteWindowSessions = { projects: [], sessions: [], folders: {}, roots: {} }
@@ -121,6 +123,7 @@ export function remoteSessions(
     if (view) row.checks = { turn: view.turn, edited: view.edited, kinds: view.kinds.map((k) => ({ kind: k.kind, status: k.status })) }
     const ring = context(s)
     if (ring) row.context = remoteContext(ring)
+    if (offPlan(s)) row.offPlan = true
     const added = w.added ?? 0
     const removed = w.removed ?? 0
     if (added + removed > 0) row.stat = { added, removed }

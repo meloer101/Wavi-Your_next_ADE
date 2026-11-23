@@ -119,6 +119,13 @@ describe('context and usage for the phone (PRD F22 v1.230 ④)', () => {
     expect(list.sessions[1]!.context).toBeUndefined()
   })
 
+  it('marks a session that runs off its vendor\'s plan', () => {
+    const data = { projects: [project], worktrees: [tree], sessions: [session({ id: 's1' }), session({ id: 's2' })] }
+    const list = remoteSessions(data, undefined, undefined, undefined, undefined, (s) => s.id === 's1')
+    expect(list.sessions[0]!.offPlan).toBe(true)
+    expect(list.sessions[1]!.offPlan).toBeUndefined()
+  })
+
   it('works high and the mark out the way contextHigh and contextMark do', () => {
     // 20k before the compaction point; the mark only when the point is known; 80 % when it is not.
     expect(remoteContext({ percent: 50, usedTokens: 100_000, windowTokens: 200_000, compactAt: 150_000, compactPercent: 75 })).toEqual({ percent: 50, usedTokens: 100_000, windowTokens: 200_000, markPercent: 75, high: false })

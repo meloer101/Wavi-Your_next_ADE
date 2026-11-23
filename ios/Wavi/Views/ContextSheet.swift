@@ -7,22 +7,22 @@ import SwiftUI
 
 // MARK: - Text (pure, tested in ContextTests)
 
-/// `172k`, `1.2M`, `850`; one decimal below 10k (`1.5k`), none from 10k (the desktop's `formatTokens` rounds every k).
+/// `172k`, `1.2M`, `850`: the desktop's `formatTokens` (session-meta.ts), so both show the same text. Whole k from 1000,
+/// M with one decimal below 10M.
 func tokenText(_ count: Double) -> String {
   let n = max(0, count)
-  if n >= 1_000_000 { return n >= 10_000_000 ? "\(Int((n / 1_000_000).rounded()))M" : "\(trimmed(n / 1_000_000))M" }
-  if n >= 10_000 { return "\(Int((n / 1_000).rounded()))k" }
-  if n >= 1_000 {
-    let tenths = (n / 100).rounded()
-    return tenths >= 100 ? "10k" : "\(trimmed(tenths / 10))k"
+  if n >= 1_000_000 {
+    let millions = n / 1_000_000
+    return n >= 10_000_000 ? "\(Int(millions.rounded()))M" : "\(oneDecimal(millions))M"
   }
+  if n >= 1_000 { return "\(Int((n / 1_000).rounded()))k" }
   return String(Int(n.rounded()))
 }
 
-/// One decimal, without a trailing `.0`.
-private func trimmed(_ value: Double) -> String {
-  let rounded = (value * 10).rounded() / 10
-  return rounded == rounded.rounded() ? String(Int(rounded)) : String(format: "%.1f", rounded)
+/// One decimal, without a trailing `.0` (JavaScript's `Number(x.toFixed(1))`).
+private func oneDecimal(_ value: Double) -> String {
+  let text = String(format: "%.1f", value)
+  return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
 }
 
 /// `172k / 200k` when both counts are known, else nil (the sheet shows the percent alone).
@@ -77,6 +77,13 @@ func usageVendor(_ agent: String) -> String? {
 
 /// `Claude`, `Codex` (session-meta.ts `VENDOR_LABEL`): the vendor's name, not the agent's (`Claude Code`).
 func vendorName(_ vendor: String) -> String { vendor.prefix(1).uppercased() + vendor.dropFirst() }
+
+/// The plan windows the sheet shows for a session: its agent's vendor's. A session off its vendor's plan (a third-party
+/// endpoint) has no share of the account's windows, so it shows none (the desktop's ContextButton does the same).
+func planUsage(for session: RemoteSession, in list: RemoteSessionList) -> RemoteVendorUsage? {
+  guard session.offPlan != true, let vendor = usageVendor(session.agent) else { return nil }
+  return list.usage?.first { $0.vendor == vendor }
+}
 
 /// What the composer's text becomes when something is put into it: replaces an empty draft, goes on a new line under a
 /// draft that has words.
@@ -141,7 +148,7 @@ struct ContextSheet: View {
     if let remote = model.session(session), let context = remote.context {
       ContextSheetContent(
         context: context, agent: remote.agent,
-        usage: usageVendor(remote.agent).flatMap { vendor in model.sessions.usage?.first { $0.vendor == vendor } },
+        usage: planUsage(for: remote, in: model.sessions),
         now: Date().timeIntervalSince1970 * 1000
       ) {
         model.insert("/compact", into: session)
@@ -194,7 +201,7 @@ struct ContextSheetContent: View {
         }
       }
       .accessibilityElement(children: .combine)
-      Meter(percent: context.percent, mark: context.markPercent, height: 4, markHeight: 8)
+      Meter(percent: context.percent, mark: context.markPercent, height: 4, markHeight: 8, tickOnFill: Color.bgSheet)
     }
   }
 
@@ -231,6 +238,8 @@ private struct Meter: View {
   let mark: Double?
   let height: CGFloat
   let markHeight: CGFloat
+  /// The tick's colour once the fill has passed it (the sheet's background); before that it is text/primary.
+  var tickOnFill: Color = .textPrimary
 
   var body: some View {
     GeometryReader { proxy in
@@ -239,7 +248,7 @@ private struct Meter: View {
         Capsule().fill(Color.fillStrong).frame(height: height)
         Capsule().fill(Color.textPrimary).frame(width: width * min(1, max(0, percent / 100)), height: height)
         if let mark {
-          Rectangle().fill(Color.textPrimary).frame(width: 2, height: markHeight)
+          Rectangle().fill(percent >= mark ? tickOnFill : Color.textPrimary).frame(width: 2, height: markHeight)
             .offset(x: min(width - 2, max(0, width * min(1, max(0, mark / 100)) - 1)))
         }
       }

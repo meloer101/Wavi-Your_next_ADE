@@ -23,17 +23,19 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int, month: Int = 11) -> Doub
 private let now = at(23, 10, 0)
 
 @Suite struct ContextTests {
-  @Test func tokensHaveOneDecimalBelowTenThousandAndNoneAbove() {
+  @Test func tokensReadAsTheDesktopsFormatTokensDoes() {
+    // session-meta.ts formatTokens: whole k from 1000, M with one decimal below 10M, whole M from 10M.
     #expect(tokenText(850) == "850")
     #expect(tokenText(1_000) == "1k")
-    #expect(tokenText(1_500) == "1.5k")
+    #expect(tokenText(1_500) == "2k")
     #expect(tokenText(2_049) == "2k")
-    #expect(tokenText(9_949) == "9.9k")
-    #expect(tokenText(9_950) == "10k")
-    #expect(tokenText(10_000) == "10k")
+    #expect(tokenText(9_949) == "10k")
     #expect(tokenText(172_400) == "172k")
     #expect(tokenText(200_000) == "200k")
+    #expect(tokenText(999_499) == "999k")
+    #expect(tokenText(1_000_000) == "1M")
     #expect(tokenText(1_200_000) == "1.2M")
+    #expect(tokenText(9_960_000) == "10M")
     #expect(tokenText(12_000_000) == "12M")
     #expect(tokenText(-5) == "0")
   }
@@ -76,6 +78,19 @@ private let now = at(23, 10, 0)
     #expect(usageVendor("codex") == "codex")
     #expect(usageVendor("gemini") == nil)
     #expect(usageVendor("shell") == nil)
+  }
+
+  @Test func aSessionOffItsPlanShowsNoPlanWindows() {
+    let claude = RemoteVendorUsage(vendor: "claude", plan: "Max", windows: [.init(minutes: 300, scope: nil, percent: 42, resetsAt: nil)])
+    let list = RemoteSessionList(projects: [], sessions: [], usage: [claude])
+    func row(_ agent: String, offPlan: Bool?) -> RemoteSession {
+      RemoteSession(id: "s", projectId: "p", title: "t", agent: agent, status: .idle, action: nil, since: nil, activity: 0,
+        branch: nil, model: nil, reply: nil, ship: nil, shipNotice: nil, offPlan: offPlan)
+    }
+    #expect(planUsage(for: row("claude", offPlan: nil), in: list) == claude)
+    #expect(planUsage(for: row("claude", offPlan: true), in: list) == nil)
+    #expect(planUsage(for: row("codex", offPlan: nil), in: list) == nil)
+    #expect(planUsage(for: row("shell", offPlan: nil), in: list) == nil)
   }
 
   @Test func insertingReplacesAnEmptyDraftAndAppendsOnANewLineToAWrittenOne() {

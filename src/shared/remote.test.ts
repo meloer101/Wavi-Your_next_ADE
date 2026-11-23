@@ -225,6 +225,12 @@ describe('window messages', () => {
     const many = Array.from({ length: 20 }, (_, i) => ({ minutes: 60 + i, percent: i }))
     expect(use(Array.from({ length: 9 }, () => ({ vendor: 'claude', windows: many })))?.map((v) => v.windows.length)).toEqual([8, 8, 8, 8])
     expect(use('all')).toBeUndefined()
+    // offPlan is only ever true.
+    const off = (v: unknown) => parseWindowSessions({ ...row, sessions: [{ ...row.sessions[0], offPlan: v }] })?.sessions[0]
+    expect(off(true)?.offPlan).toBe(true)
+    expect(off(false)?.offPlan).toBeUndefined()
+    expect(off('yes')?.offPlan).toBeUndefined()
+    expect(off('yes')?.id).toBe('s1')
   })
 
   it('carries 看板 · 进度\'s checks and size and 看板 · GitHub\'s link, and leaves a bad one off (PRD F22 v1.229 ⑤)', () => {
