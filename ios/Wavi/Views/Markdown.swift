@@ -346,6 +346,10 @@ private func pieces(of node: MarkdownInline, _ style: InlineStyle) -> [InlinePie
 /// The padding inside a pill: a narrow no-break space, so a line never ends or starts on the padding alone.
 private let narrowPad = "\u{202F}"
 
+/// A zero-width space in front of a pill, outside its mark: a line may break before the pill (after CJK punctuation too),
+/// never inside its padding, which allows no break and would pull the character before it onto the pill's line.
+private let lineBreakBefore = "\u{200B}"
+
 // MARK: - Pills
 
 /// Marks the runs a pill is drawn behind: inline code (radius 4) and a chip's icon and name (radius 6).
@@ -405,6 +409,7 @@ private func markdownText(_ inlines: [MarkdownInline], files: Bool) -> Text {
     case .runs(let text): runs += text
     case .code(let code):
       flush()
+      out.append(Text(lineBreakBefore))
       out.append(Text(code).customAttribute(PillMark(chip: false)))
     case .chip(let ref):
       flush()
@@ -438,7 +443,8 @@ private func chip(_ ref: FileRef) -> Text {
   if let url = ref.url { name.link = url }
   let mark = PillMark(chip: true)
   let icon = Image(uiImage: fileChipIcon(points: UIFontMetrics(forTextStyle: .callout).scaledValue(for: 14)))
-  return Text(pad).customAttribute(mark)
+  return Text(lineBreakBefore)
+    + Text(pad).customAttribute(mark)
     + Text(icon).foregroundColor(.textSecondary).baselineOffset(-1.5).customAttribute(mark)
     + Text(narrowPad).font(codeFont).customAttribute(mark) // not a breaking space: the icon never ends a line alone
     + Text(name).customAttribute(mark)
