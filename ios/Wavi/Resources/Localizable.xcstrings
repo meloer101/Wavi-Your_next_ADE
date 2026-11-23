@@ -2249,22 +2249,6 @@
         }
       }
     },
-    "未识别的条目" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unrecognized item"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未识别的条目"
-          }
-        }
-      }
-    },
     "未跑" : {
       "localizations" : {
         "en" : {
