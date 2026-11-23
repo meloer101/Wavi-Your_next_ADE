@@ -12,6 +12,11 @@ private func tool(_ id: String, _ name: String, _ arg: String, at: Double, state
 }
 
 @Suite struct TranscriptGroupsTests {
+  @Test func itemsOfAKindThePhoneDoesNotDrawAreLeftOut() {
+    let items = [user("u", at: 1), ChatItem(kind: "unknown", id: "x", at: 2), ChatItem(kind: "newer", id: "y", at: 3), text("t", at: 4)]
+    #expect(transcriptBlocks(items, receipts: [], turnOpen: false).map(\.id) == ["u", "t"])
+  }
+
   @Test func consecutiveToolCallsFoldIntoOneLine() {
     let items = [user("u", at: 1), tool("a", "Read", "a.ts", at: 2), tool("b", "Read", "b.ts", at: 3), tool("c", "Grep", "x", at: 4), tool("d", "Bash", "pnpm test", at: 5), text("t", at: 6), tool("e", "Read", "c.ts", at: 7)]
     let blocks = transcriptBlocks(items, receipts: [], turnOpen: true)

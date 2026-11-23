@@ -24,6 +24,8 @@ struct SessionView: View {
     }
     .background(Color.bgApp)
     .navigationBarTitleDisplayMode(.inline)
+    // The conversation has its own composer at the bottom: the 会话 / 看板 bar stays on the lists.
+    .toolbarVisibility(.hidden, for: .tabBar)
     .toolbar {
       ToolbarItem(placement: .principal) { title(session) }
       if let changed {
@@ -402,7 +404,7 @@ private struct TurnRow: View {
 }
 
 /// One item of the conversation: the user's bubble, the agent's Markdown, thinking (folded), one row per tool call
-/// (tap for 45D), system lines, and 未识别的条目 so an unknown line never breaks the rest.
+/// (tap for 45D) and system lines. Other kinds are filtered out in `transcriptBlocks`.
 struct FeedRow: View {
   let item: ChatItem
   let session: String
@@ -433,7 +435,7 @@ struct FeedRow: View {
     case "system":
       Text(item.text ?? "").font(.ui(.footnote)).foregroundStyle(Color.textSecondary).frame(maxWidth: .infinity)
     default:
-      Text("未识别的条目").font(.ui(.footnote)).foregroundStyle(Color.textSecondary)
+      EmptyView()
     }
   }
 }
