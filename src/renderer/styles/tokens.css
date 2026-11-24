@@ -368,6 +368,10 @@
   --float-edge: inset 0 1px 0 #ffffff14, inset 0 0 0 1px #ffffff1c;
   --primary-finish: inset 0 -1px 0 #0000002e, 0 1px 3px #00000073;
   --composer-finish: inset 0 1px 0 #ffffff1a, 0 8px 24px -8px #00000080;
+  /* The sidebar's selection (Figma 103A): a flat white 7.5%, as a menu's chosen row; the lit drop reads harsh on #070708. */
+  --drop-fill: var(--bg-selected);
+  --drop-edge: 0 0 #0000;
+  --drop-iris: transparent;
 }
 
 :root[data-theme='light'][data-material='solid'] {
