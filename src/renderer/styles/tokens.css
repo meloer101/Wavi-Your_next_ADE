@@ -331,7 +331,7 @@
   --card-shadow: 0 1px 3px #00000014;
 }
 
-/* 实色 (PRD §5 v1.139, Figma 57; dark palette v1.231, Figma 103): an opaque window, <html data-material='solid'>
+/* 实色 (PRD §5 v1.139, Figma 57; dark palette v1.233, Figma 103): an opaque window, <html data-material='solid'>
    (appearance/map.ts). The dark palette is Google Antigravity's shipped dark tokens: near-black, slightly cool, about
    20:1 for text on the base layer, each layer a step lighter (#070708 sidebar → #0d0d10 base → #131317 menus → #15151a
    composer) and told apart by white-alpha hairlines. The light palette below is the v1.139 one (11–13:1, as VS Code's
@@ -399,7 +399,7 @@
    lighter than the base layer, every pane's finish at its edge: a line of light along the top, a faint second line inside
    it, a hairline round it and a shadow gathered underneath. Menus and sheets are the thickest pane. Hovered, chosen and
    held open are one state: a faint tint, lit along its top, a hairline round it. Contrast follows 实色's (dark: the
-   v1.231 palette, ~20:1; light: 11–13:1). Dark takes 实色's colours and keeps the glass edges below. */
+   v1.233 palette, ~20:1; light: 11–13:1). Dark takes 实色's colours and keeps the glass edges below. */
 :root[data-theme='dark'][data-material='solid'][data-finish='glass'] {
   --glass-shell-color: #070708;
   --bg-sidebar: #070708;

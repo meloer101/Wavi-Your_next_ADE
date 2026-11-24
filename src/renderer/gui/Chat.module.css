@@ -1955,6 +1955,19 @@
   width: 180px;
 }
 
+/* Figma 103C: a model menu's first column and, out of the flow beside it, the versions of the hovered family. */
+.familyHost {
+  position: relative;
+  flex: none;
+}
+
+.versionsColumn {
+  left: calc(100% + var(--space-2));
+  width: 180px;
+  max-height: 360px;
+  transform-origin: top left;
+}
+
 .pickerRow[data-muted] {
   color: var(--text-disabled);
 }

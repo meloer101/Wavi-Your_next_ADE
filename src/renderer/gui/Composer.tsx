@@ -612,8 +612,8 @@ function PickerRow({ checked, mark, label, onClick }: { checked: boolean; mark?:
 /**
  * Figma 103C: a model list as one row per family, showing the family's newest version (or the current one, when it is an
  * older version of that family, with its ✓). A family with versions to choose from ends in › and opens them in a column
- * beside it — on hover or →, aligned with its row (← returns); the row itself picks what it shows. Renders two sibling
- * columns, so the caller's wrapper lays them out side by side.
+ * beside it — on hover or →, aligned with its row (← returns), headed by the family's name; the row itself picks what it
+ * shows. The versions' column is out of the flow (beside the host), so opening it never changes the menu's size.
  */
 function FamilyColumns({ values, current, label, header, testId, onPick }: { values: readonly { value: string; label: string }[]; current: string | undefined; label: string; header?: ReactNode; testId?: string; onPick(value: string): void }) {
   const families = useMemo(() => modelFamilies(values), [values])
@@ -626,7 +626,7 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
   const family = families.find((f) => f.key === open)
 
   // The versions' column starts level with its row; a row so far down that it would stand out under the first column's
-  // foot moves up, so opening it never makes the menu taller (a menu above its button grows upward).
+  // foot moves up (to the top at most).
   useLayoutEffect(() => {
     const row = open ? rows.current.get(open) : undefined
     const first = column.current
@@ -640,7 +640,7 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
   }, [open])
 
   return (
-    <>
+    <div className={styles.familyHost}>
       <div ref={column} className={`${styles.popover} ${styles.pickerColumn}`} role="menu" aria-label={label} data-testid={testId}>
         {header}
         {families.map((f) => {
@@ -681,8 +681,8 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
       {family && (
         <div
           ref={flyout}
-          className={`${styles.popover} ${styles.pickerColumn}`}
-          style={{ marginTop: drop }}
+          className={`${styles.popover} ${styles.versionsColumn}`}
+          style={{ top: drop }}
           role="menu"
           aria-label={family.name}
           data-testid={testId && `${testId}-versions`}
@@ -692,12 +692,15 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
             rows.current.get(family.key)?.focus()
           }}
         >
+          <span className={styles.popoverTitle} data-testid={testId && `${testId}-versions-title`}>
+            {family.name}
+          </span>
           {family.versions.map((v) => (
             <PickerRow key={v.value} checked={v.value === current} label={v.label} onClick={() => onPick(v.value)} />
           ))}
         </div>
       )}
-    </>
+    </div>
   )
 }
 

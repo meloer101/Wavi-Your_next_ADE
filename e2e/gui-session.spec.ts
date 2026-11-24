@@ -229,6 +229,8 @@ test.describe('F23 GUI session (Claude)', () => {
     await families.getByRole('menuitemradio', { name: 'Opus 5.5' }).hover()
     const versions = page.getByRole('menu', { name: 'Opus', exact: true })
     await expect(versions.getByRole('menuitemradio')).toHaveText(['Opus 5.5', 'Opus 4.8', 'Opus 4.7'])
+    // The versions' column is headed by the family's name, as the families' column is by the agent's.
+    await expect(versions.getByText('Opus', { exact: true })).toBeVisible()
     await expect(versions.getByRole('menuitemradio', { name: 'Opus 5.5' })).toHaveAttribute('aria-checked', 'true')
     // → opens the versions from the keyboard, ← goes back to the row.
     await families.getByRole('menuitemradio', { name: 'Haiku 5.5' }).focus()
