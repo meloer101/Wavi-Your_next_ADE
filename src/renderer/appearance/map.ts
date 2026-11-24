@@ -70,9 +70,9 @@ export const CHAT_COLUMN: Record<ChatWidth, string> = { narrow: '720px', medium:
 
 const quote = (family: string): string => `"${family.replace(/["\\]/g, '')}"`
 
-/** The chat's font stack: the chosen Latin family (or the system UI font), the CJK one, then the UI stack. */
+/** The chat's font stack: the chosen Latin family (or the interface font, Google Sans), the CJK one, then the UI stack. */
 export function chatFontStack(c: Pick<ChatAppearance, 'latinFont' | 'cjkFont'>): string {
-  const latin = c.latinFont ? quote(c.latinFont) : '-apple-system, BlinkMacSystemFont'
+  const latin = c.latinFont ? quote(c.latinFont) : "'Google Sans Variable'"
   return `${latin}, ${quote(c.cjkFont)}, var(--font-ui)`
 }
 
