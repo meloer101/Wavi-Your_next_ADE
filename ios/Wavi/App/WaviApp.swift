@@ -8,12 +8,15 @@ struct WaviApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
   @State private var model = AppModel.shared
   @Environment(\.scenePhase) private var phase
+  /// 设置 · 外观 · 主题: nil (跟随系统) leaves the choice to iOS.
+  @AppStorage("appearance.theme") private var theme: AppTheme = .system
 
   var body: some Scene {
     WindowGroup {
       RootView()
         .environment(model)
         .tint(Color.textPrimary)
+        .preferredColorScheme(theme.scheme)
     }
     .onChange(of: phase) { _, phase in
       // A backgrounded app's socket may have died while it was frozen: reconnect, or check the open one.
@@ -41,7 +44,8 @@ enum RootTab: Hashable { case sessions, board }
 /// opens the session right there, the GitHub list opens an item).
 struct RootView: View {
   @Environment(AppModel.self) private var model
-  @State private var tab: RootTab = .sessions
+  /// 设置 · 会话 · 启动时打开, read once: changing it does not move the tab already on screen.
+  @State private var tab: RootTab = StartTab.current.tab
   @State private var path: [Route] = []
   @State private var boardPath: [Route] = []
   /// 看板's page, remembered on this phone (PRD v1.229 ①).

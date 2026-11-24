@@ -659,6 +659,7 @@ private struct MarkdownCodeBlock: View {
   let language: String?
   let code: String
   @State private var copies = 0
+  @AppStorage("haptics.enabled") private var haptics = true
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -673,7 +674,7 @@ private struct MarkdownCodeBlock: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "复制代码"))
-        .sensoryFeedback(.impact(weight: .light), trigger: copies)
+        .sensoryFeedback(trigger: copies) { _, _ in haptics ? .impact(weight: .light) : nil }
       }
       .padding(.horizontal, 12)
       .padding(.top, 10)

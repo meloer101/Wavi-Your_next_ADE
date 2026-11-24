@@ -10,6 +10,12 @@ final class LiveActivities {
   private var shown: ActivityState?
   private var pushedAt: Date?
 
+  /// 设置 · 会话 · 灵动岛和锁屏卡片: on unless the user switched it off.
+  static var enabled: Bool { UserDefaults.standard.object(forKey: "activity.enabled") as? Bool ?? true }
+
+  /// The switch was turned off: every card on screen goes, also when nothing arrives from the Mac to end it.
+  static func endAll() { end(Activity<WaviActivityAttributes>.activities) }
+
   /// What the card shows now.
   var current: ActivityState? { shown }
 
@@ -35,6 +41,8 @@ final class LiveActivities {
   /// that has to wait for it (an intent, before the system suspends the app again).
   @discardableResult
   func show(_ state: ActivityState?, mac: String, alert: Bool = false) -> Task<Void, Never>? {
+    // Switched off: no card is shown, and the one that is goes (the same as a session list with nothing to show).
+    let state = Self.enabled ? state : nil
     // The same card again is not sent (Wavi lists sessions every 250 ms); only its stale date is renewed, at half the
     // window, so a card that stays the same while the Mac is there does not read 已过期.
     func card(_ s: ActivityState?) -> ActivityState? {

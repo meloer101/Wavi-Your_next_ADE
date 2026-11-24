@@ -382,6 +382,7 @@ private struct ReceiptRow: View {
 private struct MessageMeta: View {
   let item: ChatItem
   @State private var copies = 0
+  @AppStorage("haptics.enabled") private var haptics = true
 
   var body: some View {
     HStack(spacing: 8) {
@@ -394,7 +395,7 @@ private struct MessageMeta: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel(String(localized: "复制"))
-      .sensoryFeedback(.impact(weight: .light), trigger: copies)
+      .sensoryFeedback(trigger: copies) { _, _ in haptics ? .impact(weight: .light) : nil }
     }
     .foregroundStyle(Color.textSecondary)
     .frame(maxWidth: .infinity, alignment: item.kind == "user" ? .trailing : .leading)
