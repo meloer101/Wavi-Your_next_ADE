@@ -1,5 +1,5 @@
 /*
- * Figma 34P SessionRow — lines of 18 (title) and 16, 2 apart, padding 6/8. The status glyph hangs in a 16px column,
+ * Figma 34P SessionRow — lines of 20 (title) and 18 (the text tokens' line heights, PRD v1.236), 2 apart, padding 6/8. The status glyph hangs in a 16px column,
  * so every line's text starts on the sidebar's text line (--indent-tree: 8 + 16 + 8), where the nav labels and project
  * names start too. selected = --bg-selected; attention recolors the activity line only.
  */
@@ -139,11 +139,11 @@
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  height: 16px;
+  height: 18px;
 }
 
 .line:first-child {
-  height: 18px;
+  height: 20px;
 }
 
 /* Hangs left of the text line, centred in the 16px column under the nav icons and project chevrons. */
@@ -155,7 +155,7 @@
   align-items: center;
   justify-content: center;
   width: 16px;
-  height: 18px;
+  height: 20px;
 }
 
 /* Text takes what it needs; tags follow it, and the time or mark is pushed to the right edge. */
