@@ -210,8 +210,8 @@ struct AvatarDisc: View {
   }
 }
 
-/// A full-width sheet that picks one of a few values, like 会话设置's (Figma 109): the system's glass behind it, as tall as
-/// its content. A tap on a row picks it and closes the sheet.
+/// A full-width sheet that picks one of a few values (Figma 110C): the system's glass behind it, as tall as its content,
+/// the choices as a segmented control. A tap on a segment picks it, and the sheet closes a moment later so the change is seen.
 struct PickSheet<Item: Identifiable & Equatable>: View {
   let title: String
   let items: [Item]
@@ -219,44 +219,51 @@ struct PickSheet<Item: Identifiable & Equatable>: View {
   let label: (Item) -> String
   let pick: (Item) -> Void
   @Environment(\.dismiss) private var dismiss
-  @State private var height: CGFloat = 240
+  @State private var height: CGFloat = 155
+  @State private var selected: Item?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Text(title).font(.ui(.callout, medium: true)).foregroundStyle(Color.textPrimary).padding(.leading, 4)
-      VStack(spacing: 0) {
-        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-          Button {
-            pick(item)
-            dismiss()
-          } label: {
-            HStack(spacing: 8) {
-              Group { if item == current { Icon("check", size: 20).foregroundStyle(Color.textPrimary) } else { Color.clear } }
-                .frame(width: 20, height: 20)
-              Text(label(item)).font(.ui(.callout)).foregroundStyle(Color.textPrimary).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.leading, 16)
-            .padding(.trailing, 12)
-            .frame(minHeight: 52)
-            .contentShape(Rectangle())
+    let shown = selected ?? current
+    VStack(alignment: .leading, spacing: 20) {
+      Text(title).font(.ui(.callout, medium: true)).foregroundStyle(Color.textPrimary)
+      HStack(spacing: 0) {
+        ForEach(items) { item in
+          Button { choose(item) } label: {
+            Text(label(item))
+              .font(.ui(.callout, medium: item == shown))
+              .foregroundStyle(item == shown ? Color.textPrimary : Color.textSecondary)
+              .frame(maxWidth: .infinity, minHeight: 48)
+              .background(item == shown ? Color.fillStrong : .clear, in: RoundedRectangle(cornerRadius: 20))
+              .contentShape(RoundedRectangle(cornerRadius: 20))
           }
-          .buttonStyle(RowStyle())
-          .accessibilityAddTraits(item == current ? .isSelected : [])
-          if index < items.count - 1 { Hairline() }
+          .buttonStyle(.plain)
+          .accessibilityLabel(label(item))
+          .accessibilityAddTraits(item == shown ? .isSelected : [])
         }
       }
-      .background(Color.fillSubtle, in: RoundedRectangle(cornerRadius: Metric.radiusField))
-      .overlay(RoundedRectangle(cornerRadius: Metric.radiusField).strokeBorder(Color.hairline))
-      .clipShape(RoundedRectangle(cornerRadius: Metric.radiusField))
+      .padding(4)
+      .frame(minHeight: 56)
+      .background(Color.fillSubtle, in: RoundedRectangle(cornerRadius: 24))
+      .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.hairline))
     }
     .padding(.horizontal, 20)
-    // The system's grabber sits in the first 36 points.
-    .padding(.top, 36)
+    // The system's grabber sits in the first 40 points.
+    .padding(.top, 40)
     .padding(.bottom, 20)
     .frame(maxWidth: .infinity, alignment: .topLeading)
     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
     .presentationDetents([.height(height)])
     .presentationDragIndicator(.visible)
+  }
+
+  private func choose(_ item: Item) {
+    guard selected == nil else { return }
+    withAnimation(.snappy(duration: 0.2)) { selected = item }
+    pick(item)
+    Task {
+      try? await Task.sleep(for: .milliseconds(250))
+      dismiss()
+    }
   }
 }
 
