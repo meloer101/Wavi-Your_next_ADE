@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-24：界面字号整体大一号（PRD v1.236，`src/renderer/styles/tokens.css` 的 `--text-*`）已做完。
 - 2026-11-24：侧栏原来的等宽字（时间、模型、快捷键、计数、版本号）改用 Google Sans 加 `tabular-nums`（PRD v1.235，`src/renderer/sidebar/*.module.css`）已做完。
 - 2026-11-24：界面字体换成 Google Sans（PRD v1.234，`@fontsource-variable/google-sans`，`--font-ui` 在 `src/renderer/styles/tokens.css`；对话区默认跟随，`appearance/map.ts`）已做完。
 - 2026-11-24：实色和实心玻璃的深色换成近黑高对比配色（PRD v1.233 ①，`src/renderer/styles/tokens.css`，新 token `--composer-finish`，`gui/Chat.module.css` 的输入框用它）；GUI 模型菜单按系列分组（②，`modelFamilies` 在 `src/renderer/gui/model.ts`，菜单 `FamilyColumns` 在 `Composer.tsx`；e2e `gui-session.spec.ts` 加一例）已做完。
