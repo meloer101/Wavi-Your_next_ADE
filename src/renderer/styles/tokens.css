@@ -227,11 +227,14 @@
   --tile-edge: 0 0 #0000;
   --primary-finish: 0 0 #0000;
   --field-finish: 0 0 #0000;
+  /* The composer box's finish on 实色 dark (Figma 103): a lit top line and a soft shadow under it; nothing elsewhere. */
+  --composer-finish: 0 0 #0000;
 }
 
 /* Light — applied via data-theme (see renderer/theme.ts), which follows the system by default */
 :root[data-theme='light'] {
   color-scheme: light;
+  --composer-finish: 0 0 #0000;
   --bg-app: #ffffff;
   --bg-sidebar: #fafafa;
   --bg-panel: #ffffff;
@@ -328,33 +331,43 @@
   --card-shadow: 0 1px 3px #00000014;
 }
 
-/* 实色 (PRD §5 v1.139, Figma 57): an opaque window, <html data-material='solid'> (appearance/map.ts). The base palettes
-   above run at 17–19:1 (near-black / white against near-white / black text), which reads harsh on an opaque window;
-   this one sits near 11–13:1, as VS Code's Dark / Light Modern do. Still chroma 0; status colours are unchanged. The
-   terminal's theme colour follows the card. */
+/* 实色 (PRD §5 v1.139, Figma 57; dark palette v1.231, Figma 103): an opaque window, <html data-material='solid'>
+   (appearance/map.ts). The dark palette is Google Antigravity's shipped dark tokens: near-black, slightly cool, about
+   20:1 for text on the base layer, each layer a step lighter (#070708 sidebar → #0d0d10 base → #131317 menus → #15151a
+   composer) and told apart by white-alpha hairlines. The light palette below is the v1.139 one (11–13:1, as VS Code's
+   Light Modern). Status colours are unchanged. The terminal's theme colour follows the card. */
 :root[data-theme='dark'][data-material='solid'] {
-  --bg-app: #1f1f1f;
-  --bg-sidebar: #181818;
-  --bg-panel: #212121;
-  --bg-raised: #262626;
-  --bg-float: #242424;
-  --bg-section: #292929;
+  --bg-sidebar: #070708;
+  --glass-shell-color: #070708;
+  --bg-inset: #070708;
+  --bg-app: #0d0d10;
+  --bg-panel: #0d0d10;
+  --term-bg: #0d0d10;
+  --text-inverse: #0d0d10;
+  --bg-raised: #131317;
+  --bg-float: #131317;
+  --bg-popover: #131317;
+  --float-bg: #131317;
+  --bg-section: #15151a;
   --composer-bg: var(--bg-section);
-  --bg-inset: #181818;
-  --bg-popover: #2e2e2e;
-  --text-primary: #d5d5d5;
-  --text-secondary: #999999;
-  --text-tertiary: #808080;
-  --text-disabled: #545454;
-  --text-inverse: #1f1f1f;
-  --fill-primary: #d5d5d5;
-  --glass-primary-fg: #d5d5d5;
-  --card-idle: #303030;
-  --card-idle-hover: #343434;
-  --glass-shell-color: #181818;
-  --float-bg: #2a2a2a;
-  --term-bg: #1f1f1f;
-  --term-fg: #cfcfcf;
+  --bg-hover: #ffffff0d;
+  --bg-selected: #ffffff13;
+  --border-subtle: #ffffff12;
+  --border-default: #ffffff1c;
+  --border-strong: #ffffff2e;
+  --text-primary: #ffffff;
+  --text-secondary: #bcbdc6;
+  --text-tertiary: #87888f;
+  --text-disabled: #4b4c53;
+  --fill-primary: #ffffff;
+  --glass-primary-fg: #ffffff;
+  --term-fg: #e4e4e8;
+  --card-idle: #1a1a1f;
+  --card-idle-hover: #202026;
+  --card-edge: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff12;
+  --float-edge: inset 0 1px 0 #ffffff14, inset 0 0 0 1px #ffffff1c;
+  --primary-finish: inset 0 -1px 0 #0000002e, 0 1px 3px #00000073;
+  --composer-finish: inset 0 1px 0 #ffffff1a, 0 8px 24px -8px #00000080;
 }
 
 :root[data-theme='light'][data-material='solid'] {
@@ -385,23 +398,24 @@
 /* 实心玻璃 (PRD §5, Figma 93; after deeplethe/solid-glass, MIT): opaque like 实色 (data-material='solid'), the cards a step
    lighter than the base layer, every pane's finish at its edge: a line of light along the top, a faint second line inside
    it, a hairline round it and a shadow gathered underneath. Menus and sheets are the thickest pane. Hovered, chosen and
-   held open are one state: a faint tint, lit along its top, a hairline round it. Contrast stays 实色's (11–13:1). */
+   held open are one state: a faint tint, lit along its top, a hairline round it. Contrast follows 实色's (dark: the
+   v1.231 palette, ~20:1; light: 11–13:1). Dark takes 实色's colours and keeps the glass edges below. */
 :root[data-theme='dark'][data-material='solid'][data-finish='glass'] {
-  --glass-shell-color: #141414;
-  --bg-sidebar: #141414;
-  --bg-app: #202020;
-  --bg-panel: #202020;
-  --bg-raised: #272727;
-  --bg-float: #262626;
-  --bg-inset: #1a1a1a;
-  --term-bg: #202020;
-  --float-bg: #262626;
+  --glass-shell-color: #070708;
+  --bg-sidebar: #070708;
+  --bg-inset: #070708;
+  --bg-app: #0d0d10;
+  --bg-panel: #0d0d10;
+  --term-bg: #0d0d10;
+  --bg-raised: #131317;
+  --bg-float: #131317;
+  --float-bg: #131317;
   --card-edge: inset 0 1px 0 #ffffff29, inset 0 0 0 1px #ffffff0a;
   --card-shadow: 0 0 0 1px #ffffff0f, 0 1px 2px #0000001a, 0 12px 32px -14px #00000099;
   --float-edge: inset 0 1px 0 #ffffff29;
   --shadow-glass-menu: 0 0 0 1px #ffffff0f, 0 24px 60px -18px #00000099, 0 6px 16px -6px #00000038;
-  --glass-sheet: #262626f5;
-  --glass-menu: #2a2a2af5;
+  --glass-sheet: #131317f5;
+  --glass-menu: #131317f5;
   --glass-highlight: inset 0 1px 0 #ffffff29;
   --shadow-glass: 0 0 0 1px #ffffff0f, 0 24px 60px -18px #00000099, 0 6px 16px -6px #00000038;
   --state-ring: inset 0 1px 0 #ffffff1c, inset 0 0 0 1px #ffffff0f;
@@ -409,8 +423,8 @@
   --drop-fill: var(--bg-selected);
   --drop-edge: var(--state-ring);
   --drop-iris: transparent;
-  --glass-primary-bg: #d5d5d5db;
-  --glass-primary-fg: #1f1f1f;
+  --glass-primary-bg: #ffffffeb;
+  --glass-primary-fg: #0d0d10;
   --primary-finish: inset 0 1px 0 #ffffff, inset 0 -1px 0 #00000038, 0 0 0 1px #ffffff42;
   --field-finish: inset 0 1px 0 #ffffff26, inset 0 0 0 1px #ffffff14;
 }

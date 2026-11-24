@@ -14,6 +14,8 @@ import { launchApp, setWindowSize } from './launch'
 const SHOTS = join(process.cwd(), 'test-results', 'gui-session')
 const WITHIN = { timeout: 20_000 }
 const FAKE = join(process.cwd(), 'src', 'main', 'gui', 'fixtures', 'fake-claude.mjs')
+// Claude's model list as it comes in versions (Figma 103C): Opus has three, Haiku two.
+const FAKE_MODELS = 'default|Default (recommended), opus|Opus 5.5, haiku|Haiku 5.5, claude-haiku-4-5|Haiku 4.5, claude-opus-4-8|Opus 4.8, claude-opus-4-7|Opus 4.7'
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(90_000)
@@ -27,10 +29,11 @@ test.describe('F23 GUI session (Claude)', () => {
   const profile = join(root, 'profile')
   for (const dir of [bin, zdot, project, profile]) mkdirSync(dir)
   const argsFile = join(root, 'claude-args.json')
+  const controlLog = join(root, 'claude-control.jsonl')
   // `claude` runs the fake with this Node; anything else (a TUI launch) would fail loudly.
   writeFileSync(join(bin, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "${FAKE}" "$@"\n`)
   chmodSync(join(bin, 'claude'), 0o755)
-  writeFileSync(join(zdot, '.zshrc'), `export PATH="${bin}:$PATH"\nexport FAKE_ARGS_FILE="${argsFile}"\n`)
+  writeFileSync(join(zdot, '.zshrc'), `export PATH="${bin}:$PATH"\nexport FAKE_ARGS_FILE="${argsFile}"\nexport FAKE_CONTROL_LOG="${controlLog}"\nexport FAKE_MODELS="${FAKE_MODELS}"\n`)
   writeFileSync(join(project, 'README.md'), '# demo\n')
 
   let app: ElectronApplication
@@ -129,8 +132,8 @@ test.describe('F23 GUI session (Claude)', () => {
     await expect(page.getByTestId('gui-agent-menu').getByRole('menuitem', { name: 'Claude Code' })).toBeVisible(WITHIN)
     await expect(page.getByTestId('gui-agent-menu').getByRole('menuitem', { name: 'Codex' })).toBeVisible()
     // No 「Default (recommended)」: Claude's default is listed as the model it is (Opus here).
-    await expect(page.getByTestId('gui-agent-models').getByRole('menuitemradio')).toHaveText(['Opus', 'Haiku'])
-    await expect(page.getByTestId('gui-agent-models').getByRole('menuitemradio', { name: 'Opus' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByTestId('gui-agent-models').getByRole('menuitemradio')).toHaveText(['Opus 5.5', 'Haiku 5.5'])
+    await expect(page.getByTestId('gui-agent-models').getByRole('menuitemradio', { name: 'Opus 5.5' })).toHaveAttribute('aria-checked', 'true')
     // Rows are 32 high (the author, 2026-11-08: a little roomier).
     // Rounded: a display that is not at an integer scale lays the row out a fraction of a pixel short (31.98 on the CI runner).
     // Polled: the menu pops in from scale(0.97) over --duration-pop, and a box measured mid-animation is 31.
@@ -213,6 +216,52 @@ test.describe('F23 GUI session (Claude)', () => {
     await expect(feed().getByText('Hello: 你好')).toBeVisible(WITHIN)
     expect(await offsetFromTop('你好')).toBe(24)
     await expect(page.getByTestId('gui-welcome')).toHaveCount(0)
+  })
+
+  test('the model menu lists a row for each family; hovering one opens its versions, newest first (Figma 103C)', async () => {
+    await composer().locator('[data-picker="model"]').click()
+    const menu = page.getByRole('dialog', { name: '模型' })
+    const families = page.getByRole('menu', { name: '模型', exact: true })
+    // One row for each family, showing its newest version; › marks a family with versions to choose from.
+    await expect(menu.getByRole('menuitemradio')).toHaveText(['Opus 5.5', 'Haiku 5.5'], WITHIN)
+    await expect(families.getByRole('menuitemradio', { name: 'Opus 5.5' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByRole('menu', { name: 'Opus', exact: true })).toHaveCount(0)
+    await families.getByRole('menuitemradio', { name: 'Opus 5.5' }).hover()
+    const versions = page.getByRole('menu', { name: 'Opus', exact: true })
+    await expect(versions.getByRole('menuitemradio')).toHaveText(['Opus 5.5', 'Opus 4.8', 'Opus 4.7'])
+    await expect(versions.getByRole('menuitemradio', { name: 'Opus 5.5' })).toHaveAttribute('aria-checked', 'true')
+    // → opens the versions from the keyboard, ← goes back to the row.
+    await families.getByRole('menuitemradio', { name: 'Haiku 5.5' }).focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('menu', { name: 'Haiku', exact: true }).getByRole('menuitemradio', { name: 'Haiku 5.5' })).toBeFocused()
+    await page.keyboard.press('ArrowLeft')
+    await expect(families.getByRole('menuitemradio', { name: 'Haiku 5.5' })).toBeFocused()
+    await page.screenshot({ path: join(SHOTS, 'model-families-dark.png') })
+    // The pointer is still over Opus: move it off the row and back, as a hand would.
+    await families.getByRole('menuitemradio', { name: 'Haiku 5.5' }).hover()
+    await families.getByRole('menuitemradio', { name: 'Opus 5.5' }).hover()
+    await versions.getByRole('menuitemradio', { name: 'Opus 4.7' }).click()
+    await expect(menu).toHaveCount(0)
+    await expect
+      .poll(() =>
+        existsSync(controlLog)
+          ? readFileSync(controlLog, 'utf8')
+              .split('\n')
+              .filter(Boolean)
+              .map((line) => JSON.parse(line) as { subtype: string; model?: string })
+              .filter((r) => r.subtype === 'set_model')
+              .map((r) => r.model)
+          : [],
+      )
+      .toEqual(['claude-opus-4-7'])
+    // The family's row keeps the version that is in use, with its ✓.
+    await composer().locator('[data-picker="model"]').click()
+    await expect(families.getByRole('menuitemradio', { name: 'Opus 4.7' })).toHaveAttribute('aria-checked', 'true')
+    // Back to Opus 5.5, which the later tests (快速, effort) need.
+    await families.getByRole('menuitemradio', { name: 'Haiku 5.5' }).hover()
+    await families.getByRole('menuitemradio', { name: 'Opus 4.7' }).hover()
+    await versions.getByRole('menuitemradio', { name: 'Opus 5.5' }).click()
+    await expect(menu).toHaveCount(0)
   })
 
   test('a sent message shows at once, before the agent echoes it, and only once after', async () => {

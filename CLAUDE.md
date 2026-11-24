@@ -53,7 +53,7 @@ Stay inside the directories your task owns. If you truly need a change elsewhere
 - Every agent, not just two: research, comparisons, designs and code that touch agents cover all the agents Wavi supports (`src/shared/agents.ts`, GUI drivers in `src/shared/gui-agents.ts`), not only Claude Code and Codex. List the ones that could not be measured or checked (not installed, no access) instead of leaving them out.
 - TypeScript strict; no `any`. Pure logic goes in `src/shared/` or a feature's `*.ts` file with a colocated `*.test.ts` (Vitest).
 - Styling: CSS Modules (`*.module.css`). Colors, spacing, radii and type **only** via variables in `src/renderer/styles/tokens.css`. Verify both themes (`<html data-theme="dark|light">`).
-- Design taste: quiet and systematic — chroma-0 neutrals, color only for status, hierarchy from type/alignment/hairlines, small radii, no cards/gradients/decorative captions. Status is never color-only (StatusGlyph shape + text).
+- Design taste: quiet and systematic — neutrals near chroma 0 (the dark solid palette carries a faint cool tint), color only for status, hierarchy from type/alignment/hairlines, small radii, no cards/gradients/decorative captions. Status is never color-only (StatusGlyph shape + text).
 - Figma hand-off: screenshot and look at every changed screen before reporting, not a sample; a component edit counts as changing every screen that uses it. Render with `get_screenshot` in a separate call (CJK in text set during the same `use_figma` call can render blank).
 - Icons: Hugeicons (stroke-rounded, free), only through `src/renderer/ui/icons.tsx` (add a glyph there when you need a new one), `size={16} strokeWidth={1.75}`.
 - CJK: always keep a CJK family in font stacks; CJK occupies 2 terminal cells.
