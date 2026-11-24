@@ -16,6 +16,8 @@ private func session(_ id: String) -> RemoteSession {
     activity: 1_000, branch: "main", model: nil, reply: nil, ship: nil, shipNotice: nil)
 }
 
+private let card = activityState(sessions: [session("s1")], prompts: [], now: 9_000)!
+
 private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "terminal-reborn")], sessions: [session("s1")])
 
 @Suite struct AppSettingsTests {
@@ -24,7 +26,8 @@ private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "t
     #expect(AppTheme.light.scheme == .light)
     #expect(AppTheme.dark.scheme == .dark)
     #expect(AppTheme(rawValue: "dark")?.scheme == .dark)
-    // What @AppStorage does with a value it does not know: the default, 跟随系统.
+    // A stored value this version does not know has no case; @AppStorage then reads the declared default, 跟随系统 (the
+    // property wrapper itself is not exercised here).
     #expect(AppTheme(rawValue: "sepia") == nil)
   }
 
@@ -74,7 +77,7 @@ private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "t
     #expect(cache.sessions(scope) == nil)
   }
 
-  @MainActor @Test func theCardSwitchIsOnUntilItIsTurnedOff() {
+  @MainActor @Test func theCardSwitchDefaultsToOn() {
     let defaults = UserDefaults.standard
     let before = defaults.object(forKey: "activity.enabled")
     defer { defaults.set(before, forKey: "activity.enabled") }
@@ -84,5 +87,39 @@ private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "t
     #expect(!LiveActivities.enabled)
     defaults.set(true, forKey: "activity.enabled")
     #expect(LiveActivities.enabled)
+  }
+
+  /// ActivityKit does not run in a test, so a card on screen is stood in for by what the instance remembers of it
+  /// (`shown`, `pushedAt`); what is asserted is the instance's own bookkeeping, not the system's card.
+  @MainActor @Test func withTheSwitchOffACardIsNotShown() {
+    let defaults = UserDefaults.standard
+    let before = defaults.object(forKey: "activity.enabled")
+    defer { defaults.set(before, forKey: "activity.enabled") }
+    defaults.set(false, forKey: "activity.enabled")
+    let activities = LiveActivities()
+    activities.show(card, mac: "Mac")
+    #expect(activities.current == nil)
+    #expect(activities.pushedAt == nil)
+  }
+
+  @MainActor @Test func aCardShownAgainAfterTheSwitchWasOffIsNotTakenForTheOldOne() {
+    let defaults = UserDefaults.standard
+    let before = defaults.object(forKey: "activity.enabled")
+    defer { defaults.set(before, forKey: "activity.enabled") }
+    defaults.set(true, forKey: "activity.enabled")
+    let activities = LiveActivities()
+    // The card is on screen, sent a moment ago: the same card again is not sent (show returns early, pushedAt stays).
+    activities.shown = card
+    let sentAt = Date()
+    activities.pushedAt = sentAt
+    activities.show(card, mac: "Mac")
+    #expect(activities.pushedAt == sentAt)
+
+    // Switch off (the Mac may be offline: nothing else arrives to clear it), then on: the same card is shown again.
+    activities.reset()
+    #expect(activities.current == nil)
+    #expect(activities.pushedAt == nil)
+    activities.show(card, mac: "Mac")
+    #expect(activities.pushedAt != nil)
   }
 }

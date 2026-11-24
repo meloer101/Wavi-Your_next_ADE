@@ -86,6 +86,7 @@ struct AppSettingsView: View {
             Line(label: String(localized: "主题"), value: theme.label) { Icon("chevron-down", size: 14).foregroundStyle(Color.textSecondary) }
           }
           .buttonStyle(RowStyle())
+          .accessibilityValue(theme.label)
           Hairline()
           Button {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -104,6 +105,7 @@ struct AppSettingsView: View {
             Line(label: String(localized: "启动时打开"), value: startTab.label) { Icon("chevron-down", size: 14).foregroundStyle(Color.textSecondary) }
           }
           .buttonStyle(RowStyle())
+          .accessibilityValue(startTab.label)
           Hairline()
           Toggle(String(localized: "灵动岛和锁屏卡片"), isOn: $activityEnabled).toggleStyle(SwitchRowStyle())
           Hairline()
@@ -129,7 +131,7 @@ struct AppSettingsView: View {
     .navigationTitle("设置")
     .navigationBarTitleDisplayMode(.inline)
     .task { await loadSize() }
-    .onChange(of: activityEnabled) { _, on in if !on { LiveActivities.endAll() } }
+    .onChange(of: activityEnabled) { model.activitySwitchChanged() }
     .confirmationDialog(model.macName, isPresented: $unpairing, titleVisibility: .visible) {
       Button("取消配对", role: .destructive) { model.forget() }
     }
@@ -143,7 +145,7 @@ struct AppSettingsView: View {
     }
     .confirmationDialog("头像", isPresented: $avatarMenu) {
       Button("更换") { pickingAvatar = true }
-      Button("去掉") { MyAvatar.shared.remove() }
+      Button("去掉", role: .destructive) { MyAvatar.shared.remove() }
     }
     .photosPicker(isPresented: $pickingAvatar, selection: $avatarItem, matching: .images)
     .onChange(of: avatarItem) { _, item in
@@ -165,6 +167,7 @@ struct AppSettingsView: View {
       Line(label: String(localized: "头像"), avatar: true) { Icon("chevron-right", size: 14).foregroundStyle(Color.textSecondary) }
     }
     .buttonStyle(RowStyle())
+    .accessibilityValue(MyAvatar.shared.image == nil ? String(localized: "未设置") : String(localized: "已设置"))
   }
 
   private func loadSize() async {

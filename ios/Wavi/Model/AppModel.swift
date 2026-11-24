@@ -279,6 +279,11 @@ final class AppModel {
     return true
   }
 
+  /// 设置 · 灵动岛和锁屏卡片 was switched: off ends the card and forgets it, on shows the one the sessions call for now.
+  func activitySwitchChanged() {
+    if LiveActivities.enabled { syncActivity() } else { activities.reset() }
+  }
+
   /// The Live Activity follows the sessions and prompts; `alert` when Wavi just listed a prompt it had not before.
   @discardableResult
   private func syncActivity(alert: Bool = false) -> Task<Void, Never>? {

@@ -86,11 +86,27 @@ private func firstScrollView(in view: UIView) -> UIScrollView? {
   return nil
 }
 
+/// A picture to stand in for the one the user chose: two colours, so the crop and the circle show.
+private func samplePicture() -> Data {
+  let image = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 200)).image { context in
+    UIColor(red: 0.95, green: 0.55, blue: 0.2, alpha: 1).setFill()
+    context.fill(CGRect(x: 0, y: 0, width: 300, height: 200))
+    UIColor(red: 0.2, green: 0.35, blue: 0.8, alpha: 1).setFill()
+    context.cgContext.fillEllipse(in: CGRect(x: 90, y: 30, width: 120, height: 120))
+  }
+  return image.jpegData(compressionQuality: 0.9)!
+}
+
 @Suite @MainActor struct SettingsShots {
   @Test func listAndSettings() async throws {
     for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
       try await shot(Host { SessionsView() }, style, named: "sessions-avatar-\(name)")
       try await shot(Host { AppSettingsView() }, style, named: "settings-\(name)")
+      // 105A with a picture chosen: the button is the picture alone, no glass around it.
+      #expect(await MyAvatar.shared.set(samplePicture()))
+      try await shot(Host { SessionsView() }, style, named: "sessions-avatar-set-\(name)")
+      try await shot(Host { AppSettingsView() }, style, named: "settings-avatar-set-\(name)")
+      MyAvatar.shared.remove()
       try await shot(Host { AppSettingsView() }, style, named: "settings-scrolled-\(name)", scrolled: true)
     }
   }
