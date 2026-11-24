@@ -238,6 +238,11 @@ test.describe('F23 GUI session (Claude)', () => {
     await expect(page.getByRole('menu', { name: 'Haiku', exact: true }).getByRole('menuitemradio', { name: 'Haiku 5.5' })).toBeFocused()
     await page.keyboard.press('ArrowLeft')
     await expect(families.getByRole('menuitemradio', { name: 'Haiku 5.5' })).toBeFocused()
+    // ↑ to Opus: the versions column that is open follows the focused row.
+    await page.keyboard.press('ArrowUp')
+    await expect(families.getByRole('menuitemradio', { name: 'Opus 5.5' })).toBeFocused()
+    await expect(page.getByRole('menu', { name: 'Opus', exact: true })).toBeVisible()
+    await expect(page.getByRole('menu', { name: 'Haiku', exact: true })).toHaveCount(0)
     await page.screenshot({ path: join(SHOTS, 'model-families-dark.png') })
     // The pointer is still over Opus: move it off the row and back, as a hand would.
     await families.getByRole('menuitemradio', { name: 'Haiku 5.5' }).hover()
@@ -264,6 +269,49 @@ test.describe('F23 GUI session (Claude)', () => {
     await families.getByRole('menuitemradio', { name: 'Opus 4.7' }).hover()
     await versions.getByRole('menuitemradio', { name: 'Opus 5.5' }).click()
     await expect(menu).toHaveCount(0)
+    // A pane too narrow for the versions beside the first column: they stay inside the pane (on the left, or over the
+    // column when neither side has room). The window goes to its smallest and the pane is cut to 440 wide.
+    await setWindowSize(app, page, 960, 900)
+    const clipOf = () =>
+      page.evaluate(() => {
+        const el = document.querySelector<HTMLElement>('[role="menu"][aria-label="Opus"]')
+        let up = el?.parentElement ?? null
+        while (up && getComputedStyle(up).overflowX === 'visible') up = up.parentElement
+        const clip = up?.getBoundingClientRect()
+        const box = el?.getBoundingClientRect()
+        return clip && box ? { clip: { left: clip.left, right: clip.right }, box: { left: box.left, right: box.right } } : null
+      })
+    await composer().locator('[data-picker="model"]').click()
+    await families.getByRole('menuitemradio', { name: 'Opus 5.5' }).hover()
+    await expect(versions).toBeVisible()
+    const roomy = (await clipOf())!
+    expect(roomy.box.left).toBeGreaterThanOrEqual(roomy.clip.left)
+    expect(roomy.box.right).toBeLessThanOrEqual(roomy.clip.right)
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => {
+      const chat = document.querySelector<HTMLElement>('[data-testid="gui-chat"]')!
+      let up: HTMLElement | null = chat
+      while (up && getComputedStyle(up).overflowX === 'visible') up = up.parentElement
+      const pane = up!
+      pane.dataset.shrunk = pane.style.right
+      pane.style.right = `${pane.getBoundingClientRect().width - 440}px`
+    })
+    await composer().locator('[data-picker="model"]').click()
+    await families.getByRole('menuitemradio', { name: 'Haiku 5.5' }).hover()
+    await families.getByRole('menuitemradio', { name: 'Opus 5.5' }).hover()
+    await expect(versions).toBeVisible()
+    await expect.poll(async () => {
+      const at = (await clipOf())!
+      return at.box.left >= at.clip.left - 0.5 && at.box.right <= at.clip.right + 0.5
+    }).toBe(true)
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => {
+      const chat = document.querySelector<HTMLElement>('[data-testid="gui-chat"]')!
+      let up: HTMLElement | null = chat
+      while (up && getComputedStyle(up).overflowX === 'visible') up = up.parentElement
+      up!.style.right = up!.dataset.shrunk ?? ''
+    })
+    await setWindowSize(app, page, 1440, 900)
   })
 
   test('a sent message shows at once, before the agent echoes it, and only once after', async () => {

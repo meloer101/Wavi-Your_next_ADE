@@ -609,6 +609,19 @@ function PickerRow({ checked, mark, label, onClick }: { checked: boolean; mark?:
   )
 }
 
+/** The box that clips what is drawn inside `el`: its nearest ancestor that hides overflow, else the window. */
+function clippingBox(el: HTMLElement): { left: number; right: number } {
+  for (let up = el.parentElement; up; up = up.parentElement) {
+    const { overflowX } = up.ownerDocument.defaultView!.getComputedStyle(up)
+    if (overflowX !== 'visible') {
+      const box = up.getBoundingClientRect()
+      return { left: box.left, right: box.right }
+    }
+  }
+  const view = el.ownerDocument.defaultView!
+  return { left: 0, right: view.innerWidth }
+}
+
 /**
  * Figma 103C: a model list as one row per family, showing the family's newest version (or the current one, when it is an
  * older version of that family, with its ✓). A family with versions to choose from ends in › and opens them in a column
@@ -619,28 +632,43 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
   const families = useMemo(() => modelFamilies(values), [values])
   const [open, setOpen] = useState<string | null>(null)
   const [drop, setDrop] = useState(0)
+  // Which side of the first column the versions open on, and where when neither side has room.
+  const [side, setSide] = useState<{ at: 'right' | 'left' | 'inset'; left: number }>({ at: 'right', left: 0 })
+  const host = useRef<HTMLDivElement>(null)
   const column = useRef<HTMLDivElement>(null)
   const flyout = useRef<HTMLDivElement>(null)
   const rows = useRef(new Map<string, HTMLElement>())
   const enter = useRef(false)
   const family = families.find((f) => f.key === open)
+  // Its family left the list (the models were refreshed): nothing is open.
+  if (open !== null && !family) setOpen(null)
 
   // The versions' column starts level with its row; a row so far down that it would stand out under the first column's
-  // foot moves up (to the top at most).
+  // foot moves up (to the top at most). It opens on the right of the first column, on the left when the right runs past
+  // the pane that clips it, and — with room on neither side — over the first column's right part, inside the pane.
+  // Measured again when the list changes under an open family (its models arrive or refresh).
   useLayoutEffect(() => {
     const row = open ? rows.current.get(open) : undefined
     const first = column.current
     const second = flyout.current
-    if (!row || !first || !second) return
+    const at = host.current
+    if (!row || !first || !second || !at) return
     setDrop(Math.max(0, Math.min(row.offsetTop - first.offsetTop - first.scrollTop, first.offsetHeight - second.offsetHeight)))
+    const clip = clippingBox(at)
+    const box = at.getBoundingClientRect()
+    const gap = 2
+    const room = { left: clip.left, right: clip.right }
+    if (box.right + gap + second.offsetWidth <= room.right) setSide({ at: 'right', left: 0 })
+    else if (box.left - gap - second.offsetWidth >= room.left) setSide({ at: 'left', left: 0 })
+    else setSide({ at: 'inset', left: Math.max(room.left - box.left, room.right - second.offsetWidth - box.left) })
     if (enter.current) {
       enter.current = false
       second.querySelector<HTMLElement>('[aria-checked="true"], [role="menuitemradio"]')?.focus()
     }
-  }, [open])
+  }, [open, family, families])
 
   return (
-    <div className={styles.familyHost}>
+    <div ref={host} className={styles.familyHost}>
       <div ref={column} className={`${styles.popover} ${styles.pickerColumn}`} role="menu" aria-label={label} data-testid={testId}>
         {header}
         {families.map((f) => {
@@ -659,7 +687,14 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
               aria-haspopup={several ? 'menu' : undefined}
               aria-expanded={several ? open === f.key : undefined}
               className={styles.pickerRow}
-              onMouseEnter={() => setOpen(several ? f.key : null)}
+              // A pointer passing over rows while the keyboard is in the versions column leaves it as it is.
+              onMouseEnter={() => {
+                if (!flyout.current?.contains(flyout.current.ownerDocument.activeElement)) setOpen(several ? f.key : null)
+              }}
+              // ↑ ↓ through the rows take the versions column along, once it is open.
+              onFocus={() => {
+                if (open !== null) setOpen(several ? f.key : null)
+              }}
               onKeyDown={(e) => {
                 if (e.key !== 'ArrowRight' || !several) return
                 e.preventDefault()
@@ -682,7 +717,8 @@ function FamilyColumns({ values, current, label, header, testId, onPick }: { val
         <div
           ref={flyout}
           className={`${styles.popover} ${styles.versionsColumn}`}
-          style={{ top: drop }}
+          style={side.at === 'inset' ? { top: drop, left: side.left } : { top: drop }}
+          data-side={side.at}
           role="menu"
           aria-label={family.name}
           data-testid={testId && `${testId}-versions`}
