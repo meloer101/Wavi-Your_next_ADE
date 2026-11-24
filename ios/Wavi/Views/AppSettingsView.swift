@@ -206,7 +206,7 @@ struct LinkStatus: View {
   var body: some View {
     let dot: Color = switch linkDot(link) {
     case .done: .statusDone
-    case .attention: .statusAttention
+    case .warning: .noticeWarning
     case .error: .statusError
     }
     HStack(spacing: 6) {

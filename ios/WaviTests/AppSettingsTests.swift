@@ -136,9 +136,9 @@ private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "t
 
   @Test func theDotFollowsTheLink() {
     #expect(linkDot(.open(url: "ws://100.101.2.3:7429")) == .done)
-    #expect(linkDot(.connecting) == .attention)
-    #expect(linkDot(.offline(.macAsleep)) == .attention)
-    #expect(linkDot(.offline(.tailscaleOff)) == .attention)
+    #expect(linkDot(.connecting) == .warning)
+    #expect(linkDot(.offline(.macAsleep)) == .warning)
+    #expect(linkDot(.offline(.tailscaleOff)) == .warning)
     #expect(linkDot(.refused) == .error)
   }
 }

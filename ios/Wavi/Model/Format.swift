@@ -214,15 +214,15 @@ func connectionStatusText(_ link: LinkState, words: ConnectionWords) -> String {
   return words.text
 }
 
-/// The dot before it: done while the link is open, error when the Mac does not know this phone, attention otherwise
-/// (connecting, or the Mac cannot be reached). The words carry the state too: the dot is never the only signal.
-enum LinkDot: Equatable { case done, attention, error }
+/// The dot before it: done while the link is open, error when the Mac does not know this phone, warning otherwise
+/// (connecting, or the Mac cannot be reached: the amber of the connection line under the screen titles). The words carry the state too: the dot is never the only signal.
+enum LinkDot: Equatable { case done, warning, error }
 
 func linkDot(_ link: LinkState) -> LinkDot {
   switch link {
   case .open: .done
   case .refused: .error
-  case .connecting, .offline: .attention
+  case .connecting, .offline: .warning
   }
 }
 
