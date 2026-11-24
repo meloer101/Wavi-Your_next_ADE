@@ -1,6 +1,6 @@
 # Wavi 路线图与进度
 
-> 最后更新：2026-11-23
+> 最后更新：2026-11-24
 > 本文只记**做到哪了**：已完成什么、正在做什么、还没做什么。产品最终长什么样写在 [PRD](PRD.md)。
 > 维护规则：完成、新增、取消一项时直接改这里（勾选、移动或划掉），更新顶部日期；不要另建任务单、验收记录或计划文档。验收结论写进对应里程碑下面，几行即可。
 
@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-24：实色和实心玻璃的深色换成近黑高对比配色（PRD v1.233 ①，`src/renderer/styles/tokens.css`，新 token `--composer-finish`，`gui/Chat.module.css` 的输入框用它）；GUI 模型菜单按系列分组（②，`modelFamilies` 在 `src/renderer/gui/model.ts`，菜单 `FamilyColumns` 在 `Composer.tsx`；e2e `gui-session.spec.ts` 加一例）已做完。
 - 2026-11-23：手机会话页的表格不再错位、嵌套列表分层缩进（PRD v1.230 ①，`ios/Wavi/Views/Components.swift`）；富文本（②，`ios/Wavi/Views/Markdown.swift`，swift-markdown 解析；行内代码、文件路径 chip 点开只读文件页、任务列表、链接、代码块复制、表格单元格行内 Markdown 和右缘渐隐，新命令 `file`）已做完；手机对话页不再显示底部标签栏、不再画「未识别的条目」（`ios/Wavi/Views/SessionView.swift`、`ios/Wavi/Model/TranscriptGroups.swift`）；一轮折成「工作了」（③，`ios/Wavi/Model/TranscriptGroups.swift` 的 `.fold` / `.reply`、`SessionView.swift` 的 `FoldRow`；消息下面写时间和复制，复制图标换成桌面的 Copy）已做完；context 圆环（④，`ios/Wavi/Views/ContextSheet.swift`、`SessionView.swift` 会话设置那一行的右端；协议加 `RemoteSession.context` 和 `RemoteSessionList.usage`，Figma 104C）已做完：圆环平时画占用、离自动压缩点 20k 以内（不知道压缩点时 ≥ 80%）用 text/primary 并写百分比，点开 sheet 看 `172k / 200k`、压缩点刻度、这家 agent 的额度窗口，接近压缩时有「放进 /compact」（只放进输入框、不发送）。
 - 2026-11-22：修复发给 Pi 的长消息一直停在输入框、不按回车（PRD §6.9）：Pi 把超过 10 行或 1000 字符的粘贴折叠成 `[paste #N +K lines]`，Wavi 只认正文开头，等到超时。`src/shared/send-protocol.ts` 新增 `OTHER_AGENT_PROFILES`（目前只有 Pi），Claude / Codex / 其余 agent 不变；`send-protocol.test.ts` 加 Pi 的阈值和占位符用例。
 - 2026-11-23：手机新建会话 / 交给 agent 的卡片改用 `bgGrouped`（`ios/Wavi/Views/NewSessionView.swift`，Figma 103G：浅色 #ededed、深色 #222222）；原来是系统 Form 的默认行底色，浅色下白卡贴在白底上看不出来。
