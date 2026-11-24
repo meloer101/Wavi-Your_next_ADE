@@ -48,6 +48,7 @@ const ICON_NAMES: Record<string, GlyphName> = {
   'square-check': 'SquareCheck',
   'square-terminal': 'SquareTerminal',
   'triangle-alert': 'TriangleAlert',
+  'user-round': 'UserRound',
   x: 'X'
 }
 const WRITE = process.env.WAVI_WRITE_PHONE_ASSETS === '1'

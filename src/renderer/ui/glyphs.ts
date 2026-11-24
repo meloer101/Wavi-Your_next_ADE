@@ -103,6 +103,7 @@ import {
   Camera01Icon,
   CheckmarkSquare02Icon,
   Image01Icon,
+  UserIcon,
 } from '@hugeicons/core-free-icons'
 import type { IconSvgElement } from '@hugeicons/react'
 
@@ -207,7 +208,8 @@ export const GLYPHS = {
   Camera: Camera01Icon,
   Image: Image01Icon,
   SquareCheck: CheckmarkSquare02Icon,
-  TriangleAlert: Alert02Icon
+  TriangleAlert: Alert02Icon,
+  UserRound: UserIcon
 } as const satisfies Record<string, IconSvgElement>
 
 export type GlyphName = keyof typeof GLYPHS
