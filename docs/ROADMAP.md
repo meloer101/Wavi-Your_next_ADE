@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-24：手机设置页重做（PRD v1.235，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
 - 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.234，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.233 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
 - 2026-11-24：手机设置页的「主题」和「启动时打开」改成全宽玻璃 sheet（PRD v1.233，Figma 109，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：不再用系统 `Menu`，点一行改值并关闭，高度贴合内容。已验证：`xcodebuild test` 通过，109A / 109B 深浅色四张截图对过；未验证：系统 sheet 的真实玻璃和拖动条位置（窗口截图画不出系统的 sheet）。
 - 2026-11-24：手机 context sheet 重画（PRD v1.232，Figma 108，`ios/Wavi/Views/ContextSheet.swift`）已做完：去掉不透明底和 Spacer，用系统玻璃，高度贴合内容；横条换成 40 根刻度（`tickMarks`），压缩点是替换掉的那一根；上下文头一行的百分比不再包胶囊；只显示 5 小时和 7 天窗口（`shownWindows` 去掉带 `scope` 的）；「放进 /compact」用主按钮样式。已验证：`xcodebuild test` 通过，Figma 108A / 108B / 108C 深浅色六张截图对过；未验证：系统 sheet 在真机上的玻璃和高度（窗口截图画不出系统的 sheet）。

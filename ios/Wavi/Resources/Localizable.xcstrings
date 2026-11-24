@@ -4869,22 +4869,6 @@
         }
       }
     },
-    "连接" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connection"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接"
-          }
-        }
-      }
-    },
     "外观" : {
       "localizations" : {
         "en" : {
@@ -5201,6 +5185,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上下文"
+          }
+        }
+      }
+    },
+    "%@ · 已连接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Connected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · 已连接"
           }
         }
       }

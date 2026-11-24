@@ -123,10 +123,22 @@ private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "t
     #expect(activities.pushedAt != nil)
   }
 
-  @Test func theConnectionRowNamesTheWayInUseOrWhatIsWrong() {
-    let open = connectionWords(.open(url: "ws://100.101.2.3:7429"), mac: "MacBook Air", dropped: false)
-    #expect(connectionDetail(.open(url: "ws://100.101.2.3:7429"), words: open) == "Tailscale")
+  @Test func theHeroSaysHowTheMacIsReachedOrWhatIsWrong() {
+    let url = "ws://100.101.2.3:7429"
+    let open = connectionWords(.open(url: url), mac: "MacBook Air", dropped: false)
+    #expect(connectionStatusText(.open(url: url), words: open) == "Tailscale · 已连接")
+    #expect(connectionStatusText(.open(url: "ws://192.168.1.5:7429"), words: open) == "局域网 · 已连接")
     let offline = connectionWords(.offline(.macAsleep), mac: "MacBook Air", dropped: false)
-    #expect(connectionDetail(.offline(.macAsleep), words: offline) == offline.text)
+    #expect(connectionStatusText(.offline(.macAsleep), words: offline) == offline.text)
+    let connecting = connectionWords(.connecting, mac: "MacBook Air", dropped: false)
+    #expect(connectionStatusText(.connecting, words: connecting) == connecting.text)
+  }
+
+  @Test func theDotFollowsTheLink() {
+    #expect(linkDot(.open(url: "ws://100.101.2.3:7429")) == .done)
+    #expect(linkDot(.connecting) == .attention)
+    #expect(linkDot(.offline(.macAsleep)) == .attention)
+    #expect(linkDot(.offline(.tailscaleOff)) == .attention)
+    #expect(linkDot(.refused) == .error)
   }
 }

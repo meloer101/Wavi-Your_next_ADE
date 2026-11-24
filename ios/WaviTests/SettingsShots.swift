@@ -123,6 +123,21 @@ private struct PickShot<Item: Identifiable & Equatable>: View {
 }
 
 @Suite @MainActor struct SettingsShots {
+  /// The hero's status line for a link that is open (the host's own link is never open): the done-coloured dot and
+  /// `Tailscale · 已连接`, and the refused link's error-coloured dot.
+  @Test func theStatusLineOfAnOpenLink() async throws {
+    let open = LinkState.open(url: "ws://100.101.2.3:7429")
+    for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
+      let line = VStack(spacing: 16) {
+        LinkStatus(link: open, words: connectionWords(open, mac: "MacBook Pro", dropped: false))
+        LinkStatus(link: .refused, words: connectionWords(.refused, mac: "MacBook Pro", dropped: false))
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color.bgApp)
+      try await shot(line, style, named: "status-line-\(name)")
+    }
+  }
+
   /// Figma 109A (主题) and 109B (启动时打开), dark and light.
   @Test func pickSheets() async throws {
     for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {

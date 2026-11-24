@@ -76,15 +76,8 @@ struct AppSettingsView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        block(nil) { avatarRow }
-        block(String(localized: "连接")) {
-          Line(label: "Mac", value: model.macName)
-          Hairline()
-          Line(label: String(localized: "连接"), value: connectionDetail(model.link, words: model.connection))
-          Hairline()
-          Button { unpairing = true } label: { Line(label: String(localized: "取消配对"), danger: true) }.buttonStyle(RowStyle())
-        }
+      VStack(alignment: .leading, spacing: 24) {
+        hero
         block(String(localized: "外观")) {
           Button { picking = .theme } label: {
             Line(label: String(localized: "主题"), value: theme.label) { Icon("chevron-down", size: 14).foregroundStyle(Color.textSecondary) }
@@ -120,6 +113,9 @@ struct AppSettingsView: View {
           Line(label: String(localized: "版本"), value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
           Hairline()
           Line(label: String(localized: "协议"), value: "\(Shared.data.protocol)")
+        }
+        block(nil) {
+          Button { unpairing = true } label: { Line(label: String(localized: "取消配对"), danger: true) }.buttonStyle(RowStyle())
         }
       }
       .padding(.horizontal, Metric.margin)
@@ -167,42 +163,72 @@ struct AppSettingsView: View {
     .alert("这张照片没有设成头像", isPresented: $avatarFailed) { Button("好", role: .cancel) {} }
   }
 
-  private var avatarRow: some View {
-    Button {
-      if MyAvatar.shared.image == nil { pickingAvatar = true } else { avatarMenu = true }
-    } label: {
-      Line(label: String(localized: "头像"), avatar: true) { Icon("chevron-right", size: 14).foregroundStyle(Color.textSecondary) }
+  /// The Mac and how it is reached, over my picture (Figma 110D): tapping the picture sets, changes or removes it.
+  private var hero: some View {
+    VStack(spacing: 8) {
+      Button {
+        if MyAvatar.shared.image == nil { pickingAvatar = true } else { avatarMenu = true }
+      } label: { AvatarDisc(size: 80, icon: 32) }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "头像"))
+        .accessibilityValue(MyAvatar.shared.image == nil ? String(localized: "未设置") : String(localized: "已设置"))
+      Text(model.macName).font(.fixed(20, medium: true)).foregroundStyle(Color.textPrimary).lineLimit(1)
+      LinkStatus(link: model.link, words: model.connection)
     }
-    .buttonStyle(RowStyle())
-    .accessibilityValue(MyAvatar.shared.image == nil ? String(localized: "未设置") : String(localized: "已设置"))
+    .frame(maxWidth: .infinity)
+    .padding(.top, 8)
+    .padding(.bottom, 4)
   }
 
   private func loadSize() async {
     cacheBytes = await Task.detached { PhoneCache.shared.size() }.value
   }
 
-  /// A group under its small label (none for the first): the rows are drawn straight into it.
+  /// A group under its small label (none for the first): the rows are drawn straight into it, on the subtle fill with a hairline
+  /// (Figma 110D, like the pick sheet's group).
   private func block<Rows: View>(_ title: String?, @ViewBuilder rows: () -> Rows) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       if let title { Text(title).font(.ui(.footnote)).foregroundStyle(Color.textSecondary).padding(.leading, 16) }
       VStack(spacing: 0) { rows() }
         .frame(maxWidth: .infinity)
-        .background(Color.bgGrouped, in: RoundedRectangle(cornerRadius: Metric.radiusGroup))
-        .clipShape(RoundedRectangle(cornerRadius: Metric.radiusGroup))
+        .background(Color.fillSubtle, in: RoundedRectangle(cornerRadius: Metric.radiusField))
+        .overlay(RoundedRectangle(cornerRadius: Metric.radiusField).strokeBorder(Color.hairline))
+        .clipShape(RoundedRectangle(cornerRadius: Metric.radiusField))
     }
+  }
+}
+
+/// A dot and the words for the link (Figma 110D): the dot's colour follows the link, the words say it too.
+struct LinkStatus: View {
+  let link: LinkState
+  let words: ConnectionWords
+
+  var body: some View {
+    let dot: Color = switch linkDot(link) {
+    case .done: .statusDone
+    case .attention: .statusAttention
+    case .error: .statusError
+    }
+    HStack(spacing: 6) {
+      Circle().fill(dot).frame(width: 6, height: 6)
+      Text(connectionStatusText(link, words: words)).font(.ui(.footnote)).foregroundStyle(Color.textSecondary).lineLimit(1)
+    }
+    .accessibilityElement(children: .combine)
   }
 }
 
 /// My picture, or the user-round mark on the subtle fill when none is set (Figma 105C's 头像 row, 105A's button).
 struct AvatarDisc: View {
   let size: CGFloat
+  /// The mark's size when no picture is set (half the disc by default).
+  var icon: CGFloat?
 
   var body: some View {
     Group {
       if let image = MyAvatar.shared.image {
         Image(uiImage: image).resizable().scaledToFill()
       } else {
-        Color.fillStrong.overlay { Icon("user-round", size: size / 2).foregroundStyle(Color.textPrimary) }
+        Color.fillStrong.overlay { Icon("user-round", size: icon ?? size / 2).foregroundStyle(Color.textPrimary) }
       }
     }
     .frame(width: size, height: size)
