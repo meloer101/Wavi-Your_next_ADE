@@ -66,6 +66,13 @@ struct AppSettingsView: View {
   @State private var unpairing = false
   @State private var clearing = false
   @State private var cacheBytes: Int64?
+  @State private var picking: Pick?
+
+  /// The two rows that choose from a few values in a sheet (PRD v1.233, Figma 109).
+  enum Pick: Identifiable {
+    case theme, start
+    var id: Self { self }
+  }
 
   var body: some View {
     ScrollView {
@@ -79,12 +86,7 @@ struct AppSettingsView: View {
           Button { unpairing = true } label: { Line(label: String(localized: "取消配对"), danger: true) }.buttonStyle(RowStyle())
         }
         block(String(localized: "外观")) {
-          Menu {
-            Picker(String(localized: "主题"), selection: $theme) {
-              ForEach(AppTheme.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.inline)
-          } label: {
+          Button { picking = .theme } label: {
             Line(label: String(localized: "主题"), value: theme.label) { Icon("chevron-down", size: 14).foregroundStyle(Color.textSecondary) }
           }
           .buttonStyle(RowStyle())
@@ -98,12 +100,7 @@ struct AppSettingsView: View {
           .buttonStyle(RowStyle())
         }
         block(String(localized: "会话")) {
-          Menu {
-            Picker(String(localized: "启动时打开"), selection: $startTab) {
-              ForEach(StartTab.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.inline)
-          } label: {
+          Button { picking = .start } label: {
             Line(label: String(localized: "启动时打开"), value: startTab.label) { Icon("chevron-down", size: 14).foregroundStyle(Color.textSecondary) }
           }
           .buttonStyle(RowStyle())
@@ -136,6 +133,12 @@ struct AppSettingsView: View {
     .navigationBarTitleDisplayMode(.inline)
     .task { await loadSize() }
     .onChange(of: activityEnabled) { model.activitySwitchChanged() }
+    .sheet(item: $picking) { pick in
+      switch pick {
+      case .theme: PickSheet(title: String(localized: "主题"), items: AppTheme.allCases, current: theme, label: \.label) { theme = $0 }
+      case .start: PickSheet(title: String(localized: "启动时打开"), items: StartTab.allCases, current: startTab, label: \.label) { startTab = $0 }
+      }
+    }
     .confirmationDialog(model.macName, isPresented: $unpairing, titleVisibility: .visible) {
       Button("取消配对", role: .destructive) { model.forget() }
     }
@@ -204,6 +207,56 @@ struct AvatarDisc: View {
     }
     .frame(width: size, height: size)
     .clipShape(Circle())
+  }
+}
+
+/// A full-width sheet that picks one of a few values, like 会话设置's (Figma 109): the system's glass behind it, as tall as
+/// its content. A tap on a row picks it and closes the sheet.
+struct PickSheet<Item: Identifiable & Equatable>: View {
+  let title: String
+  let items: [Item]
+  let current: Item
+  let label: (Item) -> String
+  let pick: (Item) -> Void
+  @Environment(\.dismiss) private var dismiss
+  @State private var height: CGFloat = 240
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      Text(title).font(.ui(.callout, medium: true)).foregroundStyle(Color.textPrimary).padding(.leading, 4)
+      VStack(spacing: 0) {
+        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+          Button {
+            pick(item)
+            dismiss()
+          } label: {
+            HStack(spacing: 8) {
+              Group { if item == current { Icon("check", size: 20).foregroundStyle(Color.textPrimary) } else { Color.clear } }
+                .frame(width: 20, height: 20)
+              Text(label(item)).font(.ui(.callout)).foregroundStyle(Color.textPrimary).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 12)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(RowStyle())
+          .accessibilityAddTraits(item == current ? .isSelected : [])
+          if index < items.count - 1 { Hairline() }
+        }
+      }
+      .background(Color.fillSubtle, in: RoundedRectangle(cornerRadius: Metric.radiusField))
+      .overlay(RoundedRectangle(cornerRadius: Metric.radiusField).strokeBorder(Color.hairline))
+      .clipShape(RoundedRectangle(cornerRadius: Metric.radiusField))
+    }
+    .padding(.horizontal, 20)
+    // The system's grabber sits in the first 36 points.
+    .padding(.top, 36)
+    .padding(.bottom, 20)
+    .frame(maxWidth: .infinity, alignment: .topLeading)
+    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+    .presentationDetents([.height(height)])
+    .presentationDragIndicator(.visible)
   }
 }
 

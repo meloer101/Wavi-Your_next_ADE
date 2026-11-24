@@ -97,7 +97,41 @@ private func samplePicture() -> Data {
   return image.jpegData(compressionQuality: 0.9)!
 }
 
+/// The settings page under the scrim with a pick sheet at the bottom (Figma 109): the content in a bg/sheet container with a
+/// grabber drawn like the system's, since a window capture has no real sheet.
+private struct PickShot<Item: Identifiable & Equatable>: View {
+  let title: String
+  let items: [Item]
+  let current: Item
+  let label: (Item) -> String
+
+  var body: some View {
+    ZStack(alignment: .bottom) {
+      Host { AppSettingsView() }
+      Color.scrim.ignoresSafeArea()
+      PickSheet(title: title, items: items, current: current, label: label) { _ in }
+        .frame(width: 386)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Color.bgSheet, in: RoundedRectangle(cornerRadius: 38))
+        .overlay(alignment: .top) { Capsule().fill(Color.fillStrong).frame(width: 36, height: 5).padding(.top, 12) }
+        .overlay(RoundedRectangle(cornerRadius: 38).strokeBorder(Color.hairline))
+        .padding(8)
+    }
+    // Figma 109: the sheet is 8 from the screen's bottom edge, not above the home indicator.
+    .ignoresSafeArea(edges: .bottom)
+  }
+}
+
 @Suite @MainActor struct SettingsShots {
+  /// Figma 109A (主题) and 109B (启动时打开), dark and light.
+  @Test func pickSheets() async throws {
+    for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
+      try await shot(PickShot(title: "主题", items: AppTheme.allCases, current: AppTheme.system, label: \.label), style, named: "pick-theme-\(name)")
+      try await shot(PickShot(title: "启动时打开", items: StartTab.allCases, current: StartTab.sessions, label: \.label), style, named: "pick-start-\(name)")
+    }
+  }
+
+
   @Test func listAndSettings() async throws {
     for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
       try await shot(Host { SessionsView() }, style, named: "sessions-avatar-\(name)")
