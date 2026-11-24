@@ -60,7 +60,8 @@
   flex: none;
   margin-left: auto;
   padding-left: var(--space-4);
-  font: var(--text-mono-s);
+  font: var(--text-caption);
+  font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
@@ -131,9 +132,10 @@
   pointer-events: none;
 }
 
-/* Figma 74D: a workflow run's name is its script's (mono); its phases sit one column in, without a tick of their own. */
+/* Figma 74D: a workflow run's name is its script's; its phases sit one column in, without a tick of their own. */
 .row[data-kind='workflow'] .title {
-  font: var(--text-mono-s);
+  font: var(--text-caption);
+  font-variant-numeric: tabular-nums;
 }
 
 .row[data-kind='phase'] {

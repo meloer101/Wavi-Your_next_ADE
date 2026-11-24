@@ -192,21 +192,25 @@
   flex: none;
   margin-left: auto;
   padding-left: var(--space-4);
-  font: var(--text-mono-s);
+  font: var(--text-caption);
+  font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
 
 /* A long wait is heavier, not louder (PRD F10). */
 .time[data-emphasis='true'] {
-  font: var(--text-mono-s-medium);
+  font: var(--text-caption-strong);
+  font-variant-numeric: tabular-nums;
 }
 
-/* The model `wavi run --model` asked for (Figma 44B): mono, like `#123 ✓`, after the branch, which gives way first. */
+/* The model `wavi run --model` asked for (Figma 44B): after the branch, which gives way first. Sidebar text is the
+   interface font throughout, numbers tabular so a column of times lines up (PRD v1.235). */
 .model {
   flex: none;
   margin-left: var(--space-4);
-  font: var(--text-mono-s);
+  font: var(--text-caption);
+  font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
   white-space: nowrap;
 }

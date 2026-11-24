@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-24：侧栏原来的等宽字（时间、模型、快捷键、计数、版本号）改用 Google Sans 加 `tabular-nums`（PRD v1.235，`src/renderer/sidebar/*.module.css`）已做完。
 - 2026-11-24：界面字体换成 Google Sans（PRD v1.234，`@fontsource-variable/google-sans`，`--font-ui` 在 `src/renderer/styles/tokens.css`；对话区默认跟随，`appearance/map.ts`）已做完。
 - 2026-11-24：实色和实心玻璃的深色换成近黑高对比配色（PRD v1.233 ①，`src/renderer/styles/tokens.css`，新 token `--composer-finish`，`gui/Chat.module.css` 的输入框用它）；GUI 模型菜单按系列分组（②，`modelFamilies` 在 `src/renderer/gui/model.ts`，菜单 `FamilyColumns` 在 `Composer.tsx`；e2e `gui-session.spec.ts` 加一例）已做完。
 - 2026-11-23：手机会话页的表格不再错位、嵌套列表分层缩进（PRD v1.230 ①，`ios/Wavi/Views/Components.swift`）；富文本（②，`ios/Wavi/Views/Markdown.swift`，swift-markdown 解析；行内代码、文件路径 chip 点开只读文件页、任务列表、链接、代码块复制、表格单元格行内 Markdown 和右缘渐隐，新命令 `file`）已做完；手机对话页不再显示底部标签栏、不再画「未识别的条目」（`ios/Wavi/Views/SessionView.swift`、`ios/Wavi/Model/TranscriptGroups.swift`）；一轮折成「工作了」（③，`ios/Wavi/Model/TranscriptGroups.swift` 的 `.fold` / `.reply`、`SessionView.swift` 的 `FoldRow`；消息下面写时间和复制，复制图标换成桌面的 Copy）已做完；context 圆环（④，`ios/Wavi/Views/ContextSheet.swift`、`SessionView.swift` 会话设置那一行的右端；协议加 `RemoteSession.context` 和 `RemoteSessionList.usage`，Figma 104C）已做完：圆环平时画占用、离自动压缩点 20k 以内（不知道压缩点时 ≥ 80%）用 text/primary 并写百分比，点开 sheet 看 `172k / 200k`、压缩点刻度、这家 agent 的额度窗口，接近压缩时有「放进 /compact」（只放进输入框、不发送）。
