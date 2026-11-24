@@ -48,7 +48,9 @@
   --card-gap-bottom: var(--space-12);
 
   /* Type */
-  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  /* Google Sans (OFL 1.1, bundled via @fontsource-variable/google-sans, PRD v1.234), as Antigravity; its opsz axis sizes
+     the shapes to the size like SF Pro's. Chinese falls through to PingFang SC. */
+  --font-ui: 'Google Sans Variable', 'PingFang SC', 'Noto Sans SC', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'PingFang SC', 'Noto Sans SC', monospace;
   --text-display: 500 28px/36px var(--font-ui);
   --text-title-l: 500 20px/28px var(--font-ui);

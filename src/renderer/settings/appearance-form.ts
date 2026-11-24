@@ -16,8 +16,8 @@ import type { SelectOption } from './controls'
 import { CJK_SAMPLE, LATIN_SAMPLE, cssFamily, groupCjkFamilies, withCurrent } from './fonts'
 
 const M = defineMessages({
-  zh: { lineHeight: '行高', systemUiFont: '跟随系统' },
-  en: { lineHeight: 'line height', systemUiFont: 'System' }
+  zh: { lineHeight: '行高', systemUiFont: '跟随界面' },
+  en: { lineHeight: 'line height', systemUiFont: 'App font' }
 })
 
 export const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = localized(
