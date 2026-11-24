@@ -207,6 +207,13 @@ func connectionWords(_ link: LinkState, mac: String, dropped: Bool) -> Connectio
   }
 }
 
+/// 设置 · 连接: how the Mac is reached (`Tailscale`, `局域网`) while the link is open — the Mac's name has its own row —
+/// and the words of `connectionWords` (what is wrong) otherwise.
+func connectionDetail(_ link: LinkState, words: ConnectionWords) -> String {
+  if case .open(let url) = link { return viaOf(url) }
+  return words.text
+}
+
 /// 45E's title: what the agent wants to do.
 func permissionTitle(_ tool: String) -> String {
   switch tool {

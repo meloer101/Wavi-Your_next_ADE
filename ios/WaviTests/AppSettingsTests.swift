@@ -122,4 +122,11 @@ private let list = RemoteSessionList(projects: [RemoteProject(id: "p1", name: "t
     activities.show(card, mac: "Mac")
     #expect(activities.pushedAt != nil)
   }
+
+  @Test func theConnectionRowNamesTheWayInUseOrWhatIsWrong() {
+    let open = connectionWords(.open(url: "ws://100.101.2.3:7429"), mac: "MacBook Air", dropped: false)
+    #expect(connectionDetail(.open(url: "ws://100.101.2.3:7429"), words: open) == "Tailscale")
+    let offline = connectionWords(.offline(.macAsleep), mac: "MacBook Air", dropped: false)
+    #expect(connectionDetail(.offline(.macAsleep), words: offline) == offline.text)
+  }
 }

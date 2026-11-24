@@ -72,7 +72,9 @@ struct AppSettingsView: View {
       VStack(alignment: .leading, spacing: 20) {
         block(nil) { avatarRow }
         block(String(localized: "连接")) {
-          Line(label: model.macName, value: model.connection.text)
+          Line(label: "Mac", value: model.macName)
+          Hairline()
+          Line(label: String(localized: "连接"), value: connectionDetail(model.link, words: model.connection))
           Hairline()
           Button { unpairing = true } label: { Line(label: String(localized: "取消配对"), danger: true) }.buttonStyle(RowStyle())
         }
@@ -129,6 +131,8 @@ struct AppSettingsView: View {
     }
     .background(Color.bgApp)
     .navigationTitle("设置")
+    // The tab bar belongs to the two lists: a page pushed from one hides it, like the session page.
+    .toolbarVisibility(.hidden, for: .tabBar)
     .navigationBarTitleDisplayMode(.inline)
     .task { await loadSize() }
     .onChange(of: activityEnabled) { model.activitySwitchChanged() }
@@ -215,7 +219,7 @@ private struct Line<Trailing: View>: View {
     HStack(spacing: 8) {
       if avatar { AvatarDisc(size: 36) }
       Text(label).font(.ui(.callout)).foregroundStyle(danger ? Color.noticeDanger : Color.textPrimary).frame(maxWidth: .infinity, alignment: .leading)
-      if let value { Text(value).font(.ui(.callout)).foregroundStyle(Color.textSecondary).lineLimit(1) }
+      if let value { Text(value).font(.ui(.callout)).foregroundStyle(Color.textSecondary).lineLimit(2).multilineTextAlignment(.trailing) }
       trailing
     }
     .padding(.leading, 16)
