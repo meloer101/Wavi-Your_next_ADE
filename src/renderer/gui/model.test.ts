@@ -20,6 +20,7 @@ import {
   modeChanges,
   chatIsEmpty,
   guiAgentMenu,
+  modelFamilies,
   projectChoices,
   wheelSteps,
   planParts,
@@ -759,5 +760,50 @@ describe('foldsMessage (Figma 96A)', () => {
     expect(foldsMessage(12 * line, line, 10)).toBe(false)
     expect(foldsMessage(0, line, 10)).toBe(false)
     expect(foldsMessage(40 * line, 0, 10)).toBe(false)
+  })
+})
+
+describe('modelFamilies', () => {
+  const list = (rows: string): { value: string; label: string }[] => rows.split(', ').map((row) => ({ value: row.split('|')[0]!, label: row.split('|')[1]! }))
+  const shape = (rows: string) => modelFamilies(list(rows)).map((f) => [f.name, f.versions.map((v) => v.label)])
+
+  // Claude Code 2.1.x's `initialize` list, in its order.
+  const CLAUDE =
+    'opus|Opus 5.5, fable|Fable 5.2, sonnet|Sonnet 5.5, haiku|Haiku 5.5, claude-fable-5-1|Fable 5.1, claude-haiku-4-5-20251001|Haiku 4.5, claude-sonnet-5|Sonnet 5, claude-opus-5|Opus 5, claude-fable-5|Fable 5, claude-opus-4-8|Opus 4.8, claude-opus-4-7|Opus 4.7, claude-opus-4-6|Opus 4.6, claude-sonnet-4-6|Sonnet 4.6'
+
+  it('groups Claude Code’s list by family, newest version first, families in order of first appearance', () => {
+    expect(shape(CLAUDE)).toEqual([
+      ['Opus', ['Opus 5.5', 'Opus 5', 'Opus 4.8', 'Opus 4.7', 'Opus 4.6']],
+      ['Fable', ['Fable 5.2', 'Fable 5.1', 'Fable 5']],
+      ['Sonnet', ['Sonnet 5.5', 'Sonnet 5', 'Sonnet 4.6']],
+      ['Haiku', ['Haiku 5.5', 'Haiku 4.5']]
+    ])
+    expect(modelFamilies(list(CLAUDE))[0]?.versions.map((v) => v.value)).toEqual(['opus', 'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6'])
+  })
+
+  it('orders versions by number, not by position in the list', () => {
+    expect(shape('a|Opus 4.6, b|Opus 4.10, c|Opus 4.7')).toEqual([['Opus', ['Opus 4.10', 'Opus 4.7', 'Opus 4.6']]])
+  })
+
+  it('makes a label with no version number its own family', () => {
+    expect(shape('default|Default, opus|Opus 5.5, haiku|Haiku')).toEqual([
+      ['Default', ['Default']],
+      ['Opus', ['Opus 5.5']],
+      ['Haiku', ['Haiku']]
+    ])
+  })
+
+  it('drops the version from GPT / Codex style labels and ignores case', () => {
+    expect(shape('a|GPT-5.5, b|GPT-5.5-Codex, c|GPT-5.4, d|gpt-5.4-codex, e|GPT-5.5-Codex-Mini, f|o3-mini, g|DeepSeek V4 Pro')).toEqual([
+      ['GPT', ['GPT-5.5', 'GPT-5.4']],
+      ['GPT-Codex', ['GPT-5.5-Codex', 'gpt-5.4-codex']],
+      ['GPT-Codex-Mini', ['GPT-5.5-Codex-Mini']],
+      ['o3-mini', ['o3-mini']],
+      ['DeepSeek Pro', ['DeepSeek V4 Pro']]
+    ])
+  })
+
+  it('returns nothing for an empty list', () => {
+    expect(modelFamilies([])).toEqual([])
   })
 })

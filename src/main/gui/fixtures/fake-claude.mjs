@@ -270,6 +270,8 @@ function onUser(message) {
 
 function control(message) {
   const r = message.request
+  // FAKE_CONTROL_LOG: every control request, one JSON line each, for a test to read what the app asked.
+  if (process.env.FAKE_CONTROL_LOG) appendFileSync(process.env.FAKE_CONTROL_LOG, `${JSON.stringify(r)}\n`)
   const reply = (response) => out({ type: 'control_response', response: { subtype: 'success', request_id: message.request_id, response } })
   if (r.subtype === 'initialize') {
     reply({
@@ -277,11 +279,17 @@ function control(message) {
         { name: 'review', description: 'Review the diff (project)', argumentHint: '[path]' },
         { name: 'research', description: 'Research a topic and write a report (user)', argumentHint: '<topic>' }
       ],
-      models: [
-        { value: 'default', displayName: 'Default (recommended)', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
-        { value: 'opus', displayName: 'Opus', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
-        { value: 'haiku', displayName: 'Haiku' }
-      ],
+      // FAKE_MODELS: "value|label, …" in place of the default list (default and Opus keep their effort levels), as Claude lists its versions.
+      models: process.env.FAKE_MODELS
+        ? process.env.FAKE_MODELS.split(', ').map((row) => {
+            const [value, displayName] = row.split('|')
+            return value === 'opus' || value === 'default' ? { value, displayName, resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true } : { value, displayName }
+          })
+        : [
+            { value: 'default', displayName: 'Default (recommended)', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
+            { value: 'opus', displayName: 'Opus', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
+            { value: 'haiku', displayName: 'Haiku' }
+          ],
       current_permission_mode: 'default'
     })
   } else if (r.subtype === 'get_settings') reply({ effective: { effortLevel: 'max' }, sources: [], applied: { ultracode, ultracodeRequested: ultracode, ultracodeAvailable: true } })
