@@ -54,6 +54,42 @@ private let now = at(23, 10, 0)
     #expect(percentText(-3) == "0%")
   }
 
+  @Test func theGaugeHas40TicksAndTheCompactionPointIsOneOfThem() {
+    func marks(_ percent: Double, _ mark: Double?) -> (filled: Int, mark: Int?) { tickMarks(percent: percent, mark: mark) }
+    #expect(marks(0, nil).filled == 0)
+    #expect(marks(11, nil).filled == 4)
+    // Figma 108B: 86 % is 34 ticks (34.4), the point at 90 % is the 37th tick (index 36).
+    #expect(marks(86, 90).filled == 34)
+    #expect(marks(86, 90).mark == 36)
+    #expect(marks(100, nil).filled == 40)
+    #expect(marks(50, nil).mark == nil)
+    // Out of range: the gauge never draws more than it has, and the point is at most the last tick.
+    #expect(marks(140, 120).filled == 40)
+    #expect(marks(140, 120).mark == 39)
+    #expect(marks(-5, -5).filled == 0)
+    #expect(marks(-5, -5).mark == 0)
+    #expect(marks(100, 100).mark == 39)
+    // Figma 108A / 108C: 7 % and 2 % windows, 31 % context.
+    #expect(marks(7, nil).filled == 3)
+    #expect(marks(2, nil).filled == 1)
+    #expect(marks(31, 95).filled == 12)
+    #expect(marks(31, 95).mark == 38)
+  }
+
+  @Test func windowsOfOneModelStayOnTheMac() {
+    let all = RemoteVendorUsage(vendor: "claude", plan: "Max", windows: [
+      .init(minutes: 300, scope: nil, percent: 7, resetsAt: nil),
+      .init(minutes: 10_080, scope: nil, percent: 2, resetsAt: nil),
+      .init(minutes: 10_080, scope: "Sonnet", percent: 30, resetsAt: nil)
+    ])
+    #expect(shownWindows(all).map(\.minutes) == [300, 10_080])
+    #expect(shownWindows(all).allSatisfy { $0.scope == nil })
+    // Only a model's window left: nothing to show, so the sheet draws no plan block.
+    let scoped = RemoteVendorUsage(vendor: "claude", plan: nil, windows: [.init(minutes: 10_080, scope: "Opus", percent: 5, resetsAt: nil)])
+    #expect(shownWindows(scoped).isEmpty)
+    #expect(shownWindows(RemoteVendorUsage(vendor: "codex", plan: nil, windows: [])).isEmpty)
+  }
+
   /// The desktop's `windowLabel` in Chinese (the scheme runs the tests in Chinese, as the Mac's tests do).
   @Test func windowLabelsAreTheDesktops() throws {
     let labels = try vectors("windowLabels")

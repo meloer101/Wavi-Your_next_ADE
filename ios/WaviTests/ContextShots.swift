@@ -1,6 +1,5 @@
-// The context ring and its sheet drawn to PNGs, dark and light (PRD F22 v1.230 ④, Figma 104C1 / 104C2 / 104C3): the 会话设置
-// row with the ring in its normal state and in its high state, and the sheet's content with Claude's plan windows and
-// 「放进 /compact」. `test-results/context/` when the shell names WAVI_SHOT_DIR, the simulator's temporary folder otherwise.
+// The context ring and its sheet drawn to PNGs, dark and light (PRD F22 v1.230 ④, Figma 104C1 / 104C2; the sheet is Figma 108
+// since v1.232): the 会话设置 row with the ring in its normal state and in its high state, and the sheet's three states. `test-results/context/` when the shell names WAVI_SHOT_DIR, the simulator's temporary folder otherwise.
 import Foundation
 import SwiftUI
 import Testing
@@ -82,26 +81,43 @@ private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name:
     for (style, name) in styles { try await shot(Row(session: session(high, settings: nil)), style, named: "row-ring-only-\(name)", height: 64) }
   }
 
-  @Test func theSheetWithClaudeUsageAndCompact() async throws { try await sheetShots(high, named: "sheet") }
-
-  /// The fill has passed the compaction tick: the tick is drawn in the sheet's colour, so it still shows.
-  @Test func theSheetPastTheCompactionMark() async throws {
-    try await sheetShots(RemoteContext(percent: 95, usedTokens: 190_000, windowTokens: 200_000, markPercent: 92, high: true), named: "sheet-past-mark")
-  }
-
-  private func sheetShots(_ context: RemoteContext, named base: String) async throws {
-    let now = Date().timeIntervalSince1970 * 1000
-    let usage = RemoteVendorUsage(vendor: "claude", plan: "Max", windows: [
-      .init(minutes: 300, scope: nil, percent: 42, resetsAt: now + 3 * 3_600_000),
-      .init(minutes: 10_080, scope: nil, percent: 18, resetsAt: now + 4 * 24 * 3_600_000)
-    ])
+  /// Figma 108A / 108B / 108C, dark and light: the context sheet with the plan windows; at 86 % with 「放进 /compact」; without
+  /// plan windows. The system draws the real sheet's glass and grabber, which a window capture of the content does not
+  /// have: the content sits in a bg/sheet container with a grabber drawn like the system's.
+  @Test func theSheetInFigma108sThreeStates() async throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .current
+    func at(_ day: Int, _ hour: Int, _ minute: Int) -> Double {
+      calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute))!.timeIntervalSince1970 * 1000
+    }
+    // A Saturday noon: 23:30 is today, Tuesday 10:00 reads 周二.
+    let now = at(21, 12, 0)
+    let usage = { (five: Double, seven: Double) in
+      RemoteVendorUsage(vendor: "claude", plan: "Max", windows: [
+        .init(minutes: 300, scope: nil, percent: five, resetsAt: at(21, 23, 30)),
+        .init(minutes: 10_080, scope: nil, percent: seven, resetsAt: at(24, 10, 0)),
+        // Never drawn on the phone (PRD v1.232).
+        .init(minutes: 10_080, scope: "Sonnet", percent: 55, resetsAt: at(24, 10, 0))
+      ])
+    }
+    let states: [(String, RemoteContext, RemoteVendorUsage?)] = [
+      ("108A", RemoteContext(percent: 11, usedTokens: 115_000, windowTokens: 1_000_000, markPercent: 97, high: false), usage(7, 2)),
+      ("108B", RemoteContext(percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 90, high: true), usage(63, 41)),
+      ("108C", RemoteContext(percent: 31, usedTokens: 62_000, windowTokens: 200_000, markPercent: 90, high: false), nil)
+    ]
     for (style, name) in styles {
-      let sheet = ContextSheetContent(context: context, agent: "claude", usage: usage, now: now) {}
-        .frame(width: 402, height: 340)
-        .background(Color.bgSheet, in: UnevenRoundedRectangle(topLeadingRadius: Metric.radiusSheetTop, topTrailingRadius: Metric.radiusSheetTop))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .background(Color.bgApp)
-      try await shot(sheet, style, named: "\(base)-\(name)", height: 400)
+      for (state, context, usage) in states {
+        let sheet = ContextSheetContent(context: context, agent: "claude", usage: usage, now: now) {}
+          .frame(width: 386)
+          .fixedSize(horizontal: false, vertical: true)
+          .background(Color.bgSheet, in: RoundedRectangle(cornerRadius: 38))
+          .overlay(alignment: .top) { Capsule().fill(Color.fillStrong).frame(width: 36, height: 5).padding(.top, 12) }
+          .overlay(RoundedRectangle(cornerRadius: 38).strokeBorder(Color.hairline))
+          .padding(8)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+          .background(Color.bgApp)
+        try await shot(sheet, style, named: "sheet-\(state)-\(name)", height: 874)
+      }
     }
   }
 }
