@@ -190,4 +190,45 @@ private func session(_ id: String = "s", project: String = "p1", status: Session
     #expect(fields["untracked"] == .bool(true))
     #expect(fields["oldPath"] == nil)
   }
+
+  // PRD v1.243: a session under a listed parent is no row of its project; it stays in 等你处理 while it needs the user.
+  @Test func aMemberOfAListedParentIsNoProjectRow() {
+    func child(_ id: String, _ status: SessionStatus, parent: String) -> RemoteSession {
+      var s = session(id, status: status, activity: 1)
+      s.parentId = parent
+      return s
+    }
+    let list = RemoteSessionList(projects: [.init(id: "p1", name: "acme-web")], sessions: [
+      session("parent", activity: 9), child("kid", .running, parent: "parent"), child("asking", .needsYou, parent: "parent"),
+      child("orphan", .idle, parent: "gone")
+    ])
+    let groups = groupSessions(list)
+    #expect(groups.map(\.title) == ["等你处理", "acme-web"])
+    #expect(groups[0].rows.map(\.session.id) == ["asking"])
+    // A parent that is not listed leaves the session where it was.
+    #expect(groups[1].rows.map(\.session.id) == ["parent", "orphan"])
+  }
+
+  @Test func foldMembersFollowTheMacsOrderAndResolveSessionMembers() {
+    var parent = session("parent")
+    parent.group = RemoteGroup(total: 2, counts: [.init(status: .running, count: 2)], members: [
+      RemoteMember(id: "kid", kind: .session, title: "kid", status: .running, meta: nil),
+      RemoteMember(id: "a1", kind: .subagent, title: "scan", status: .running, meta: "Opus 5.5")
+    ])
+    let list = RemoteSessionList(projects: [], sessions: [parent, session("kid")])
+    let members = foldMembers(of: parent, in: list)
+    #expect(members.map(\.id) == ["kid", "a1"])
+    #expect(members[0].session?.id == "kid" && members[1].session == nil)
+    #expect(foldMembers(of: session("kid"), in: list).isEmpty)
+  }
+
+  @Test func openFoldsToggleAndForgetSessionsThatAreGone() {
+    var raw = ""
+    raw = FoldOpen.toggled(raw, "a")
+    raw = FoldOpen.toggled(raw, "b")
+    #expect(FoldOpen.ids(raw) == ["a", "b"])
+    #expect(FoldOpen.ids(FoldOpen.toggled(raw, "a")) == ["b"])
+    #expect(FoldOpen.ids(FoldOpen.pruned(raw, keeping: ["b", "c"])) == ["b"])
+    #expect(FoldOpen.ids("") .isEmpty)
+  }
 }

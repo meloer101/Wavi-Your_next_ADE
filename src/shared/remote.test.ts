@@ -194,6 +194,40 @@ describe('window messages', () => {
     expect(parseWindowSessions({ ...good, sessions: 'all' })).toBeNull()
   })
 
+  it('validates parentId and the collaboration group, and leaves malformed ones off (PRD v1.243)', () => {
+    const group = {
+      total: 2,
+      counts: [{ status: 'running', count: 2 }],
+      members: [
+        { id: 's2', kind: 'session', title: '补测试', status: 'running' },
+        { id: 'agent-1', kind: 'subagent', title: '查调用点', status: 'running', meta: 'Opus 5.5' }
+      ]
+    }
+    const base = {
+      projects: [{ id: 'p1', name: 'acme-web' }],
+      sessions: [{ id: 's1', projectId: 'p1', title: '修好登录', agent: 'claude', status: 'running', activity: 1 }],
+      folders: { s1: { cwd: '/Users/me/acme' } },
+      roots: { p1: '/Users/me/acme' }
+    }
+    const read = (extra: Record<string, unknown>) => parseWindowSessions({ ...base, sessions: [{ ...base.sessions[0], ...extra }] })?.sessions[0]
+    expect(read({ parentId: 's0', group })).toMatchObject({ parentId: 's0', group })
+    // Malformed fields are dropped; the session itself stays on the list.
+    expect(read({ parentId: 'bad id!' })?.parentId).toBeUndefined()
+    expect(read({ parentId: 's1' })?.parentId).toBeUndefined()
+    for (const bad of [
+      { ...group, total: -1 },
+      { ...group, counts: [{ status: 'busy', count: 1 }] },
+      { ...group, members: [{ id: 'x', kind: 'robot', title: 't', status: 'idle' }] },
+      { ...group, members: [{ id: 'x', kind: 'session', title: 't'.repeat(501), status: 'idle' }] },
+      { ...group, members: Array.from({ length: 201 }, (_, i) => ({ id: `m${i}`, kind: 'subagent', title: 't', status: 'idle' })) },
+      'x'
+    ]) {
+      const row = read({ group: bad })
+      expect(row?.id).toBe('s1')
+      expect(row?.group).toBeUndefined()
+    }
+  })
+
   it('validates the context ring and the vendors\' plan windows, and leaves a bad one off (PRD F22 v1.230 ④)', () => {
     const row = {
       projects: [{ id: 'p1', name: 'acme-web' }],

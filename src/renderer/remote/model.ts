@@ -3,11 +3,13 @@
 // session's folder and each project's root. Pure.
 import type { GuiModelCatalog, GuiPicks } from '@shared/gui-chat'
 import { USAGE_VENDORS, usageVendor } from '@shared/agents'
-import type { RemoteAgentModels, RemoteContext, RemoteSession, RemoteShip, RemoteShipField, RemoteVendorUsage, RemoteWindowSessions } from '@shared/remote'
+import type { RemoteAgentModels, RemoteContext, RemoteGroup, RemoteMember, RemoteSession, RemoteShip, RemoteShipField, RemoteVendorUsage, RemoteWindowSessions } from '@shared/remote'
 import { contextHigh, contextMark, planLabel, vendorStatus, windowKey, type ContextUsage, type UsageAccount, type UsageVendor, type VendorUsage } from '@shared/session-meta'
 import type { SessionSettings } from '@shared/session-settings'
 import { turnCheckView, type TurnChecks } from '@shared/turn-checks'
-import type { Project, Session, Worktree } from '@shared/types'
+import type { Project, Session, SessionId, Worktree } from '@shared/types'
+import { groupsOf, type SideItem } from '../sidebar/model'
+import { glyphStatus } from '../lifecycle/present'
 import { glanceFields, submitBlocker, submitLabel, type ShipKind, type ShipState } from '../pull-requests/ship-flow'
 
 /** Local folders never go to the phone (PRD F22): a worktree's or project's path in a message becomes `.` / the folder name. */
@@ -111,16 +113,56 @@ export interface RemoteShipping {
   endings: Readonly<Record<string, string>>
 }
 
+/** The most a group lists: the fold shows one level and the wire validates the same bound. */
+const MAX_MEMBERS = 200
+
+/**
+ * The collaboration groups of the sessions the phone lists (PRD v1.243), counted by the sidebar's own `groupsOf`: a
+ * session whose dispatcher is not listed has no parent here. `parentId` per child, `group` per session with members.
+ */
+export function remoteGroups(
+  listed: readonly Session[],
+  items: Readonly<Record<SessionId, readonly SideItem[]>>
+): { parents: Record<SessionId, SessionId>; groups: Record<SessionId, RemoteGroup> } {
+  const byId = new Map(listed.map((s) => [s.id, s]))
+  const parents: Record<SessionId, SessionId> = {}
+  for (const s of listed) if (s.dispatchedBy && s.dispatchedBy !== s.id && byId.has(s.dispatchedBy)) parents[s.id] = s.dispatchedBy
+  const groups: Record<SessionId, RemoteGroup> = {}
+  for (const [id, group] of Object.entries(groupsOf(listed, items))) {
+    const lines = new Map((items[id] ?? []).map((item) => [item.id, item]))
+    const phases = (items[id] ?? []).filter((item) => item.kind === 'phase')
+    const members: RemoteMember[] = [
+      ...group.children.flatMap((child): RemoteMember[] => {
+        const s = byId.get(child)
+        return s ? [{ id: s.id, kind: 'session', title: clip(s.title, 500), status: glyphStatus(s) }] : []
+      }),
+      ...group.items.flatMap((item): RemoteMember[] => {
+        const line = lines.get(item.id)
+        if (!line) return []
+        const kind = line.kind === 'workflow' ? 'workflow' : line.kind === 'teammate' ? 'teammate' : 'subagent'
+        // A run's meta is the phase it is in; a subagent's and a teammate's is their model.
+        const meta = kind === 'workflow' ? (phases.find((p) => p.id.startsWith(`phase:${line.id.slice('workflow:'.length)}:`) && p.glyph === 'running')?.title ?? line.right) : kind === 'teammate' ? line.right : line.model
+        return [{ id: item.id, kind, title: clip(line.title, 500), status: item.status, ...(meta ? { meta: clip(meta, 200) } : {}) }]
+      })
+    ]
+    groups[id] = { total: group.total, counts: group.counts.map((c) => ({ status: c.status, count: c.count })), members: members.slice(0, MAX_MEMBERS) }
+  }
+  return { parents, groups }
+}
+
 export function remoteSessions(
   data: { projects: readonly Project[]; worktrees: readonly Worktree[]; sessions: readonly Session[] },
   shipping: RemoteShipping = { ships: {}, endings: {} },
   settings: (session: Session) => SessionSettings | undefined = () => undefined,
   checks: (session: Session) => TurnChecks | undefined = () => undefined,
   context: (session: Session) => ContextUsage | undefined = () => undefined,
-  vendor: (session: Session) => UsageVendor | undefined = () => undefined
+  vendor: (session: Session) => UsageVendor | undefined = () => undefined,
+  /** Every session's subagents, workflow runs and team as the sidebar lines (`sideItemsOf`), for the groups. */
+  items: Readonly<Record<SessionId, readonly SideItem[]>> = {}
 ): RemoteWindowSessions {
   const worktrees = new Map(data.worktrees.map((w) => [w.id, w]))
   const out: RemoteWindowSessions = { projects: [], sessions: [], folders: {}, roots: {} }
+  const listed: Session[] = []
   for (const s of data.sessions) {
     const w = worktrees.get(s.worktreeId)
     if (!w || w.archived || s.kind === 'shell') continue
@@ -149,7 +191,15 @@ export function remoteSessions(
     const ending = shipping.endings[w.path]
     if (ending && !ship) row.shipNotice = clip(hidePaths(ending, [w.path, root]), 300)
     out.sessions.push(row)
+    listed.push(s)
     out.folders[s.id] = { cwd: w.path, ...(w.baseBranch ? { base: w.baseBranch } : {}), ...(s.agentSessionId ? { agentSession: s.agentSessionId } : {}) }
+  }
+  const { parents, groups } = remoteGroups(listed, items)
+  for (const row of out.sessions) {
+    const parentId = parents[row.id]
+    if (parentId) row.parentId = parentId
+    const group = groups[row.id]
+    if (group) row.group = group
   }
   for (const p of data.projects) {
     out.roots[p.id] = p.rootPath

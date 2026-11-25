@@ -22,7 +22,10 @@ final class AppModel {
   /// A link that was open went away (the line says 连接断了，正在重连 rather than 正在连接).
   private(set) var dropped = false
   private(set) var macName = ""
-  private(set) var sessions = RemoteSessionList.empty
+  private(set) var sessions = RemoteSessionList.empty {
+    // Folds left open for sessions that are gone are forgotten (PRD v1.243).
+    didSet { pruneOpenFolds() }
+  }
   /// Figma 91′: when each running session's turn began (ms), kept while it runs or waits on the user, so the run row's
   /// clock does not start over after an answer (the session's `since` is its current status's).
   private(set) var turnStarts: [String: Double] = [:]
@@ -207,6 +210,13 @@ final class AppModel {
   /// What the connection line under the titles says.
   var connection: ConnectionWords { connectionWords(link, mac: macName, dropped: dropped) }
 
+
+  private func pruneOpenFolds() {
+    let raw = UserDefaults.standard.string(forKey: FoldOpen.key) ?? ""
+    guard !raw.isEmpty else { return }
+    let kept = FoldOpen.pruned(raw, keeping: Set(sessions.sessions.map(\.id)))
+    if kept != raw { UserDefaults.standard.set(kept, forKey: FoldOpen.key) }
+  }
 
   func session(_ id: String) -> RemoteSession? { sessions.sessions.first { $0.id == id } }
 

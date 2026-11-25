@@ -81,6 +81,43 @@ struct RemoteSession: Codable, Hashable, Sendable, Identifiable {
   /// The vendor (claude / codex) whose plan windows in `RemoteSessionList.usage` apply to this session, as the Mac picks it;
   /// absent when none applies, so the sheet shows no plan windows.
   var usageVendor: String? = nil
+  /// The session that dispatched this one, only when that session is in the same list (PRD v1.243): the list and the board
+  /// fold it under its parent. An older Mac sends none and the list stays flat.
+  var parentId: String? = nil
+  /// The members folded under this session, counted on the Mac; the phone never counts.
+  var group: RemoteGroup? = nil
+}
+
+/// A session's members (src/shared/remote.ts `RemoteGroup`): direct ones in the group's order, `total` and `counts` at any depth.
+struct RemoteGroup: Codable, Hashable, Sendable {
+  let total: Int
+  /// Most urgent status first; statuses with none are left out.
+  let counts: [Count]
+  let members: [RemoteMember]
+
+  struct Count: Codable, Hashable, Sendable {
+    let status: SessionStatus
+    let count: Int
+  }
+}
+
+struct RemoteMember: Codable, Hashable, Sendable, Identifiable {
+  /// session / subagent / teammate / workflow; one this phone does not know reads as a subagent (a line, not tappable).
+  enum Kind: String, Codable, Hashable, Sendable {
+    case session, subagent, teammate, workflow
+
+    init(from decoder: Decoder) throws {
+      self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .subagent
+    }
+  }
+
+  /// A `session` member's id is a session id in the same list.
+  let id: String
+  let kind: Kind
+  let title: String
+  let status: SessionStatus
+  /// The model of a subagent / teammate, the phase of a workflow run.
+  let meta: String?
 }
 
 /// One session's context window (src/shared/remote.ts `RemoteContext`). `high` is worked out on the Mac; the phone never
