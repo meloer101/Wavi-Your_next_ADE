@@ -41,9 +41,9 @@ describe('sessionTime', () => {
 
   it('idle and done_unread count from the finish, not from later activity', () => {
     const session = timed({ finishedAt: NOW - 7 * MIN, statusSince: NOW - 2 * MIN })
-    expect(sessionTime(session, 'idle', NOW).text).toBe('7m 前')
-    expect(sessionTime(session, 'done_unread', NOW).text).toBe('7m 前')
-    expect(sessionTime(timed({ statusSince: NOW - 4 * MIN }), 'error', NOW).text).toBe('4m 前')
+    expect(sessionTime(session, 'idle', NOW).text).toBe('7m')
+    expect(sessionTime(session, 'done_unread', NOW).text).toBe('7m')
+    expect(sessionTime(timed({ statusSince: NOW - 4 * MIN }), 'error', NOW).text).toBe('4m')
   })
 })
 
