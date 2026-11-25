@@ -41,6 +41,20 @@
 }
 
 .set {
+  padding: 0;
+  border: 0;
+  background: transparent;
   font: var(--text-caption);
   color: var(--text-primary);
+  cursor: default;
+}
+
+.set:hover {
+  text-decoration: underline;
+}
+
+.set:focus-visible,
+.leader:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }

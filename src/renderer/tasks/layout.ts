@@ -34,7 +34,7 @@ export interface Dims {
 }
 
 export const DIMS: Record<LayoutMode, Dims> = {
-  note: { w: 220, h: 94, hParent: 118, pitch: 290, gap: 12, leafShift: 30, rootGap: 24, labelH: 28, labelGap: 24, clusterGap: 80, rowWidth: 2000 },
+  note: { w: 220, h: 94, hParent: 118, pitch: 290, gap: 24, leafShift: 30, rootGap: 24, labelH: 28, labelGap: 24, clusterGap: 80, rowWidth: 2000 },
   chip: { w: 156, h: 28, hParent: 28, pitch: 176, gap: 8, leafShift: 10, rootGap: 16, labelH: 28, labelGap: 16, clusterGap: 32, rowWidth: 1100 }
 }
 

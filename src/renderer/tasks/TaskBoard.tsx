@@ -15,7 +15,7 @@ import { diffActivity, matchesFilter, snapshotOf, type Snapshot } from './model'
 import { Note, type NoteInfo } from './Note'
 import { ActivityPanel, Toolbar, ZoomControl } from './Panes'
 import { ProjectLabel } from './ProjectLabel'
-import { defaultProject, startTaskSync, useTaskBoard } from './store'
+import { activityShown, defaultProject, startTaskSync, useTaskBoard } from './store'
 import { useCards } from './use-cards'
 import styles from './TaskBoard.module.css'
 
@@ -36,8 +36,8 @@ export function TaskBoard() {
   const [panning, setPanning] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
-  const { view, selectedId, detailId, events, activityOpen, lastProjectId, loaded } = useTaskBoard(
-    useShallow((s) => ({ view: s.view, selectedId: s.selectedId, detailId: s.detailId, events: s.events, activityOpen: s.activityOpen, lastProjectId: s.lastProjectId, loaded: s.loaded }))
+  const { view, selectedId, detailId, events, activityPref, lastProjectId, loaded } = useTaskBoard(
+    useShallow((s) => ({ view: s.view, selectedId: s.selectedId, detailId: s.detailId, events: s.events, activityPref: s.activityPref, lastProjectId: s.lastProjectId, loaded: s.loaded }))
   )
   const tasks = useTaskBoard((s) => s.tasks)
   const filter = useOverviewStore((s) => s.filter)
@@ -47,6 +47,13 @@ export function TaskBoard() {
   )
 
   useEffect(() => startTaskSync(), [])
+  // Coming to the tab from its button leaves the focus on the button: the board's keys (N, ⇧1, ⌥D, Space) live on the
+  // tab's body, so take it, unless the user is already typing somewhere.
+  useEffect(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement && active.closest('input, textarea, select')) return
+    host.current?.parentElement?.focus()
+  }, [])
   useEffect(() => subscribeClock(() => setNow(Math.floor(Date.now() / TICK_MS) * TICK_MS)), [])
   useEffect(() => {
     const el = host.current
@@ -54,6 +61,21 @@ export function TaskBoard() {
     const observer = new ResizeObserver(([entry]) => entry && setSize({ w: entry.contentRect.width, h: entry.contentRect.height }))
     observer.observe(el)
     return () => observer.disconnect()
+  }, [])
+
+  // Space is "down" only while the key is: a window that loses focus never sees the keyup (blur clears it), and while a
+  // dialog or the input note is open it does not count (`spacePans`).
+  useEffect(() => {
+    const release = (): void => setSpaceDown(false)
+    const onKeyUp = (e: KeyboardEvent): void => {
+      if (e.key === ' ') release()
+    }
+    window.addEventListener('blur', release)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('blur', release)
+      window.removeEventListener('keyup', onKeyUp)
+    }
   }, [])
 
   // ── Layout ──
@@ -174,7 +196,8 @@ export function TaskBoard() {
       if (target.closest('input, select, textarea, [role="dialog"]')) return
       if (e.altKey && e.code === 'KeyD' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        useTaskBoard.getState().toggleActivity()
+        const state = useTaskBoard.getState()
+        state.setActivity(!activityShown(state.activityPref, host.current?.clientWidth ?? 0))
         return
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -199,26 +222,22 @@ export function TaskBoard() {
         state.select(null)
       }
     }
-    const onKeyUp = (e: KeyboardEvent): void => {
-      if (e.key === ' ') setSpaceDown(false)
-    }
     body.addEventListener('keydown', onKey)
-    body.addEventListener('keyup', onKeyUp)
-    return () => {
-      body.removeEventListener('keydown', onKey)
-      body.removeEventListener('keyup', onKeyUp)
-    }
+    return () => body.removeEventListener('keydown', onKey)
   }, [fit, startCompose])
 
   // ── Panning ──
-  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const spacePans = spaceDown && !composing && detailId === null
+  // `card`: the card the press started on (Space-drag over a note); pointer capture sends the pointerup to the board, so
+  // where it started, not where it ended, says whether it was a click on a note.
+  const drag = useRef<{ x: number; y: number; moved: boolean; card: string | null } | null>(null)
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
     if (e.button !== 0) return
     const target = e.target as HTMLElement
     if (target.closest('[data-no-pan], button, input, select')) return
     const onCard = target.closest('[data-task-id]') !== null
-    if (onCard && !spaceDown) return
-    drag.current = { x: e.clientX, y: e.clientY, moved: false }
+    if (onCard && !spacePans) return
+    drag.current = { x: e.clientX, y: e.clientY, moved: false, card: target.closest<HTMLElement>('[data-task-id]')?.dataset.taskId ?? null }
     e.currentTarget.setPointerCapture(e.pointerId)
     host.current?.parentElement?.focus()
   }
@@ -235,34 +254,28 @@ export function TaskBoard() {
     const state = useTaskBoard.getState()
     state.setView(panBy(state.view, dx, dy))
   }
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+  const onPointerUp = (): void => {
     const d = drag.current
     drag.current = null
     setPanning(false)
-    if (d && !d.moved && !(e.target as HTMLElement).closest('[data-task-id]')) useTaskBoard.getState().select(null)
+    if (d && !d.moved) useTaskBoard.getState().select(d.card)
+  }
+  const onPointerCancel = (): void => {
+    drag.current = null
+    setPanning(false)
   }
 
   // ── Render ──
+  const activityOpen = activityShown(activityPref, size.w)
   const detail = detailId !== null ? cardById.get(detailId) : undefined
   const compose = composing ? defaultProject(projectIds, lastProjectId, activeProject) : undefined
-  const leaderOf = (projectId: string) => (leaderSessions?.[projectId] !== undefined ? sessions.find((s) => s.id === leaderSessions[projectId]) : undefined)
   const projectsOnBoard = useMemo(() => projects.filter((p) => layout.clusters.some((c) => c.projectId === p.id)), [projects, layout])
 
-  return (
-    <div
-      ref={host}
-      className={styles.board}
-      data-testid="task-board"
-      data-drawing={drawing}
-      data-panning={panning}
-      data-space={spaceDown}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-    >
-      <DotField view={view} size={size} />
-      <div className={styles.world} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${scale})` }}>
+  // The world's content depends on the layout and the cards, not on the viewport: memoized, so panning and zooming
+  // re-render the transform and nothing under it (the links, labels and notes keep their elements).
+  const world = useMemo(
+    () => (
+      <>
         <svg className={styles.links} width="1" height="1" aria-hidden>
           {layout.links.map((l) => {
             const mid = (l.x1 + l.x2) / 2
@@ -279,7 +292,7 @@ export function TaskBoard() {
         {drawing !== 'dot' &&
           projectsOnBoard.map((p) => {
             const cluster = layout.clusters.find((c) => c.projectId === p.id)!
-            return <ProjectLabel key={p.id} project={p} at={cluster.label} leader={leaderOf(p.id)} />
+            return <ProjectLabel key={p.id} project={p} at={cluster.label} leader={leaderSessions?.[p.id] !== undefined ? sessions.find((x) => x.id === leaderSessions[p.id]) : undefined} />
           })}
         {layout.cards.map((placed) => {
           const card = cardById.get(placed.id)
@@ -299,8 +312,29 @@ export function TaskBoard() {
             />
           )
         })}
+      </>
+    ),
+    [layout, drawing, projectsOnBoard, leaderSessions, sessions, cardById, infos, selectedId, filter, projectName, now, onSelect, onOpen]
+  )
+
+  return (
+    <div
+      ref={host}
+      className={styles.board}
+      data-testid="task-board"
+      data-drawing={drawing}
+      data-panning={panning}
+      data-space={spacePans}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+    >
+      <DotField view={view} size={size} />
+      <div className={styles.world} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${scale})` }}>
+        {world}
       </div>
-      <ActivityPanel events={events} open={activityOpen} onToggle={useTaskBoard.getState().toggleActivity} />
+      <ActivityPanel events={events} open={activityOpen} onToggle={() => useTaskBoard.getState().setActivity(!activityOpen)} />
       <Toolbar onAdd={startCompose} onFit={fit} />
       <ZoomControl zoom={view.zoom} onStep={(dir) => zoomBy(dir === 1 ? ZOOM_STEP : 1 / ZOOM_STEP)} />
       {compose !== undefined && <Compose projects={projects} initialProject={compose} onSubmit={paste} onCancel={() => { setComposing(false); host.current?.parentElement?.focus() }} />}

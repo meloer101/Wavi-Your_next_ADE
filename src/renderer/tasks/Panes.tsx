@@ -65,7 +65,7 @@ export function ActivityPanel({ events, open, onToggle }: { events: readonly Act
   const m = useMessages(M)
   if (events.length === 0) return null
   return (
-    <section className={styles.activity} data-testid="task-activity" data-open={open} aria-label={m.activity}>
+    <section className={styles.activity} data-testid="task-activity" data-open={open} data-no-pan="" aria-label={m.activity}>
       <button type="button" className={styles.activityHead} onClick={onToggle} aria-expanded={open} title={open ? m.collapse : m.expand}>
         <span>{m.activity}</span>
         <span className={styles.key}>⌥D</span>
@@ -90,7 +90,7 @@ export function ActivityPanel({ events, open, onToggle }: { events: readonly Act
 export function Toolbar({ onAdd, onFit }: { onAdd(): void; onFit(): void }) {
   const m = useMessages(M)
   return (
-    <div className={styles.toolbar} role="toolbar" aria-label={m.add}>
+    <div className={styles.toolbar} role="toolbar" aria-label={m.add} data-no-pan="">
       <button type="button" className={styles.tool} onClick={onAdd} data-testid="task-add">
         <Plus {...ICON} />
         {m.add}
@@ -108,7 +108,7 @@ export function Toolbar({ onAdd, onFit }: { onAdd(): void; onFit(): void }) {
 export function ZoomControl({ zoom, onStep }: { zoom: number; onStep(direction: 1 | -1): void }) {
   const m = useMessages(M)
   return (
-    <div className={styles.zoom} role="group" aria-label={m.zoom}>
+    <div className={styles.zoom} role="group" aria-label={m.zoom} data-no-pan="">
       <button type="button" className={styles.zoomButton} aria-label={m.zoomOut} title={m.zoomOut} onClick={() => onStep(-1)}>
         <Minus {...ICON} />
       </button>

@@ -5,7 +5,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { launchApp } from './launch'
+import { launchApp, setWindowSize } from './launch'
 
 const SHOTS = join(process.cwd(), 'test-results', 'tasks')
 const WITHIN = { timeout: 20_000 }
@@ -200,4 +200,62 @@ test('Enter opens the card; 删除 asks first and removes it with what is below'
   await shoot('detail')
   await detail.getByRole('button', { name: '删除' }).click()
   await expect(note(28)).toHaveCount(0, WITHIN)
+})
+
+test('the board has the keyboard when the tab opens: N works without a click on the canvas', async () => {
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await page.keyboard.press('n')
+  await expect(page.getByTestId('task-compose-input')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('task-compose')).toHaveCount(0)
+})
+
+test('Space-drag over a note selects it on a plain click; a window blur lets go of Space', async () => {
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(27)).toBeVisible(WITHIN)
+  await board().click({ position: { x: 600, y: 700 } })
+  await expect(note(27)).toHaveAttribute('data-selected', 'false')
+  await page.keyboard.down(' ')
+  await expect(board()).toHaveAttribute('data-space', 'true')
+  await note(27).click()
+  await expect(note(27)).toHaveAttribute('data-selected', 'true')
+  await page.evaluate(() => globalThis.dispatchEvent(new Event('blur')))
+  await expect(board()).toHaveAttribute('data-space', 'false')
+  await page.keyboard.up(' ')
+})
+
+test('the floating panes are not canvas: pressing and scrolling on them does not pan', async () => {
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  const before = await note(21).boundingBox()
+  const bar = (await page.locator('[role="toolbar"]').boundingBox())!
+  // The empty strip on the toolbar's left edge, and the zoom control's value.
+  await page.mouse.move(bar.x + 2, bar.y + bar.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(bar.x + 80, bar.y - 120, { steps: 6 })
+  await page.mouse.up()
+  const zoomBox = (await page.getByTestId('task-zoom').boundingBox())!
+  await page.mouse.move(zoomBox.x + 4, zoomBox.y + 4)
+  await page.mouse.wheel(0, 200)
+  await page.waitForTimeout(150)
+  expect(await note(21).boundingBox()).toEqual(before)
+})
+
+test('「动态」 starts collapsed on a narrow canvas and keeps the user’s own toggle', async () => {
+  await setWindowSize(app, page, 1000, 900)
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  // Something has to happen for the panel to have anything to show: a card appears.
+  const t = Date.now()
+  await seed([{ id: 'n1', seq: 1, projectId: 'p-acme', title: '第一张', body: '', createdBy: 'user', manual: 'todo', createdAt: t, updatedAt: t }])
+  await expect(note(1)).toBeVisible(WITHIN)
+  await seed([
+    { id: 'n1', seq: 1, projectId: 'p-acme', title: '第一张', body: '', createdBy: 'user', manual: 'todo', createdAt: t, updatedAt: t },
+    { id: 'n2', seq: 2, projectId: 'p-acme', title: '第二张', body: '', createdBy: 'user', manual: 'todo', createdAt: t + 1, updatedAt: t }
+  ])
+  const panel = page.getByTestId('task-activity')
+  await expect(panel).toBeVisible(WITHIN)
+  await expect(panel).toHaveAttribute('data-open', 'false')
+  await panel.getByRole('button').first().click()
+  await expect(panel).toHaveAttribute('data-open', 'true')
+  expect(await page.evaluate(() => globalThis.localStorage?.getItem('tr.tasks.activity.v1'))).toBe('open')
+  await setWindowSize(app, page, 1440, 900)
 })

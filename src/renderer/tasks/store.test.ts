@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Task, TaskApi } from '@shared/task-board'
 import { joinCards } from './model'
-import { defaultProject, startTaskSync, useTaskBoard } from './store'
+import { ACTIVITY_KEY, activityShown, defaultProject, startTaskSync, useTaskBoard } from './store'
 
 let n = 0
 function task(over: Partial<Task> = {}): Task {
@@ -107,5 +107,28 @@ describe('defaultProject', () => {
   it('skips a project that is gone and answers undefined with none', () => {
     expect(defaultProject(['a'], 'gone', 'gone2')).toBe('a')
     expect(defaultProject([], null, undefined)).toBeUndefined()
+  })
+})
+
+describe('the 「动态」 panel default', () => {
+  it('is collapsed on a canvas narrower than 1100 px and open from 1100 px', () => {
+    expect(activityShown(null, 1099)).toBe(false)
+    expect(activityShown(null, 1100)).toBe(true)
+    expect(activityShown(null, 1500)).toBe(true)
+  })
+
+  it('lets the user’s own choice win over the width, either way', () => {
+    expect(activityShown(true, 600)).toBe(true)
+    expect(activityShown(false, 1800)).toBe(false)
+  })
+
+  it('remembers the choice in localStorage', () => {
+    const saved = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => saved.set(k, v) })
+    useTaskBoard.getState().setActivity(false)
+    expect(saved.get(ACTIVITY_KEY)).toBe('closed')
+    expect(useTaskBoard.getState().activityPref).toBe(false)
+    useTaskBoard.getState().setActivity(true)
+    expect(saved.get(ACTIVITY_KEY)).toBe('open')
   })
 })

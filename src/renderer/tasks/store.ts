@@ -10,6 +10,23 @@ import { DEFAULT_VIEW, parseView, type View } from './layout'
 import { appendEvents, type ActivityEvent } from './model'
 
 export const VIEW_KEY = 'tr.tasks.view.v1'
+export const ACTIVITY_KEY = 'tr.tasks.activity.v1'
+/** The 「动态」 panel starts collapsed on a canvas narrower than this (px). */
+export const ACTIVITY_MIN_WIDTH = 1100
+
+/** Whether 「动态」 is open: the user's own choice when they made one, else open only on a wide enough canvas. */
+export function activityShown(pref: boolean | null, canvasWidth: number): boolean {
+  return pref ?? canvasWidth >= ACTIVITY_MIN_WIDTH
+}
+
+function loadActivityPref(): boolean | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(ACTIVITY_KEY)
+    return raw === 'open' ? true : raw === 'closed' ? false : null
+  } catch {
+    return null
+  }
+}
 
 function loadView(): View {
   try {
@@ -44,7 +61,8 @@ interface TaskBoardState {
   /** The card open in the detail overlay (114B). */
   detailId: TaskId | null
   events: ActivityEvent[]
-  activityOpen: boolean
+  /** The user's own toggle of 「动态」 (kept on this device); null = they never chose, the canvas width decides. */
+  activityPref: boolean | null
   /** The project a pasted card went to last. */
   lastProjectId: ProjectId | null
   setTasks(tasks: Task[]): void
@@ -52,7 +70,7 @@ interface TaskBoardState {
   select(id: TaskId | null): void
   openDetail(id: TaskId | null): void
   pushEvents(drafts: Parameters<typeof appendEvents>[1]): void
-  toggleActivity(): void
+  setActivity(open: boolean): void
   setLastProject(id: ProjectId): void
 }
 
@@ -66,7 +84,7 @@ export const useTaskBoard = create<TaskBoardState>()((set) => {
     selectedId: null,
     detailId: null,
     events: [],
-    activityOpen: true,
+    activityPref: loadActivityPref(),
     lastProjectId: null,
     setTasks: (tasks) => set((s) => ({ tasks, loaded: true, ...(s.selectedId !== null && !tasks.some((t) => t.id === s.selectedId) ? { selectedId: null } : {}), ...(s.detailId !== null && !tasks.some((t) => t.id === s.detailId) ? { detailId: null } : {}) })),
     setView(next, touched = true) {
@@ -76,7 +94,14 @@ export const useTaskBoard = create<TaskBoardState>()((set) => {
     select: (selectedId) => set({ selectedId }),
     openDetail: (detailId) => set(detailId === null ? { detailId } : { detailId, selectedId: detailId }),
     pushEvents: (drafts) => set((s) => ({ events: appendEvents(s.events, drafts) })),
-    toggleActivity: () => set((s) => ({ activityOpen: !s.activityOpen })),
+    setActivity(open) {
+      set({ activityPref: open })
+      try {
+        globalThis.localStorage?.setItem(ACTIVITY_KEY, open ? 'open' : 'closed')
+      } catch {
+        // Not saved; the width default comes back next time.
+      }
+    },
     setLastProject: (lastProjectId) => set({ lastProjectId })
   }
 })
