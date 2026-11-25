@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/settings'
 import { DISPATCH_LIMITS, waviRunIds, type DispatchRequest, type PendingRun, type PendingStart, type WaviCommand, type WaviResult } from '@shared/dispatch'
+import type { Task, TaskDraft } from '@shared/task-board'
 import type { Session } from '@shared/types'
 import { decideConfirms, dropConfirmsOf, handleWaviRequest, resumeConfirmTimers, setDispatchSettings } from './handler'
 import { restoreDispatch, savedDispatch, useDispatch } from './store'
@@ -379,5 +380,99 @@ describe('wavi for a project’s leader (PRD F21 v1.198)', () => {
     const launches = useDispatch.getState().launches
     const brief = Object.values(launches).find((l) => l?.initialPrompt.includes('Write the tests'))?.initialPrompt
     expect(brief).toContain('不要用提问工具')
+  })
+})
+
+describe('wavi task and --task in a window (PRD F21 v1.246)', () => {
+  let board: Task[] = []
+  const update = vi.fn(async (id: string, patch: Partial<Task>) => {
+    const at = board.findIndex((t) => t.id === id)
+    if (at < 0) return null
+    board[at] = { ...board[at]!, ...patch } as Task
+    return board[at]!
+  })
+  const create = vi.fn(async (draft: TaskDraft) => {
+    const made: Task = { id: `t${board.length + 1}`, seq: board.length + 1, projectId: draft.projectId, title: draft.title, body: draft.body ?? '', createdBy: draft.createdBy ?? 'user', manual: 'todo', createdAt: 1, updatedAt: 1, ...(draft.parentId ? { parentId: draft.parentId } : {}) }
+    board.push(made)
+    return made
+  })
+  const card = (seq: number, over: Partial<Task> = {}): Task => ({ id: `t${seq}`, seq, projectId: 'p1', title: `Card ${seq}`, body: '', createdBy: 'user', manual: 'todo', createdAt: seq, updatedAt: seq, ...over })
+
+  beforeEach(() => {
+    sessions = [session('lead'), session('kid', { dispatchedBy: 'lead', kind: 'codex', status: 'running' }), session('grand', { dispatchedBy: 'kid', kind: 'gemini' }), session('top')]
+    leaderSessions = { p1: 'lead' }
+    board = [card(1), card(2, { parentId: 't1', sessionId: 'kid' })]
+    addBackgroundSession.mockClear()
+    deliverMessage.mockClear()
+    patchSession.mockClear()
+    update.mockClear()
+    create.mockClear()
+    useDispatch.setState({ confirms: [], held: {}, reported: {}, tells: {}, messages: {}, launches: {} })
+    vi.stubGlobal('document', { hasFocus: () => true })
+    vi.stubGlobal('window', {
+      setTimeout,
+      clearTimeout,
+      tr: {
+        app: { detectAgents: async () => ({ claude: true, codex: true, grok: true }) },
+        gitWorktrees: { newSessionInfo: async () => ({ repo: true, currentBranch: 'main', defaultBranch: 'main', branches: [], prefix: 'jacob', worktreesDir: '/wt', takenFolders: [], includeCount: 0, hasSetup: false }) },
+        git: { changes: async () => null },
+        ui: { notify: () => {} },
+        tasks: { list: async () => board.map((t) => ({ ...t })), create, update }
+      }
+    })
+    setDispatchSettings(DEFAULT_SETTINGS.dispatch)
+  })
+  afterEach(() => {
+    leaderSessions = {}
+    vi.unstubAllGlobals()
+  })
+
+  it('starts a session for a card without asking, binds it and names the card in its brief', async () => {
+    const result = await call('lead', runCmd('Build the form', { agent: 'claude', card: 1 }))
+    expect(result).toMatchObject({ ok: true, text: expect.stringContaining('bound to card #1') })
+    expect(useDispatch.getState().confirms).toHaveLength(0)
+    const childId = addBackgroundSession.mock.calls[0]![3]
+    expect(update).toHaveBeenCalledWith('t1', { sessionId: childId })
+    expect(Object.values(useDispatch.getState().launches).find((l) => l?.initialPrompt.includes('Build the form'))?.initialPrompt).toContain('#1')
+  })
+
+  it('still asks for a run without --task, and still obeys the duplicate rule for one with it', async () => {
+    await call('top', runCmd('Plain task'))
+    expect(useDispatch.getState().confirms).toHaveLength(1)
+    // `kid` is the lead's open session with this task already.
+    sessions = sessions.map((s) => (s.id === 'kid' ? { ...s, dispatchTask: 'Same words' } : s))
+    expect(await call('lead', runCmd('Same words', { card: 1 }))).toMatchObject({ ok: false, failure: 'duplicate' })
+    expect(addBackgroundSession).not.toHaveBeenCalled()
+  })
+
+  it('refuses --task for a card the caller may not hand out', async () => {
+    expect(await call('top', runCmd('x', { card: 1 }))).toMatchObject({ ok: false, failure: 'not_allowed' })
+    expect(await call('lead', runCmd('x', { card: 9 }))).toMatchObject({ ok: false, failure: 'not_found' })
+    // The card already has the session kid.
+    expect(await call('lead', runCmd('x', { card: 2 }))).toMatchObject({ ok: false, failure: 'duplicate' })
+    expect(addBackgroundSession).not.toHaveBeenCalled()
+  })
+
+  it('adds cards under the caller’s bound card, a root only for the leader, and nothing at the last level', async () => {
+    expect(await call('kid', { name: 'task-add', title: 'Form' })).toMatchObject({ ok: true, text: expect.stringContaining('under #2') })
+    expect(create).toHaveBeenLastCalledWith({ projectId: 'p1', title: 'Form', parentId: 't2', createdBy: 'kid' })
+    expect(await call('top', { name: 'task-add', title: 'Root' })).toMatchObject({ ok: false, text: expect.stringContaining('--parent') })
+    expect(await call('lead', { name: 'task-add', title: 'Root' })).toMatchObject({ ok: true })
+    expect(create).toHaveBeenLastCalledWith({ projectId: 'p1', title: 'Root', createdBy: 'lead' })
+    expect(await call('grand', { name: 'task-add', title: 'x', parent: 2 })).toMatchObject({ ok: false, text: expect.stringContaining("can't split further") })
+  })
+
+  it('lets an agent finish its card and refuses another’s', async () => {
+    expect(await call('kid', { name: 'task-update', seq: 2, note: 'form is in', done: true })).toMatchObject({ ok: true })
+    expect(update).toHaveBeenCalledWith('t2', { note: 'form is in', manual: 'done' })
+    expect(await call('kid', { name: 'task-update', seq: 1, done: true })).toMatchObject({ ok: false, failure: 'not_allowed' })
+    expect(await call('lead', { name: 'task-update', seq: 1, cancel: true })).toMatchObject({ ok: true })
+    expect(update).toHaveBeenLastCalledWith('t1', { manual: 'canceled' })
+  })
+
+  it('lists the project’s cards with their states', async () => {
+    const listed = await call('top', { name: 'task-ls' })
+    expect(listed.text).toContain('#1 · "Card 1" · not started')
+    expect(listed.text).toContain('#2 · "Card 2" · working · session kid "kid" · under #1')
   })
 })

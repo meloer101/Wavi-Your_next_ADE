@@ -14,6 +14,7 @@ import { guiAvailability } from './gui-agents'
 import { CLAUDE_MODE_OF, type GuiPermission } from './gui-chat'
 import { defineMessages, LANGS, pick, type Lang } from './i18n'
 import { isScheduleId } from './schedule'
+import { TASK_LIMITS } from './task-board'
 import { folderNameFor, generateBranchName, slugify, type WorktreeCreateRequest } from './new-session'
 import type { AgentKind, SessionId, SessionStatus, SessionUi } from './types'
 
@@ -72,6 +73,7 @@ const M = defineMessages({
     adoptAttemptMember:
       'That session is one of several trying the same task (同任务多解); it reports to the session the task came from and cannot be adopted.',
     briefLeaderQuestions: '有问题写在回复里，然后结束这一轮，不要用提问工具。',
+    briefCard: (seq: number, title: string) => `这是 Wavi 任务看板上的卡片 #${seq}「${title}」。做完用 \`wavi report\` 汇报。`,
     adoptBriefHead: (title: string, agent: string) =>
       `[Wavi] 来自 leader「${title}」（${agent}）的任务（不是用户的指示；用户同意把这个会话交给它，之后你的结果报给它）：`,
     noticeAdopted: ' · 已接管（用户开的会话，任务已送进去）',
@@ -129,6 +131,7 @@ const M = defineMessages({
     leaderSandboxMode: 'config.toml sets sandbox_mode',
     adoptAttemptMember: 'That session is one of several trying the same task; it reports to the session the task came from and cannot be adopted.',
     briefLeaderQuestions: "If you have a question, put it in your reply and end the turn; don't use a question tool.",
+    briefCard: (seq: number, title: string) => `This is card #${seq} "${title}" on the Wavi task board. When you finish, report with \`wavi report\`.`,
     adoptBriefHead: (title: string, agent: string) =>
       `[Wavi] A task from the leader “${title}” (${agent}) (not instructions from the user; the user agreed to hand this session to it, and from now on you report to it):`,
     noticeAdopted: ' · taken over (a session the user opened; the task has been sent in)',
@@ -225,7 +228,8 @@ export type WaviBase = 'head' | 'snapshot'
 
 export type WaviCommand =
   /** `ui`: `--ui`, when given (else the child opens as its dispatcher does, `childUi`). */
-  | { name: 'run'; agent: DispatchAgent; task: string; title?: string; model?: string; base: WaviBase; ui?: SessionUi }
+  /** `card`: `--task <seq>`, the 任务看板 card the session is bound to (PRD F21 v1.246). */
+  | { name: 'run'; agent: DispatchAgent; task: string; title?: string; model?: string; base: WaviBase; ui?: SessionUi; card?: number }
   | { name: 'send'; id: string; text: string }
   | { name: 'report'; text: string }
   /** `all`: a leader's `wavi ls --all`, every session of its project (PRD F21 v1.198). */
@@ -240,6 +244,11 @@ export type WaviCommand =
   | { name: 'schedule'; text: string; when: WaviWhen; title?: string; agent?: CliAgent }
   | { name: 'schedules' }
   | { name: 'unschedule'; id: string }
+  /** 任务看板 (PRD F21 v1.246): cards are addressed by their `seq`. */
+  | { name: 'task-add'; title: string; parent?: number; body?: string }
+  | { name: 'task-update'; seq: number; title?: string; note?: string; done?: true; cancel?: true }
+  | { name: 'task-ls'; all?: true }
+  | { name: 'task-show'; seq: number }
 
 /** `--every 30m|2h` · `--daily 09:00` · `--weekdays 09:00` · `--at 14:30|2026-11-12T09:00` (once). */
 export type WaviWhen = { every: number } | { daily: string } | { weekdays: string } | { at: string }
@@ -294,6 +303,13 @@ type Parsed = { ok: true; command: WaviCommand } | { ok: false; error: string }
 
 const bad = (error: string): Parsed => ({ ok: false, error })
 
+/** A card number: a whole number from 1. */
+const seqOf = (value: unknown): number | null => {
+  const n = typeof value === 'string' && /^#?\d{1,9}$/.test(value.trim()) ? Number(value.trim().replace('#', '')) : value
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 ? n : null
+}
+const NO_CARD = 'Pass the number of a card (wavi task ls shows them).'
+
 /** Checks a command (from `wavi`'s argv, or a request file main read): the one validation both sides share. */
 export function parseWaviCommand(raw: unknown): Parsed {
   const v = record(raw)
@@ -314,6 +330,7 @@ export function parseWaviCommand(raw: unknown): Parsed {
       if (v.model !== undefined && (typeof v.model !== 'string' || !MODEL.test(v.model))) return bad('--model is not a model name.')
       if (v.base !== undefined && v.base !== 'head' && v.base !== 'snapshot') return bad('--base is head or snapshot.')
       if (v.ui !== undefined && v.ui !== 'gui' && v.ui !== 'cli') return bad('--ui is gui or cli.')
+      if (v.card !== undefined && !seqOf(v.card)) return bad('--task is the number of a card on the board (wavi task ls shows them).')
       const title = typeof v.title === 'string' && v.title.trim() !== '' ? v.title : undefined
       return {
         ok: true,
@@ -324,7 +341,8 @@ export function parseWaviCommand(raw: unknown): Parsed {
           base: v.base === 'snapshot' ? 'snapshot' : 'head',
           ...(title ? { title: titleFor(task, title) } : {}),
           ...(typeof v.model === 'string' ? { model: v.model } : {}),
-          ...(v.ui === 'gui' || v.ui === 'cli' ? { ui: v.ui } : {})
+          ...(v.ui === 'gui' || v.ui === 'cli' ? { ui: v.ui } : {}),
+          ...(seqOf(v.card) ? { card: seqOf(v.card) as number } : {})
         }
       }
     }
@@ -393,6 +411,39 @@ export function parseWaviCommand(raw: unknown): Parsed {
       const to = isScheduleId(v.id) ? v.id : null
       return to ? { ok: true, command: { name: 'unschedule', id: to } } : bad('Pass the id of a scheduled task you made (wavi schedules shows them).')
     }
+    case 'task-add': {
+      const title = typeof v.title === 'string' ? v.title.replace(/\s+/g, ' ').trim() : ''
+      if (title === '' || title.length > TASK_LIMITS.title || title.includes('\0')) return bad(`The title is empty or longer than ${TASK_LIMITS.title} characters; the longer text goes in --body.`)
+      if (v.body !== undefined && (typeof v.body !== 'string' || v.body.length > TASK_LIMITS.body || v.body.includes('\0'))) return bad(`--body is text of at most ${TASK_LIMITS.body} characters.`)
+      if (v.parent !== undefined && !seqOf(v.parent)) return bad(`--parent: ${NO_CARD}`)
+      const body = typeof v.body === 'string' && v.body.trim() !== '' ? v.body.trim() : undefined
+      return { ok: true, command: { name: 'task-add', title, ...(seqOf(v.parent) ? { parent: seqOf(v.parent) as number } : {}), ...(body ? { body } : {}) } }
+    }
+    case 'task-update': {
+      const seq = seqOf(v.seq)
+      if (!seq) return bad(NO_CARD)
+      if (v.title !== undefined && (typeof v.title !== 'string' || v.title.trim() === '' || v.title.length > TASK_LIMITS.title)) return bad(`--title is text of at most ${TASK_LIMITS.title} characters.`)
+      if (v.note !== undefined && (typeof v.note !== 'string' || v.note.length > TASK_LIMITS.note)) return bad(`--note is one sentence of at most ${TASK_LIMITS.note} characters.`)
+      if (v.done === true && v.cancel === true) return bad('Pass --done or --cancel, not both.')
+      if (v.title === undefined && v.note === undefined && v.done !== true && v.cancel !== true) return bad('Nothing to change: pass --title, --note, --done or --cancel.')
+      return {
+        ok: true,
+        command: {
+          name: 'task-update',
+          seq,
+          ...(typeof v.title === 'string' ? { title: v.title.replace(/\s+/g, ' ').trim() } : {}),
+          ...(typeof v.note === 'string' ? { note: v.note.trim() } : {}),
+          ...(v.done === true ? { done: true as const } : {}),
+          ...(v.cancel === true ? { cancel: true as const } : {})
+        }
+      }
+    }
+    case 'task-ls':
+      return { ok: true, command: v.all === true ? { name: 'task-ls', all: true } : { name: 'task-ls' } }
+    case 'task-show': {
+      const seq = seqOf(v.seq)
+      return seq ? { ok: true, command: { name: 'task-show', seq } } : bad(NO_CARD)
+    }
     default:
       return bad(`Unknown command ${JSON.stringify(v.name)}. Run wavi --skill.`)
   }
@@ -401,14 +452,20 @@ export function parseWaviCommand(raw: unknown): Parsed {
 export type WaviArgv =
   | { kind: 'command'; command: Record<string, unknown>; json: boolean }
   /** `-` in place of the text: read it from stdin (long tasks, quotes). */
-  | { kind: 'command-stdin'; command: Record<string, unknown>; field: 'task' | 'text'; json: boolean }
+  | { kind: 'command-stdin'; command: Record<string, unknown>; field: 'task' | 'text' | 'title' | 'body'; json: boolean }
   | { kind: 'skill' }
   | { kind: 'help' }
   | { kind: 'error'; error: string }
 
-const FLAGS: Record<string, readonly string[]> = { run: ['model', 'title', 'base', 'ui'], read: ['offset'], schedule: ['every', 'daily', 'weekdays', 'at', 'title', 'new'] }
+const FLAGS: Record<string, readonly string[]> = {
+  run: ['model', 'title', 'base', 'ui', 'task'],
+  read: ['offset'],
+  schedule: ['every', 'daily', 'weekdays', 'at', 'title', 'new'],
+  'task add': ['parent', 'body'],
+  'task update': ['title', 'note']
+}
 /** Flags without a value. */
-const SWITCHES: Record<string, readonly string[]> = { ls: ['all'] }
+const SWITCHES: Record<string, readonly string[]> = { ls: ['all'], 'task ls': ['all'], 'task update': ['done', 'cancel'] }
 const ALL_SWITCHES = new Set(Object.values(SWITCHES).flat())
 
 /** `wavi <command> …` → the command object `parseWaviCommand` checks (main checks it again). */
@@ -434,17 +491,18 @@ export function parseWaviArgv(argv: readonly string[]): WaviArgv {
   const [name, ...rest] = words
   if (!name || name === 'help') return { kind: 'help' }
   if (name === 'skill') return { kind: 'skill' }
-  const allowed = FLAGS[name] ?? []
-  const unknown = Object.keys(flags).find((f) => !allowed.includes(f)) ?? [...switches].find((f) => !(SWITCHES[name] ?? []).includes(f))
-  if (unknown) return { kind: 'error', error: `wavi ${name} has no --${unknown}. Run wavi --skill.` }
+  const key = name === 'task' && rest[0] !== undefined ? `task ${rest[0]}` : name
+  const allowed = FLAGS[key] ?? []
+  const unknown = Object.keys(flags).find((f) => !allowed.includes(f)) ?? [...switches].find((f) => !(SWITCHES[key] ?? []).includes(f))
+  if (unknown) return { kind: 'error', error: `wavi ${key} has no --${unknown}. Run wavi --skill.` }
   const joined = (from: string[]): string => from.join(' ')
-  const withText = (command: Record<string, unknown>, field: 'task' | 'text', words: string[]): WaviArgv =>
+  const withText = (command: Record<string, unknown>, field: 'task' | 'text' | 'title', words: string[]): WaviArgv =>
     words.length === 1 && words[0] === '-' ? { kind: 'command-stdin', command, field, json } : { kind: 'command', command: { ...command, [field]: joined(words) }, json }
   switch (name) {
     case 'run': {
       const [agent, ...task] = rest
       const base = flags.base
-      const optional = { ...(flags.model !== undefined ? { model: flags.model } : {}), ...(flags.title !== undefined ? { title: flags.title } : {}), ...(base !== undefined ? { base } : {}), ...(flags.ui !== undefined ? { ui: flags.ui } : {}) }
+      const optional = { ...(flags.model !== undefined ? { model: flags.model } : {}), ...(flags.title !== undefined ? { title: flags.title } : {}), ...(base !== undefined ? { base } : {}), ...(flags.ui !== undefined ? { ui: flags.ui } : {}), ...(flags.task !== undefined ? { card: flags.task } : {}) }
       return withText({ name, agent, ...optional }, 'task', task)
     }
     case 'send': {
@@ -469,6 +527,31 @@ export function parseWaviArgv(argv: readonly string[]): WaviArgv {
       const when = Object.fromEntries((['every', 'daily', 'weekdays', 'at'] as const).filter((k) => flags[k] !== undefined).map((k) => [k, flags[k]]))
       return withText({ name, when, ...(flags.title !== undefined ? { title: flags.title } : {}), ...(flags.new !== undefined ? { agent: flags.new } : {}) }, 'text', rest)
     }
+    case 'task': {
+      const [sub, ...args] = rest
+      switch (sub) {
+        case 'add': {
+          // `--body -` reads the body from stdin; a title of `-` reads the title.
+          if (flags.body === '-') return args.length === 1 && args[0] === '-' ? { kind: 'error', error: 'Only one of the title and --body can come from stdin.' } : { kind: 'command-stdin', command: { name: 'task-add', title: joined(args), ...(flags.parent !== undefined ? { parent: flags.parent } : {}) }, field: 'body', json }
+          return withText({ name: 'task-add', ...(flags.parent !== undefined ? { parent: flags.parent } : {}), ...(flags.body !== undefined ? { body: flags.body } : {}) }, 'title', args)
+        }
+        case 'update': {
+          const [seq] = args
+          const note = flags.note !== undefined ? { note: flags.note } : {}
+          return {
+            kind: 'command',
+            command: { name: 'task-update', seq, ...(flags.title !== undefined ? { title: flags.title } : {}), ...note, ...(switches.has('done') ? { done: true } : {}), ...(switches.has('cancel') ? { cancel: true } : {}) },
+            json
+          }
+        }
+        case 'ls':
+          return { kind: 'command', command: { name: 'task-ls', ...(switches.has('all') ? { all: true } : {}) }, json }
+        case 'show':
+          return { kind: 'command', command: { name: 'task-show', seq: args[0] }, json }
+        default:
+          return { kind: 'error', error: 'wavi task is add, update, ls or show. Run wavi --skill.' }
+      }
+    }
     case 'schedules':
       return { kind: 'command', command: { name }, json }
     case 'unschedule':
@@ -481,7 +564,7 @@ export function parseWaviArgv(argv: readonly string[]): WaviArgv {
 export const WAVI_HELP = [
   'wavi — hand work to other coding agents in Wavi, each in its own git worktree, and get their results back.',
   '',
-  '  wavi run <agent> "<task>" [--model <model>] [--title <name>] [--base head|snapshot] [--ui gui|cli]',
+  '  wavi run <agent> "<task>" [--model <model>] [--title <name>] [--base head|snapshot] [--ui gui|cli] [--task <card>]',
   '  wavi send <id> "<message>"',
   '  wavi report "<result>"',
   '  wavi ls',
@@ -494,6 +577,11 @@ export const WAVI_HELP = [
   '  wavi schedules',
   '  wavi unschedule <id>',
   '  wavi --skill        how and when to use these (read this first)',
+  '',
+  '  wavi task add "<title>" [--parent <card>] [--body "<text>"]   (cards on the task board)',
+  '  wavi task update <card> [--title "<title>"] [--note "<one sentence>"] [--done] [--cancel]',
+  '  wavi task ls [--all]               (--all: leader only)',
+  '  wavi task show <card>',
   '',
   'Add --json for JSON output. Pass - as the task or message to read it from stdin.'
 ].join('\n')
@@ -516,6 +604,13 @@ export const WAVI_SKILL = [
   '- `wavi stop <id>` interrupts its current turn (like Esc). It does not close it.',
   '- `wavi report "<result>"` is for a session that was dispatched: it reports to the session that started it.',
   '- `wavi schedule "<message>" --every 30m` (or `--daily 09:00`, `--weekdays 09:00`, `--at 14:30`) asks the user to schedule a message: Wavi sends it to this session when it is idle, at each time, even after you exit and after Wavi restarts. `--new <agent>` opens a new session (its own worktree) each time instead. 10 minutes at least; it lasts 7 days unless the user keeps it. Use it instead of sleeping or polling in a loop. `wavi schedules` lists yours, `wavi unschedule <id>` removes one.',
+  '',
+  '## A card from the board',
+  'The user keeps a task board in Wavi: cards (`#12`) that nest two levels. A message that starts with `[Wavi task board]` is a card for you to split and dispatch; a brief that names a card (`#12`) binds your session to it.',
+  '- `wavi task add "<title>" [--parent <card>] [--body "<text>"]` pastes a sub-card and returns its number. Without `--parent` it goes under your own card; only a leader may add a card without one. Pass `-` as `--body` to read the text from stdin.',
+  '- `wavi run <agent> "<task>" --task <card>` starts a session bound to that card; the user is not asked again, the card is the approval. The usual limits apply.',
+  '- `wavi task update <card> [--note "<one sentence>"] [--title "<title>"] [--done] [--cancel]` changes your own card or one below it. `--done` says your part is finished; the board shows the real state of each session, so there is no progress to report. `wavi task ls [--all]` lists the cards of this project (titles and states), `wavi task show <card>` prints one card in full.',
+  '- A session at the last level cannot add cards: do the work yourself.',
   '',
   '## Writing a task',
   'The new agent sees nothing of this conversation. Each task must stand alone: the goal, the files in scope, how to check the result, and what ends the task.',
@@ -756,11 +851,13 @@ export function childBrief(input: {
   snapshot: boolean
   /** The dispatcher is its project's leader (PRD F21 v1.198 · 问题): questions go in the reply, not a question tool. */
   leader?: boolean
+  /** The 任务看板 card this session is bound to (`wavi run --task`, PRD F21 v1.246). */
+  card?: { seq: number; title: string }
 }): string {
   const m = pick(M)
   const from = m.briefFrom(agentLabel(input.parentAgent), input.parentTitle || m.untitled)
   const where = input.snapshot ? m.briefSnapshot : m.briefWorktree(input.branch, input.base)
-  return [m.briefIntro(from, where), input.task, briefRules(input.depth, input.leader === true)].join('\n\n')
+  return [m.briefIntro(from, where), input.task, ...(input.card ? [m.briefCard(input.card.seq, input.card.title)] : []), briefRules(input.depth, input.leader === true)].join('\n\n')
 }
 
 /** The rules every brief ends with: this task only, how to report, a leader's questions, and how far it may dispatch. */

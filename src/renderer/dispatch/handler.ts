@@ -35,6 +35,7 @@ import {
 } from '@shared/dispatch'
 import { defineMessages, pick } from '@shared/i18n'
 import { DEFAULT_SETTINGS, type DispatchSettings } from '@shared/settings'
+import type { Task } from '@shared/task-board'
 import type { Session, SessionId } from '@shared/types'
 import { createWorktreeFor, holdForWorktree, startEagerly } from '../new-session/creation'
 import { useSessionMeta } from '../session-meta/store'
@@ -45,6 +46,7 @@ import { useWorkspace } from '../state/workspace'
 import { randomId } from '../state/workspace-model'
 import { handleScheduleCommand } from '../schedules/agent-requests'
 import { checksOf, childrenOf, conflictsOf, isLeaderSession, placeOf, type Place } from './places'
+import { handleTaskCommand, planRunCard, taskCaller } from './task-commands'
 import { deliverMessage, queueReport } from './reports'
 import { addConfirm, queueOf, setLaunch, setQueue, setReported, setTell, takeConfirms, useDispatch, type PendingStart } from './store'
 
@@ -170,6 +172,11 @@ function run(caller: Place, request: DispatchRequest): Promise<WaviResult> | Wav
     case 'schedules':
     case 'unschedule':
       return handleScheduleCommand(caller, request, command)
+    case 'task-add':
+    case 'task-update':
+    case 'task-ls':
+    case 'task-show':
+      return handleTaskCommand(caller, depthOf(caller.session), isLeaderSession(caller.session.id), command)
   }
 }
 
@@ -212,8 +219,15 @@ async function start(caller: Place, request: DispatchRequest, command: Extract<W
   const waiting = useDispatch.getState().confirms.flatMap((c) => (c.kind === 'start' ? [c] : []))
   const refusal = startRefusal({ depth, toolsOn: settings.tools, ...load(caller), task: command.task })
   if (refusal) return refusal
-  // In parallel: `wavi` waits 5 s for the whole answer (PRD F21 接口).
-  const autoStart = settings.autoApprove || depth >= 1
+  // `--task`: the card must be this session's to hand out (PRD F21 v1.246).
+  let card: Task | undefined
+  if (command.card !== undefined) {
+    const found = planRunCard(await window.tr.tasks.list(), taskCaller(caller, depth, isLeaderSession(caller.session.id)), command.card, (id) => placeOf(id) !== null)
+    if ('ok' in found) return found
+    card = found
+  }
+  // In parallel: `wavi` waits 5 s for the whole answer (PRD F21 接口). A card is the user's own approval (v1.246).
+  const autoStart = settings.autoApprove || depth >= 1 || card !== undefined
   const [installed, info, uncommitted] = await Promise.all([
     window.tr.app.detectAgents(),
     window.tr.gitWorktrees.newSessionInfo(caller.project.rootPath),
@@ -257,10 +271,11 @@ async function start(caller: Place, request: DispatchRequest, command: Extract<W
   if (late(request)) return TOO_LATE()
   // Sessions a dispatched session starts begin at once, within the limits (only the first level is confirmed).
   if (autoStart) {
-    const started = launch(caller, plan, childId, base ?? 'HEAD', depth + 1)
+    const started = launch(caller, plan, childId, base ?? 'HEAD', depth + 1, card)
     if (!started) return waviFail('failed', 'Wavi could not add the session.')
+    const bound = card ? ((await window.tr.tasks.update(card.id, { sessionId: started.id })) ? ` It is bound to card #${card.seq}.` : ` Wavi could not bind it to card #${card.seq}.`) : ''
     return waviOk(
-      `Started session ${started.id} (${command.agent}${model}, ${where(plan)}).${note} It works on its own: Wavi sends you its report when it finishes a turn, fails or exits. End your turn now instead of waiting.`
+      `Started session ${started.id} (${command.agent}${model}, ${where(plan)}).${bound}${note} It works on its own: Wavi sends you its report when it finishes a turn, fails or exits. End your turn now instead of waiting.`
     )
   }
   hold({ kind: 'start', callId, parentId: caller.session.id, childId, plan, base: base ?? 'HEAD', uncommitted }, caller)
@@ -435,7 +450,7 @@ function decide(callIds: readonly string[], outcome: 'started' | 'declined' | 't
 }
 
 /** Adds the child to the workspace at once (sidebar, under the dispatcher) and creates its worktree in the background. */
-function launch(caller: Place, plan: ChildPlan, childId: SessionId, base: string, depth: number): StartedChild | null {
+function launch(caller: Place, plan: ChildPlan, childId: SessionId, base: string, depth: number, card?: Task): StartedChild | null {
   const snapshot = plan.item.base === 'snapshot'
   const workspace = useWorkspace.getState()
   const target = { path: plan.path, branch: plan.branch, ...(snapshot ? {} : { baseBranch: base }) }
@@ -464,7 +479,7 @@ function launch(caller: Place, plan: ChildPlan, childId: SessionId, base: string
     ...(ui === 'gui' && permission ? { guiPermission: permission } : {})
   })
   const parentAgent = caller.session.kind === 'shell' ? 'claude' : caller.session.kind
-  const brief = childBrief({ task: plan.item.task, parentTitle: caller.session.title, parentAgent, depth, branch: plan.branch, base, snapshot, leader: isLeaderSession(caller.session.id) })
+  const brief = childBrief({ task: plan.item.task, parentTitle: caller.session.title, parentAgent, depth, branch: plan.branch, base, snapshot, leader: isLeaderSession(caller.session.id), ...(card ? { card: { seq: card.seq, title: card.title } } : {}) })
   setLaunch(id, { initialPrompt: brief, ...(plan.item.model ? { model: plan.item.model } : {}), ...(ui === 'cli' && permission ? { permission } : {}) })
   holdForWorktree(id)
   startEagerly(id)
