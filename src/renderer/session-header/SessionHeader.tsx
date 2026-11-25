@@ -19,7 +19,6 @@ import { useRecordForSession } from '../issue-watch/store'
 import { useOverviewStore } from '../overview/store'
 import { openItem } from '../overview/github-store'
 import { useSidebarCollapsed, useWindowKey } from '../state/window-scope'
-import { useMainFullScreen } from '../app-shell/full-screen'
 import { StatusGlyph } from '../ui/StatusGlyph'
 import { IconButton } from '../ui/IconButton'
 import { SessionMetaChips } from '../session-meta/MetaChips'
@@ -132,8 +131,6 @@ export function SessionHeader({ sessionId, pane, part: asked = 'full' }: { sessi
   const lead = pane?.lead ?? true
   const windowKey = useWindowKey()
   const sidebarCollapsed = useSidebarCollapsed() && lead
-  // Full screen has no traffic lights, so the collapsed sidebar's button can sit on the terminal text's left edge.
-  const fullScreen = useMainFullScreen() && windowKey === MAIN_WINDOW
   const toggleSidebar = useWorkspace((s) => s.toggleSidebar)
   const waiting = useWorkspace((s) => s.sessions.filter((x) => needsAttention(x.status)).length)
   const mostUrgent = useWorkspace((s) => s.sessions.filter((x) => needsAttention(x.status)).sort(compareByUrgency)[0]?.status)
@@ -177,7 +174,7 @@ export function SessionHeader({ sessionId, pane, part: asked = 'full' }: { sessi
   // The status is in the sidebar row already (F17 dropped the copy here); only a hooks problem is worth repeating.
 
   return (
-    <header className={styles.header} data-region="session-header" data-part={part} data-sidebar-collapsed={sidebarCollapsed && showTitle} data-fullscreen={fullScreen} data-focused={focused} data-drag-region={pane?.top ?? true}>
+    <header className={styles.header} data-region="session-header" data-part={part} data-sidebar-collapsed={sidebarCollapsed && showTitle} data-focused={focused} data-drag-region={pane?.top ?? true}>
       {showTitle && sidebarCollapsed && (
         <IconButton label={m.showSidebar} title={`${m.showSidebar} · ${formatAccelerator(SHORTCUTS['toggle-sidebar'])}`} onClick={toggleSidebar}>
           <PanelLeft size={16} strokeWidth={1.75} />

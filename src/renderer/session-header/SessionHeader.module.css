@@ -19,9 +19,9 @@
   padding-left: 80px;
 }
 
-/* Full screen has no traffic lights: the button's glyph (16 in the 28 box) starts where the terminal text does
+/* Full screen (AppShell's `data-fullscreen` on the main window's shell) has no traffic lights: the button's glyph (16 in the 28 box) starts where the terminal text does
    (the card's 16 inset), and the title follows it. */
-.header[data-sidebar-collapsed='true'][data-fullscreen='true'] {
+:global([data-fullscreen='true']) .header[data-sidebar-collapsed='true'] {
   padding-left: calc(var(--space-16) - var(--space-6));
 }
 
