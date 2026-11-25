@@ -1,7 +1,8 @@
-// 任务看板 end to end (PRD F9 / F21 v1.249) through real processes: a card the user pastes (`window.tr.tasks.create`, what
-// the board's 「贴一张」 does) reaches the project's leader once; the leader and other sessions run `wavi task …` and
-// `wavi run … --task` in their own shells (the same fake `claude` as e2e/dispatch.spec.ts), and every assertion reads
-// main's store through `window.tr.tasks.list()`, not the canvas. Fake agents only, no model.
+// 任务看板 end to end (PRD F9 / F21 v1.250) through real processes: a card pasted in the new-card box with an agent chosen
+// starts that card's own leader session, bound to it, which gets the card once; 「暂不派发」 starts nothing. Leaders and
+// other sessions run `wavi task …` and `wavi run … --task` in their own shells (the same fake `claude` as
+// e2e/dispatch.spec.ts), and the assertions read main's store through `window.tr.tasks.list()`, not the canvas. Fake
+// agents only, no model.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -123,15 +124,13 @@ test.describe('任务看板 · wavi task', () => {
   }
   const inbox = (dir: string): string[] => read(dir, '.fake-inbox').split('\n').filter(Boolean).map((l) => JSON.parse(l) as string)
   const cards = (): Promise<Card[]> => page.evaluate(() => (globalThis as unknown as { tr: { tasks: { list(): Promise<unknown> } } }).tr.tasks.list()) as Promise<Card[]>
-  const paste = (draft: { projectId: string; title: string; body: string }): Promise<Card | null> =>
-    page.evaluate((d) => (globalThis as unknown as { tr: { tasks: { create(d: unknown): Promise<unknown> } } }).tr.tasks.create(d), draft) as Promise<Card | null>
   const cardBySeq = async (seq: number): Promise<Card | undefined> => (await cards()).find((c) => c.seq === seq)
-  const childWorktree = (needle: string): string => {
+  const childWorktree = (needle: string, file = '.fake-argv'): string => {
     const root = join(home, '.tr', 'worktrees')
     for (const name of existsSync(root) ? readdirSync(root) : []) {
       for (const wt of existsSync(join(root, name)) ? readdirSync(join(root, name)) : []) {
         const dir = join(root, name, wt)
-        if (read(dir, '.fake-argv').includes(needle)) return dir
+        if (read(dir, file).includes(needle)) return dir
       }
     }
     return ''
@@ -205,37 +204,69 @@ test.describe('任务看板 · wavi task', () => {
     }
   })
 
-  test('a pasted root card reaches the leader once; a second card is a second message; a reload re-delivers nothing', async () => {
-    const a = await paste({ projectId: 'p1', title: 'Ship the login', body: 'Make it work in Safari too.' })
-    expect(a).not.toBeNull()
-    root = a!
-    await expect.poll(() => inbox(project).length, WITHIN).toBe(1)
-    const first = inbox(project)[0]!
+  const board = () => page.getByTestId('task-board')
+  const openBoard = async (): Promise<void> => {
+    await page.locator('[data-region="sidebar"]').getByRole('button', { name: /^看板/ }).first().click()
+    await page.locator('[data-region="overview"]').getByRole('tab', { name: '任务' }).click()
+    await expect(board()).toBeVisible(WITHIN)
+    await board().click({ position: { x: 300, y: 300 } })
+  }
+  /** The sessions the sidebar lists. */
+  const sessionIds = (): Promise<string[]> => page.locator('[data-region="sidebar"] [data-session-id]').evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset.sessionId ?? ''))
+
+  test('a card pasted with an agent starts one session bound to it, which receives the card once', async () => {
+    await openBoard()
+    const before = await sessionIds()
+    await page.keyboard.press('n')
+    const input = page.getByTestId('task-compose-input')
+    await input.fill('Ship the login')
+    // ⇧Enter is a new line, not a paste.
+    await input.press('Shift+Enter')
+    await expect(page.getByTestId('task-compose')).toBeVisible()
+    await input.pressSequentially('Make it work in Safari too.')
+    await expect(page.getByTestId('task-compose-leader')).toContainText('Claude Code')
+    await input.press('Enter')
+    await expect(page.getByTestId('task-compose')).toHaveCount(0)
+    await expect.poll(async () => (await cards()).find((c) => c.title === 'Ship the login')?.sessionId, WITHIN).toBeTruthy()
+    root = (await cards()).find((c) => c.title === 'Ship the login')!
+    expect(root.body).toBe('Make it work in Safari too.')
+    await expect.poll(sessionIds, WITHIN).toHaveLength(before.length + 1)
+    expect(await sessionIds()).toContain(root.sessionId)
+    // A new worktree of its own; its agent's env names the session (its WAVI_DIR).
+    await expect.poll(() => childWorktree(root.sessionId!, '.fake-env'), { timeout: 60_000 }).not.toBe('')
+    const dir = childWorktree(root.sessionId!, '.fake-env')
+    await expect.poll(() => inbox(dir).length, { timeout: 60_000 }).toBe(1)
+    const first = inbox(dir)[0]!
     expect(first.startsWith('[Wavi task board]')).toBe(true)
     expect(first).toContain(`#${root.seq}`)
     expect(first).toContain('Ship the login')
     expect(first).toContain('Make it work in Safari too.')
-    const b = await paste({ projectId: 'p1', title: 'Second card', body: 'Another one.' })
-    await expect.poll(() => inbox(project).length, WITHIN).toBe(2)
-    expect(inbox(project)[1]).toContain(`#${b!.seq}`)
-    expect(inbox(project)[1]).toContain('Second card')
-    await page.reload()
-    await expect(page.locator('[data-region="terminal"] .xterm').first()).toBeVisible(WITHIN)
-    await expect.poll(async () => (await cards()).length, WITHIN).toBe(2)
+    expect(first).toContain("You are this card's leader")
     await page.waitForTimeout(3000)
-    expect(inbox(project)).toHaveLength(2)
-    // The member and the other project's agent heard nothing.
+    expect(inbox(dir)).toHaveLength(1)
+    // Nobody else heard of it, and the project's own leader got nothing.
+    expect(inbox(project)).toEqual([])
     expect(inbox(member)).toEqual([])
+    // Started in the background: the board is still what the window shows, not the new session.
+    await expect(board().locator(`[data-task-id="${root.id}"]`)).toBeVisible()
+    expect(await sessionIds()).toHaveLength(before.length + 1)
   })
 
-  test('a project without a leader gets nothing delivered; the card waits on the board', async () => {
-    const c = await paste({ projectId: 'p2', title: 'Nobody leads', body: 'Wait for the user.' })
-    expect(c).not.toBeNull()
+  test('「暂不派发」 only makes the card: no session starts', async () => {
+    const before = await sessionIds()
+    await board().click({ position: { x: 300, y: 300 } })
+    await page.keyboard.press('n')
+    await page.getByTestId('task-compose-leader').click()
+    await page.getByRole('option', { name: '暂不派发' }).click()
+    await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发')
+    await page.getByTestId('task-compose-input').fill('Nobody leads')
+    await page.getByTestId('task-compose-input').press('Enter')
+    await expect.poll(async () => (await cards()).find((c) => c.title === 'Nobody leads'), WITHIN).toMatchObject({ manual: 'todo' })
     await page.waitForTimeout(3000)
-    expect(await cardBySeq(c!.seq)).toMatchObject({ title: 'Nobody leads', manual: 'todo' })
+    expect((await cards()).find((c) => c.title === 'Nobody leads')?.sessionId).toBeUndefined()
+    expect(await sessionIds()).toHaveLength(before.length)
     expect(inbox(other)).toEqual([])
     expect(read(other, '.fake-typed')).toBe('')
-    expect(inbox(project)).toHaveLength(2)
   })
 
   test('the leader adds a child card under the root; others without a card of their own are refused', async () => {

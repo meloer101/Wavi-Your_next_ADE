@@ -322,3 +322,42 @@ test('dragging a card moves it and its children, a reload keeps the place, and a
   expect(reloaded.y).toBeCloseTo(after.root.y, 0)
   await shoot('board-moved')
 })
+
+test('the new-card box: ⇧Enter is a new line, Enter pastes, the first line is the title and the rest the body; the leader menu lists the agents and 暂不派发', async () => {
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await board().click({ position: { x: 300, y: 300 } })
+  await page.keyboard.press('n')
+  const input = page.getByTestId('task-compose-input')
+  await expect(page.getByTestId('task-compose')).toBeVisible()
+  await expect(page.getByTestId('task-compose')).toHaveCSS('width', '320px')
+  await input.fill('梳理 auth 中间件的依赖')
+  await input.press('Shift+Enter')
+  await input.pressSequentially('先列出所有调用点，再按风险排序。')
+  await input.press('Shift+Enter')
+  await input.pressSequentially('只读，不改代码。')
+  await expect(page.getByTestId('task-compose')).toBeVisible()
+  expect(await input.inputValue()).toBe('梳理 auth 中间件的依赖\n先列出所有调用点，再按风险排序。\n只读，不改代码。')
+
+  // The leader menu: the agents that can lead, then 暂不派发; the chosen one is ticked.
+  await page.getByTestId('task-compose-leader').click()
+  const options = page.getByRole('option')
+  await expect(options).toHaveText([/Claude Code/, /Codex/, /暂不派发/])
+  await expect(page.getByRole('option', { name: /Claude Code/ })).toHaveAttribute('aria-selected', 'true')
+  await shoot('compose-leader-menu')
+  await page.getByRole('option', { name: '暂不派发' }).click()
+  await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发')
+  expect(await page.evaluate(() => globalThis.localStorage?.getItem('tr.tasks.leader.v1'))).toBe('none')
+
+  await input.press('Enter')
+  await expect(page.getByTestId('task-compose')).toHaveCount(0)
+  await expect.poll(async () => ((await listTasks()) as Array<{ title: string; body: string }>)[0], WITHIN).toMatchObject({
+    title: '梳理 auth 中间件的依赖',
+    body: '先列出所有调用点，再按风险排序。\n只读，不改代码。'
+  })
+  // Esc drops the box; the leader choice is the last one made.
+  await page.keyboard.press('n')
+  await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发')
+  await page.getByTestId('task-compose-input').press('Escape')
+  await expect(page.getByTestId('task-compose')).toHaveCount(0)
+  await page.evaluate(() => globalThis.localStorage?.removeItem('tr.tasks.leader.v1'))
+})

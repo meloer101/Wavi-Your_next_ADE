@@ -7,7 +7,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { subscribeClock } from '../sidebar/clock'
 import { useOverviewStore } from '../overview/store'
 import { useWorkspace } from '../state/workspace'
-import { Compose } from './Compose'
+import { startCardLeader } from '../dispatch/task-deliver'
+import { Compose, type ComposeResult } from './Compose'
 import { Detail } from './Detail'
 import { DotField } from './DotField'
 import { DIMS, drawingFor, fitView, groupByProject, layoutBoard, modeFor, panBy, scaleFor, zoomAround, type LayoutMode, type PosOverrides, type Rect, type Size } from './layout'
@@ -175,14 +176,16 @@ export function TaskBoard() {
   const startCompose = useCallback(() => {
     if (projectIds.length > 0) setComposing(true)
   }, [projectIds])
-  const paste = async (projectId: string, title: string): Promise<boolean> => {
-    const made = await window.tr.tasks.create({ projectId, title })
+  const paste = async ({ projectId, title, body, leader }: ComposeResult): Promise<boolean> => {
+    const made = await window.tr.tasks.create({ projectId, title, ...(body !== '' ? { body } : {}) })
     if (!made) return false
     const state = useTaskBoard.getState()
     state.setLastProject(projectId)
     state.select(made.id)
     setComposing(false)
     host.current?.parentElement?.focus()
+    // The card's own leader (PRD v1.250); 暂不派发 leaves the card waiting.
+    if (leader !== 'none') void startCardLeader(made, leader).catch((error: unknown) => console.error('[tasks] the leader did not start:', error))
     return true
   }
 

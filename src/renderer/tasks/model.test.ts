@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Task } from '@shared/task-board'
-import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, type CardSession } from './model'
+import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, splitCard, type CardSession } from './model'
 
 let n = 0
 function task(over: Partial<Task> = {}): Task {
@@ -155,5 +155,24 @@ describe('actionLine', () => {
     const t = task({ sessionId: 's' })
     expect(actionLine(cardOf(t, { id: 's', status: 'running' }), root)).toEqual({ kind: 'key', key: 'working' })
     expect(actionLine(cardOf(t, { id: 's', status: 'idle' }), root)).toEqual({ kind: 'key', key: 'idle' })
+  })
+})
+
+describe('splitCard', () => {
+  it('takes the first line as the title and the rest as the body', () => {
+    expect(splitCard('改登录\n第二行\n第三行')).toEqual({ title: '改登录', body: '第二行\n第三行' })
+    expect(splitCard('  只有标题  ')).toEqual({ title: '只有标题', body: '' })
+  })
+  it('drops blank lines before the text and after it', () => {
+    expect(splitCard('\n\n标题\n\n正文\n\n')).toEqual({ title: '标题', body: '正文' })
+  })
+  it('lets what is over 120 characters in the first line start the body', () => {
+    const out = splitCard(`${'a'.repeat(120)}bcd\nnext`)!
+    expect(out.title).toBe('a'.repeat(120))
+    expect(out.body).toBe('bcd\nnext')
+  })
+  it('is null without text', () => {
+    expect(splitCard('')).toBeNull()
+    expect(splitCard(' \n \n')).toBeNull()
   })
 })

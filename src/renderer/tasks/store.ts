@@ -4,6 +4,8 @@
 // `onChanged` after it. The viewport is a per-device convenience kept in localStorage, losing it is harmless. The log
 // only knows what changed since the window opened (a reload starts it empty).
 import { create } from 'zustand'
+import { CLI_AGENTS } from '@shared/agents'
+import { canLead, type DispatchAgent } from '@shared/dispatch'
 import type { Task, TaskId } from '@shared/task-board'
 import type { ProjectId } from '@shared/types'
 import { DEFAULT_VIEW, parseView, type View } from './layout'
@@ -11,6 +13,16 @@ import { appendEvents, type ActivityEvent } from './model'
 
 export const VIEW_KEY = 'tr.tasks.view.v1'
 export const ACTIVITY_KEY = 'tr.tasks.activity.v1'
+export const LEADER_KEY = 'tr.tasks.leader.v1'
+
+/** Who leads a pasted root card (PRD F9 v1.250): an agent, or `none` (暂不派发). */
+export type LeaderChoice = DispatchAgent | 'none'
+
+/** The last choice, kept on this device; the first time it is Claude Code. A stored agent that no longer exists reads as that. */
+export function parseLeaderChoice(raw: string | null, known: readonly DispatchAgent[]): LeaderChoice {
+  if (raw === 'none') return 'none'
+  return known.find((id) => id === raw) ?? 'claude'
+}
 /** The 「动态」 panel starts collapsed on a canvas narrower than this (px). */
 export const ACTIVITY_MIN_WIDTH = 1100
 
@@ -25,6 +37,14 @@ function loadActivityPref(): boolean | null {
     return raw === 'open' ? true : raw === 'closed' ? false : null
   } catch {
     return null
+  }
+}
+
+function loadLeaderChoice(): LeaderChoice {
+  try {
+    return parseLeaderChoice(globalThis.localStorage?.getItem(LEADER_KEY) ?? null, CLI_AGENTS.filter((id) => canLead(id)))
+  } catch {
+    return 'claude'
   }
 }
 
@@ -65,6 +85,8 @@ interface TaskBoardState {
   activityPref: boolean | null
   /** The project a pasted card went to last. */
   lastProjectId: ProjectId | null
+  /** Who led the last pasted card; the new-card box starts with it. */
+  leaderChoice: LeaderChoice
   setTasks(tasks: Task[]): void
   setView(view: View, touched?: boolean): void
   select(id: TaskId | null): void
@@ -72,6 +94,7 @@ interface TaskBoardState {
   pushEvents(drafts: Parameters<typeof appendEvents>[1]): void
   setActivity(open: boolean): void
   setLastProject(id: ProjectId): void
+  setLeaderChoice(choice: LeaderChoice): void
 }
 
 export const useTaskBoard = create<TaskBoardState>()((set) => {
@@ -86,6 +109,7 @@ export const useTaskBoard = create<TaskBoardState>()((set) => {
     events: [],
     activityPref: loadActivityPref(),
     lastProjectId: null,
+    leaderChoice: loadLeaderChoice(),
     setTasks: (tasks) => set((s) => ({ tasks, loaded: true, ...(s.selectedId !== null && !tasks.some((t) => t.id === s.selectedId) ? { selectedId: null } : {}), ...(s.detailId !== null && !tasks.some((t) => t.id === s.detailId) ? { detailId: null } : {}) })),
     setView(next, touched = true) {
       set({ view: next, viewTouched: touched })
@@ -102,7 +126,15 @@ export const useTaskBoard = create<TaskBoardState>()((set) => {
         // Not saved; the width default comes back next time.
       }
     },
-    setLastProject: (lastProjectId) => set({ lastProjectId })
+    setLastProject: (lastProjectId) => set({ lastProjectId }),
+    setLeaderChoice(choice) {
+      set({ leaderChoice: choice })
+      try {
+        globalThis.localStorage?.setItem(LEADER_KEY, choice)
+      } catch {
+        // Not saved; Claude Code comes back next time.
+      }
+    }
   }
 })
 

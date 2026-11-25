@@ -1,6 +1,6 @@
 // 任务 board's pure model (PRD F9 v1.249): a card is a task joined with the session it is bound to, and the 「动态」
 // panel's events are what changed between two looks at the board.
-import { taskState, type Task, type TaskId, type TaskState } from '@shared/task-board'
+import { taskState, TASK_LIMITS, type Task, type TaskId, type TaskState } from '@shared/task-board'
 import type { Session } from '@shared/types'
 
 export type CardSession = Pick<Session, 'id' | 'status'>
@@ -152,4 +152,19 @@ export function actionLine(
   if (said) return { kind: 'text', text: said }
   if (session) return { kind: 'key', key: state === 'working' ? 'working' : 'idle' }
   return { kind: 'key', key: 'unassigned' }
+}
+
+// ── The new-card box's text ───────────────────────────────────────────────────
+
+/**
+ * What the box holds as a card: the first line is the title (trimmed, at most `TASK_LIMITS.title` characters; what is
+ * over starts the body), the other lines are the body. Blank lines before the text are dropped. `null` without text.
+ */
+export function splitCard(text: string): { title: string; body: string } | null {
+  const lines = text.replace(/^\s+/, '').replace(/\s+$/, '').split('\n')
+  const first = (lines[0] ?? '').trim()
+  if (first === '') return null
+  const over = first.slice(TASK_LIMITS.title)
+  const body = [...(over !== '' ? [over.trim()] : []), ...lines.slice(1)].join('\n').replace(/^\n+/, '')
+  return { title: first.slice(0, TASK_LIMITS.title).trimEnd(), body }
 }
