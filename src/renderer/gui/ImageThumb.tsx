@@ -1,4 +1,4 @@
-// A picture in the chat as a thumbnail (PRD F23 v1.244, Figma 112F): 120 high, as wide as its shape makes it, drawn
+// A picture in the chat as a thumbnail (PRD F23 v1.246, Figma 112F): 120 high, as wide as its shape makes it, drawn
 // under a tool row, under an agent's paragraph or where its Markdown wrote it. Inside a session's feed it is a button
 // that opens the preview at it (ImagePreview); a file that cannot be read is its name (Figma 71D) and opens nothing.
 import { useState } from 'react'

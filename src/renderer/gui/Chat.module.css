@@ -1163,34 +1163,159 @@
   gap: var(--space-8);
 }
 
-/* Figma 59J: the agent's task list above the composer (Todos.tsx) — a 1px border/subtle frame, the header 任务 ·
-   done / total, then a row per task; in the feed, a task row opens to the same rows. */
-.todoCard {
+/* Trays on the composer (Figma 113A / 113D′, PRD v1.245): 12 narrower than the composer each side, on its top edge with
+   no gap (the dock's gap is taken back) and no bottom line; the top corners round, bg/section, a hairline on top and
+   both sides. The question sits next to the composer, the tasks above it, a hairline between; only the top block is
+   round. */
+.trays {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-8) var(--space-12);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-window);
+  margin: 0 var(--space-12) calc(-1 * var(--space-8));
 }
 
-.todoHeader {
+.tray {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6) var(--space-12) var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-bottom: 0;
+  background: var(--bg-section);
+}
+
+.tray:first-child {
+  border-radius: var(--radius-window) var(--radius-window) 0 0;
+}
+
+.tray[data-testid='gui-question'] {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.trayHeader {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  font: var(--type-step);
-  color: var(--text-tertiary);
+  height: 28px;
+  min-width: 0;
 }
 
-.todoHeader > svg {
+.trayName {
+  font: var(--text-caption-strong);
+  color: var(--text-primary);
+}
+
+.trayTitle {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--text-caption);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trayCount {
   flex-shrink: 0;
-}
-
-.todoCount {
-  font-variant-numeric: tabular-nums;
+  font: var(--text-mono-s);
   color: var(--text-secondary);
 }
 
+.traySpacer {
+  flex: 1;
+}
+
+.trayButton {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.trayButton:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.trayButton:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 2px;
+}
+
+/* One 14×3 segment per task: done primary, in progress working, not started a hairline. */
+.todoSegments {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.todoSegment {
+  width: 14px;
+  height: 3px;
+  border-radius: var(--radius-xs);
+  background: var(--border-default);
+}
+
+.todoSegment[data-status='completed'] {
+  background: var(--text-primary);
+}
+
+.todoSegment[data-status='in_progress'] {
+  background: var(--status-working);
+}
+
+.trayTodos {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trayTodo {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-8) + var(--space-2));
+  min-height: 28px;
+  min-width: 0;
+  font: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.trayTodo[data-status='in_progress'] {
+  font: var(--text-caption-strong);
+  color: var(--text-primary);
+}
+
+.trayTodo[data-status='completed'] {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+.todoMark {
+  flex-shrink: 0;
+}
+
+.todoSpin {
+  transform-origin: 8px 8px;
+  animation: todo-spin var(--duration-spin) linear infinite;
+}
+
+@keyframes todo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todoSpin {
+    animation: none;
+  }
+}
+
+/* Figma 59J: a task list in the feed, a row 「任务 · N 项」 opens to it. */
 .todos {
   display: flex;
   flex-direction: column;
@@ -1284,55 +1409,149 @@
   opacity: 0.55;
 }
 
-/* Question (49″F): OptionItem rows, 2 apart. */
+/* Question tray (Figma 113D′): the question 15/22 under the header, indented to the header's text; options are
+   borderless rows (radius --radius-md): mark · label over its description · the key. */
+.trayQuestion {
+  margin: 0;
+  padding: var(--space-4) 0 var(--space-8) var(--glyph-indent);
+  font: 500 15px/22px var(--font-ui);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .options {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 }
 
 .option {
   display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  min-height: 30px;
-  padding: 0 var(--space-12);
-  border: 1px solid var(--border-default);
+  align-items: flex-start;
+  gap: calc(var(--space-8) + var(--space-2));
+  padding: var(--space-8) var(--space-6);
+  border: 0;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
   text-align: left;
 }
 
+.option[data-other] {
+  align-items: center;
+  padding: var(--space-6);
+}
+
 .option[data-focused='true'] {
-  border-color: var(--border-strong);
-  background: var(--bg-selected);
+  background: var(--bg-hover);
 }
 
-.optionKey {
+.optionMark,
+.optionMarkButton {
+  display: flex;
   flex-shrink: 0;
-  font: var(--text-mono-s-medium);
-  color: var(--text-tertiary);
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
 }
 
-.option[data-focused='true'] .optionKey {
-  color: var(--status-attention);
+.option:not([data-other]) .optionMark {
+  margin-top: var(--space-2);
+}
+
+.optionMarkButton {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.optionMark {
+  border: 1.5px solid var(--text-secondary);
+  border-radius: 50%;
+  color: var(--text-inverse);
+}
+
+.optionMark[data-multi='true'] {
+  border-radius: var(--radius-sm);
+}
+
+.optionMark[data-checked='true'] {
+  border-color: var(--text-primary);
+}
+
+.optionMark[data-multi='false'][data-checked='true'] {
+  background: radial-gradient(circle, var(--text-primary) 0 3px, transparent 3.5px);
+}
+
+.optionMark[data-multi='true'][data-checked='true'] {
+  background: var(--text-primary);
+}
+
+.optionText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .optionLabel {
-  font: var(--text-body);
+  font: var(--text-body-strong);
+  color: var(--text-primary);
+}
+
+.optionDescription {
+  font: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.optionKey {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  box-sizing: border-box;
+  height: 18px;
+  margin-top: calc(var(--space-2) / 2);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font: var(--fs-text-mono-s);
+  color: var(--text-secondary);
+}
+
+.option[data-other] .optionKey {
+  margin-top: 0;
 }
 
 .otherInput {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
   height: 30px;
   padding: 0 var(--space-12);
-  border: 0;
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--bg-selected);
-  box-shadow: var(--field-finish);
+  background: transparent;
   font: var(--text-body);
   color: var(--text-primary);
   outline: none;
+}
+
+.otherInput::placeholder {
+  color: var(--text-tertiary);
+}
+
+.otherInput:focus {
+  border-color: var(--border-strong);
+}
+
+.trayActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  padding-top: calc(var(--space-8) + var(--space-2));
 }
 
 /* Queued (49″C): 排队 · the message · ×. */
@@ -1983,6 +2202,7 @@ button.thumbButton:focus-visible {
 .round:focus-visible,
 .button:focus-visible,
 .option:focus-visible,
+.optionMarkButton:focus-visible,
 .toolRow:focus-visible,
 .thinkingRow:focus-visible,
 .queuedText:focus-visible,

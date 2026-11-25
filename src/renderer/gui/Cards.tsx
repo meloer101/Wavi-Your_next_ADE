@@ -1,12 +1,13 @@
 // What a GUI session's agent waits on (PRD F23, Figma 49″D–F): a card above the composer, its own block (bg/section),
 // magenta only on the status glyph. Permission: 拒绝 ⎋ · 总是允许 · 允许 ↵, a change to a file drawn between the title and
-// the buttons (Figma 59I). Question: numbered options + 其他…,
-// 跳过 ⎋ · 提交 ↵. Plan: 继续规划 · 批准，编辑时问我 · 批准并自动接受编辑 ↵. Each card answers keys through `bindKeys`
+// the buttons (Figma 59I). Question: a tray on the composer (Figma 113D′, PRD v1.245):
+// numbered options with their descriptions + an inline 其他 input, 跳过 ⎋ · 下一题 / 提交 ↵. Plan: 继续规划 · 批准，编辑时问我 · 批准并自动接受编辑 ↵. Each card answers keys through `bindKeys`
 // (the chat routes them, see ChatPane).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { GuiAnswer, GuiPrompt } from '@shared/gui-chat'
 import { defineMessages } from '@shared/i18n'
 import type { SessionId } from '@shared/types'
+import { Check, X } from '../ui/icons'
 import { StatusGlyph } from '../ui/StatusGlyph'
 import { ChatMarkdown } from './ChatMarkdown'
 import { DiffBlock } from './DiffBlock'
@@ -24,7 +25,7 @@ const M = defineMessages({
     otherOption: '其他…',
     other: '其他',
     skip: '跳过',
-    next: '下一个',
+    next: '下一题',
     submit: '提交',
     confirmPlan: '等你确认计划',
     keepPlanning: '继续规划',
@@ -208,33 +209,57 @@ function QuestionCard({ prompt, answer, pending, bindKeys }: CardProps<Extract<G
   if (!question) return null
 
   const picked = (index: number): boolean => (index === question.options.length ? choice?.kind === 'other' : choice?.kind === 'option' && choice.indexes.includes(index))
+  const total = prompt.questions.length
+  const last = question.options.length
+  const mark = (index: number): ReactNode => (
+    <span className={styles.optionMark} data-multi={question.multiSelect} data-checked={picked(index)} aria-hidden>
+      {question.multiSelect && picked(index) && <Check size={16} strokeWidth={1.75} />}
+    </span>
+  )
+  const role = question.multiSelect ? 'checkbox' : 'radio'
   return (
-    <Card label={m.answer} title={question.question} testId="gui-question">
+    <section className={styles.tray} aria-label={m.answer} data-testid="gui-question">
+      <header className={styles.trayHeader}>
+        <StatusGlyph status="needs_you" />
+        <span className={styles.trayTitle}>{question.header ?? m.answer}</span>
+        <span className={styles.traySpacer} />
+        {total > 1 && (
+          <span className={styles.trayCount}>
+            {step + 1}/{total}
+          </span>
+        )}
+        <button type="button" className={styles.trayButton} aria-label={m.skip} disabled={pending} onClick={skip}>
+          <X size={16} strokeWidth={1.75} />
+        </button>
+      </header>
+      <h3 className={styles.trayQuestion}>{question.question}</h3>
       <div className={styles.options} role={question.multiSelect ? 'group' : 'radiogroup'} aria-label={question.header ?? question.question}>
-        {[...question.options.map((o) => o.label), m.otherOption].map((label, index) => (
-          <button
-            key={index}
-            type="button"
-            role={question.multiSelect ? 'checkbox' : 'radio'}
-            aria-checked={picked(index)}
-            className={styles.option}
-            data-focused={focused === index || picked(index)}
-            title={question.options[index]?.description}
-            onClick={() => choose(index)}
-          >
+        {question.options.map((option, index) => (
+          <button key={index} type="button" role={role} aria-checked={picked(index)} className={styles.option} data-focused={focused === index} onClick={() => choose(index)}>
+            {mark(index)}
+            <span className={styles.optionText}>
+              <span className={styles.optionLabel}>{option.label}</span>
+              {option.description && <span className={styles.optionDescription}>{option.description}</span>}
+            </span>
             <span className={styles.optionKey}>{index + 1}</span>
-            <span className={styles.optionLabel}>{label}</span>
           </button>
         ))}
-        {choice?.kind === 'other' && (
+        {/* 其他 is the last row: its input is always there, and typing in it picks it. */}
+        <div className={styles.option} data-other data-focused={focused === last} onClick={() => choose(last)}>
+          <button type="button" role={role} aria-checked={picked(last)} aria-label={m.otherOption} className={styles.optionMarkButton}>
+            {mark(last)}
+          </button>
           <input
             ref={otherRef}
             className={styles.otherInput}
             aria-label={m.other}
-            value={choice.text}
+            placeholder={m.other}
+            value={choice?.kind === 'other' ? choice.text : ''}
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => {
               const text = e.currentTarget.value
               setChoices((all) => Object.assign([...all], { [step]: { kind: 'other', text } }))
+              setFocused(last)
             }}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.keyCode === 229) return
@@ -245,17 +270,20 @@ function QuestionCard({ prompt, answer, pending, bindKeys }: CardProps<Extract<G
               } else if (e.key === 'Escape') {
                 e.preventDefault()
                 e.stopPropagation()
-                setChoices((all) => Object.assign([...all], { [step]: undefined }))
+                // The pane ignores keys typed in an input, so a second ⎋ skips here.
+                if (choice?.kind === 'other') setChoices((all) => Object.assign([...all], { [step]: undefined }))
+                else skip()
               }
             }}
           />
-        )}
+          <span className={styles.optionKey}>{last + 1}</span>
+        </div>
       </div>
-      <div className={styles.cardActions}>
+      <div className={styles.trayActions}>
         <Button label={m.skip} shortcut="⎋" disabled={pending} onClick={skip} />
-        <Button label={step < prompt.questions.length - 1 ? m.next : m.submit} shortcut="↵" primary disabled={pending} onClick={primary} />
+        <Button label={step < total - 1 ? m.next : m.submit} shortcut="↵" primary disabled={pending} onClick={primary} />
       </div>
-    </Card>
+    </section>
   )
 }
 

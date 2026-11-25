@@ -1,4 +1,4 @@
-// The image preview (PRD F23 v1.244, Figma 112G / 112H): a layer over the whole window that shows one picture of the
+// The image preview (PRD F23 v1.246, Figma 112G / 112H): a layer over the whole window that shows one picture of the
 // session at a time — yours, a tool's, an agent's, one its Markdown wrote — fitted to the stage, zoomed around the
 // cursor, dragged when larger than it. ← → go through every picture of the session; ⎋ closes the layer and goes no
 // further (the chat's own ⎋, which interrupts the agent, never sees it). The view math is image-zoom.ts.
