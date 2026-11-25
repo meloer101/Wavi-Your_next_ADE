@@ -27,6 +27,9 @@ const worktrees: Worktree[] = [
   { id: 'wb1', projectId: 'pb', branch: 'x/three', path: '/wt/three', isMain: false, added: 10, removed: 2 }
 ]
 
+/** Every group the tests below draw is open: members are folded unless their session is listed (PRD v1.243). */
+const OPEN = ['lead', 'parent', 'c1', 'c2', 's1']
+
 function session(id: string, worktreeId: string, status: SessionStatus, lastActivityAt = 0, extra: Partial<Session> = {}): Session {
   return { id, worktreeId, kind: 'claude', title: id, status, startedAt: 0, lastActivityAt, ...extra }
 }
@@ -117,7 +120,7 @@ describe('buildSidebarGroups', () => {
 describe('leader session (PRD F21 v1.198, Figma 81A)', () => {
   it('writes leader before the branch on the leader’s third line, in both views', () => {
     const sessions = [session('lead', 'wam', 'idle'), session('kid', 'wa1', 'running', 0, { dispatchedBy: 'lead' })]
-    const [alpha] = buildSidebarGroups({ projects, worktrees, sessions, leaderSessions: { pa: 'lead' } })
+    const [alpha] = buildSidebarGroups({ projects, worktrees, sessions, expandedGroups: OPEN, leaderSessions: { pa: 'lead' } })
     expect(alpha?.rows.map((r) => [r.session.id, r.branch, r.depth])).toEqual([
       ['lead', 'leader · main', 0],
       ['kid', 'x/one', 1]
@@ -179,6 +182,7 @@ describe('dispatched sessions (PRD F21)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [
         session('child-b', 'wa2', 'running', 0, { dispatchedBy: 'parent' }),
         session('parent', 'wam', 'idle'),
@@ -196,6 +200,7 @@ describe('dispatched sessions (PRD F21)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [
         session('parent', 'wam', 'idle', 0, { title: 'Cookie 会话迁移' }),
         session('part', 'wa1', 'running', 0, { title: 'Cookie 会话迁移 · Codex', dispatchedBy: 'parent' })
@@ -219,6 +224,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [session('s1', 'wa1', 'running', 0, { askingAgents: ['a2'] }), session('s2', 'wa2', 'idle')],
       subagents: { s1: [sub('a1', '梳理 auth', 'Fable 5.1'), sub('a2')] }
     })
@@ -231,6 +237,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [
         session('parent', 'wam', 'running'),
         session('c1', 'wa1', 'running', 0, { dispatchedBy: 'parent' }),
@@ -254,6 +261,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [
         session('parent', 'wam', 'running'),
         session('c1', 'wa1', 'running', 0, { dispatchedBy: 'parent', dispatchModel: 'gpt-6-sol' }),
@@ -287,6 +295,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [session('parent', 'wam', 'needs_you'), session('c1', 'wa1', 'running', 0, { dispatchedBy: 'parent' })],
       subagents: { parent: [...(waiting.parent ?? []), sub('p1')], c1: waiting.c1 ?? [] }
     })
@@ -309,6 +318,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [session('lead', 'wam', 'running'), session('c1', 'wa1', 'running', 0, { dispatchedBy: 'lead' })],
       subagents: { lead: [...teamItems(team), sub('p1')] }
     })
@@ -327,6 +337,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const groups = buildSidebarGroups({
       projects,
       worktrees,
+      expandedGroups: OPEN,
       sessions: [session('parent', 'wam', 'idle'), session('c1', 'wa1', 'running', 0, { dispatchedBy: 'parent' })],
       subagents: { c1: [sub('k')] }
     })
@@ -337,7 +348,7 @@ describe('subagents under their session (PRD F21 v1.109, Figma 44B)', () => {
     const parent = session('parent', 'wam', 'running')
     const child = session('c1', 'wa1', 'running', 0, { dispatchedBy: 'parent' })
     const rows = (subagents: Record<string, ReturnType<typeof sub>[]>) =>
-      buildSidebarGroups({ projects, worktrees, sessions: [parent, child], subagents })[0]!.rows
+      buildSidebarGroups({ projects, worktrees, sessions: [parent, child], expandedGroups: OPEN, subagents })[0]!.rows
     const one = rows({ c1: [sub('a', 'one')] })
     const named = rows({ c1: [sub('a', 'one', 'Opus 5.5')] })
     const none = rows({})
@@ -413,16 +424,13 @@ describe('按状态 view (PRD §3.3, Figma 53C)', () => {
     expect(outsideGit[0]?.rows[0]?.branch).toBe('beta')
   })
 
-  it('keeps a session’s own subagents under it', () => {
-    const groups = buildSidebarGroups({
-      projects,
-      worktrees,
-      sessions,
-      groupBy: 'status',
-      subagents: { 'a-run': [{ id: 'ag1', title: '扫描', model: 'Opus 5.5' }] }
-    })
-    const row = groups.find((g) => g.status === 'running')!.rows[0]!
-    expect(row).toMatchObject({ tree: 'parent', after: [{ id: 'ag1', depth: 1, tree: 'last' }] })
+  it('folds a session’s own subagents under it, and draws them once its group is open', () => {
+    const input = { projects, worktrees, sessions, groupBy: 'status' as const, subagents: { 'a-run': [{ id: 'ag1', title: '扫描', model: 'Opus 5.5' }] } }
+    const folded = buildSidebarGroups(input).find((g) => g.status === 'running')!.rows[0]!
+    expect(folded.after).toBeUndefined()
+    expect(folded.fold).toMatchObject({ ownerId: 'a-run', expanded: false, total: 1, counts: [{ status: 'running', count: 1 }] })
+    const open = buildSidebarGroups({ ...input, expandedGroups: ['a-run'] }).find((g) => g.status === 'running')!.rows[0]!
+    expect(open).toMatchObject({ tree: 'parent', after: [{ id: 'ag1', depth: 1, tree: 'last' }], fold: { expanded: true } })
   })
 
   it('folds a collapsed status group: no rows, its count kept, its rows out of ⌘1–9', () => {
@@ -503,5 +511,99 @@ describe('pickSessions (issue #6)', () => {
   it('rows no longer drawn (closed, folded) drop out, and a hidden anchor falls back to the active row', () => {
     expect(pick(['x', 'b'], 'x', 'b', 'c', 'toggle')).toEqual(['b', 'c'])
     expect(pick([], 'x', 'a', 'c', 'range')).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('collaboration groups fold their members (PRD v1.243)', () => {
+  const sub = (id: string) => ({ id, title: id })
+  const family = [
+    session('parent', 'wam', 'idle'),
+    session('c1', 'wa1', 'needs_you', 0, { dispatchedBy: 'parent' }),
+    session('g1', 'wa2', 'running', 0, { dispatchedBy: 'c1' }),
+    session('c2', 'wa2', 'idle', 0, { dispatchedBy: 'parent' })
+  ]
+  const build = (expandedGroups: string[], extra: Partial<Parameters<typeof buildSidebarGroups>[0]> = {}) =>
+    buildSidebarGroups({ projects, worktrees, sessions: family, subagents: { parent: [sub('p1')], c1: [sub('k')] }, expandedGroups, ...extra })
+
+  it('draws one fold row under a new group and no members, counting every descendant', () => {
+    const rows = build([])[0]!.rows
+    expect(rows.map((r) => r.session.id)).toEqual(['parent'])
+    expect(rows[0]).toMatchObject({ fold: { ownerId: 'parent', expanded: false, total: 5, line: false } })
+    expect(rows[0]!.fold!.counts).toEqual([
+      { status: 'needs_you', count: 1 },
+      { status: 'running', count: 3 },
+      { status: 'idle', count: 1 }
+    ])
+    expect(rows[0]!.tree).toBeUndefined()
+    expect(rows[0]!.after).toBeUndefined()
+  })
+
+  it('opens one level: a member with members of its own shows its own folded row, one level deeper', () => {
+    const rows = build(['parent'])[0]!.rows
+    expect(rows.map((r) => `${r.session.id}:${r.depth}`)).toEqual(['parent:0', 'c1:1', 'c2:1'])
+    expect(rows[0]!.fold).toMatchObject({ expanded: true, depth: 1, line: true })
+    expect(rows[1]!.fold).toMatchObject({ ownerId: 'c1', expanded: false, depth: 2, total: 2, line: false })
+    expect(rows[1]!.opens).toBeUndefined()
+    expect(rows[2]!.fold).toBeUndefined()
+    // The dispatcher's own subagent is drawn after its children, on its line.
+    expect(rows[2]!.after?.map((a) => a.id)).toEqual(['p1'])
+    expect(rows.map((r) => r.tree)).toEqual(['parent', 'child', 'child'])
+  })
+
+  it('opens a member’s group on its own', () => {
+    const rows = build(['parent', 'c1'])[0]!.rows
+    expect(rows.map((r) => `${r.session.id}:${r.depth}`)).toEqual(['parent:0', 'c1:1', 'g1:2', 'c2:1'])
+    expect(rows[1]!.fold).toMatchObject({ expanded: true, depth: 2, line: true, pass: true })
+    expect(rows[2]!.after?.map((a) => a.id)).toEqual(['k'])
+  })
+
+  it('keeps ⌘1–9 and ↑↓ off folded members, and leaves ⌘J on them', () => {
+    const groups = build([])
+    expect(visibleSessionIds(groups)).toEqual(['parent'])
+    expect(sessionForShortcut(groups, 2)).toBeNull()
+    expect(nextAttentionSessionId(family, 'parent')).toBe('c1')
+    expect(visibleSessionIds(build(['parent']))).toEqual(['parent', 'c1', 'c2'])
+  })
+
+  it('does not fold a pending confirm: it stays under the session that asked', () => {
+    const plan = { item: { title: '登录页 e2e' } } as never
+    const rows = buildSidebarGroups({
+      projects,
+      worktrees,
+      sessions: [session('parent', 'wam', 'idle')],
+      subagents: pendingItems([{ childId: 'n1', parentId: 'parent', plan }])
+    })[0]!.rows
+    expect(rows[0]!.fold).toBeUndefined()
+    expect(rows[0]!.after?.map((a) => a.id)).toEqual(['pending:n1'])
+    // With members as well, the confirm stays while the members fold.
+    const both = buildSidebarGroups({
+      projects,
+      worktrees,
+      sessions: [session('parent', 'wam', 'idle')],
+      subagents: { parent: [...(pendingItems([{ childId: 'n1', parentId: 'parent', plan }]).parent ?? []), sub('p1')] }
+    })[0]!.rows[0]!
+    expect(both.fold).toMatchObject({ total: 1, expanded: false, line: true })
+    expect(both.after?.map((a) => a.id)).toEqual(['pending:n1'])
+    expect(both.tree).toBe('parent')
+  })
+
+  it('counts a workflow run and a teammate, not its phases or the team heading', () => {
+    const team = {
+      startedAt: 0,
+      members: [{ name: 'docs', agentId: 'adocs', state: 'asking' as const, action: '写入', spans: [] }],
+      messages: []
+    }
+    const run = workflowItems(
+      [{ key: 'r1', name: 'review', agents: [], phases: [{ title: 'one', agents: [] }] } as never],
+      { unread: true, folded: new Set() }
+    )
+    const row = buildSidebarGroups({ projects, worktrees, sessions: [session('lead', 'wam', 'idle')], subagents: { lead: [...teamItems(team), ...run] } })[0]!.rows[0]!
+    expect(row.fold?.total).toBe(2)
+    expect(row.fold?.counts.map((c) => c.status)).toEqual(['needs_you', 'running'])
+  })
+
+  it('draws the same fold row and rows for the same input, so memoized rows hold', () => {
+    expect(sameRow(build(['parent'])[0]!.rows[0]!, build(['parent'])[0]!.rows[0]!)).toBe(true)
+    expect(sameRow(build(['parent'])[0]!.rows[0]!, build([])[0]!.rows[0]!)).toBe(false)
   })
 })

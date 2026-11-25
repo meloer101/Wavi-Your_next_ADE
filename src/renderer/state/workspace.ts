@@ -100,6 +100,8 @@ interface WorkspaceState extends WorkspaceData {
   sidebarGroupBy: SidebarGroupBy
   /** Status groups folded in the sidebar's 按状态 view. */
   collapsedStatusGroups: readonly SessionStatus[]
+  /** Sessions whose collaboration group is open in the sidebar (PRD v1.243); absent = folded. */
+  expandedGroups: readonly SessionId[]
   mainView: MainView
   /** Folders opened as projects, most recent first (first-run screen). */
   recentProjects: readonly string[]
@@ -149,6 +151,10 @@ interface WorkspaceState extends WorkspaceData {
   toggleProjectCollapsed(id: ProjectId): void
   setSidebarGroupBy(groupBy: SidebarGroupBy): void
   toggleStatusGroupCollapsed(status: SessionStatus): void
+  /** Opens or folds one session's collaboration group in the sidebar. */
+  toggleGroupExpanded(id: SessionId): void
+  /** Opens these sessions' groups (⌘J lands on a folded member: every ancestor opens). */
+  expandGroups(ids: readonly SessionId[]): void
   /** Adds (or finds) the project for a folder. */
   addProject(rootPath: string): ProjectId
   removeProject(id: ProjectId): void
@@ -321,6 +327,7 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => {
     collapsedProjectIds: saved?.collapsedProjectIds ?? [],
     sidebarGroupBy: saved?.sidebarGroupBy ?? 'project',
     collapsedStatusGroups: saved?.collapsedStatusGroups ?? [],
+    expandedGroups: saved?.expandedGroups ?? [],
     mainView: 'session',
     recentProjects: saved?.recentProjects ?? [],
     newSessionWorkdir: saved?.newSessionWorkdir ?? {},
@@ -400,6 +407,13 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => {
           : [...s.collapsedProjectIds, id]
       })),
     setSidebarGroupBy: (groupBy) => set({ sidebarGroupBy: groupBy }),
+    toggleGroupExpanded: (id) =>
+      set((s) => ({ expandedGroups: s.expandedGroups.includes(id) ? s.expandedGroups.filter((x) => x !== id) : [...s.expandedGroups, id] })),
+    expandGroups: (ids) =>
+      set((s) => {
+        const add = ids.filter((id) => !s.expandedGroups.includes(id))
+        return add.length === 0 ? s : { expandedGroups: [...s.expandedGroups, ...add] }
+      }),
     toggleStatusGroupCollapsed: (status) =>
       set((s) => ({
         collapsedStatusGroups: s.collapsedStatusGroups.includes(status)
@@ -554,6 +568,7 @@ setSnapshotProvider(() => {
       collapsedProjectIds: state.collapsedProjectIds,
       sidebarGroupBy: state.sidebarGroupBy,
       collapsedStatusGroups: state.collapsedStatusGroups,
+      expandedGroups: state.expandedGroups,
       recentProjects: state.recentProjects,
       newSessionWorkdir: state.newSessionWorkdir,
       newSessionAgent: state.newSessionAgent,

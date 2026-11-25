@@ -45,6 +45,18 @@
   gap: var(--space-2);
 }
 
+.groupBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-radius: 10px;
+}
+
+/* The selected session is one of the members (Figma 111I): the group is tinted, the member's own block sits on its row. */
+.groupBox[data-member-selected='true'] {
+  background: var(--bg-selected);
+}
+
 .footer {
   flex: none;
   display: flex;

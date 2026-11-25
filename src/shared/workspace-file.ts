@@ -133,6 +133,8 @@ export interface WorkspaceFile {
   sidebarGroupBy?: 'status'
   /** Status groups folded in the sidebar. Absent when none. */
   collapsedStatusGroups?: SessionStatus[]
+  /** Sessions whose collaboration group is open in the sidebar (PRD v1.243); absent = every group folded. Only ids of sessions that exist. */
+  expandedGroups?: string[]
   /** Composer drafts by session id; only non-empty drafts of sessions that exist. */
   drafts: Record<string, string>
   /** Folders opened as projects, most recent first (first-run screen, B10). Absent when empty. */
@@ -326,6 +328,7 @@ function sanitizeBody(value: Record<string, unknown>, now: number): WorkspaceFil
   const collapsedStatusGroups = Array.isArray(value.collapsedStatusGroups)
     ? SESSION_STATUSES.filter((status) => (value.collapsedStatusGroups as unknown[]).includes(status))
     : []
+  const expandedGroups = Array.isArray(value.expandedGroups) ? [...new Set(value.expandedGroups.filter((id): id is string => isString(id) && sessionIds.has(id)))] : []
   const reviewComments = sanitizeReviewComments(value.reviewComments, new Set(worktrees.map((w) => w.path)))
   const attemptGroups = sanitizeAttemptGroups(value.attemptGroups, sessionIds)
   const worktreePaths = new Set(worktrees.map((w) => w.path))
@@ -375,6 +378,7 @@ function sanitizeBody(value: Record<string, unknown>, now: number): WorkspaceFil
       : [],
     ...(value.sidebarGroupBy === 'status' ? { sidebarGroupBy: 'status' as const } : {}),
     ...(collapsedStatusGroups.length > 0 ? { collapsedStatusGroups } : {}),
+    ...(expandedGroups.length > 0 ? { expandedGroups } : {}),
     drafts,
     ...(recentProjects.length > 0 ? { recentProjects } : {}),
     ...(Object.keys(newSessionWorkdir).length > 0 ? { newSessionWorkdir } : {}),

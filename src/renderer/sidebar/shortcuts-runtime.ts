@@ -5,23 +5,28 @@ import { MAIN_WINDOW, type WindowKey } from '@shared/window-layout'
 import { everyWindow } from '../app-shell/windows-runtime'
 import { noteKeyCommand } from '../state/key-commands'
 import { useWorkspace, windowEffects } from '../state/workspace'
+import { dispatchAncestors } from '@shared/session-group'
 import { buildSidebarGroups, nextAttentionSessionId, sessionForShortcut } from './model'
 import { installSidebarShortcuts } from './shortcuts'
 import { toggleOverview } from '../overview/store'
 
 /** The sidebar of window `key` as it is now: a project window lists only its project (F20 · 多窗口). */
 function groupsNow(key: WindowKey) {
-  const { projects, worktrees, sessions, collapsedProjectIds, sidebarGroupBy, collapsedStatusGroups, windows } = useWorkspace.getState()
+  const { projects, worktrees, sessions, collapsedProjectIds, sidebarGroupBy, collapsedStatusGroups, expandedGroups, windows } = useWorkspace.getState()
   const scope = windows.find((w) => w.key === key)?.projectId ?? null
   const listed = scope === null ? projects : projects.filter((p) => p.id === scope)
-  return buildSidebarGroups({ projects: listed, worktrees, sessions, collapsedProjectIds, groupBy: sidebarGroupBy, collapsedStatusGroups })
+  return buildSidebarGroups({ projects: listed, worktrees, sessions, collapsedProjectIds, groupBy: sidebarGroupBy, collapsedStatusGroups, expandedGroups })
 }
 
 /** ⌘J: the next session that needs the user, if any. */
 export function jumpToNextAttention(): SessionId | null {
-  const { sessions, activeSessionId } = useWorkspace.getState()
+  const { sessions, activeSessionId, sidebarGroupBy } = useWorkspace.getState()
   const id = nextAttentionSessionId(sessions, activeSessionId)
-  if (id) useWorkspace.getState().setActiveSession(id)
+  if (id) {
+    // A folded member that needs the user opens every group above it, so the row it lands on is drawn (PRD v1.243).
+    if (sidebarGroupBy !== 'status') useWorkspace.getState().expandGroups(dispatchAncestors(sessions, id))
+    useWorkspace.getState().setActiveSession(id)
+  }
   return id
 }
 

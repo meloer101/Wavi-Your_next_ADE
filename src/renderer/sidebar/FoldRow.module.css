@@ -1,0 +1,97 @@
+/*
+ * Figma 111G / 111H FoldRow — one line of 18, padding 6/8, like a SubagentRow. The chevron hangs in the glyph column of
+ * the level it folds (depth 1: centre 32, depth 2: centre 48), the label starts on that level's text line, and the
+ * counts follow it: a 12px status glyph and a caption number each, 8 apart. The tree line of the session runs through
+ * the glyph column one level up and passes this row without a tick (SessionRow.module.css).
+ */
+.row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  --row-text-inset: calc(var(--indent-tree) + var(--space-16));
+  --row-line-x: var(--space-16);
+  padding: var(--space-6) var(--space-8) var(--space-6) calc(var(--row-text-inset) - var(--space-8) - 16px);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--text-caption);
+  text-align: left;
+  cursor: default;
+}
+
+.row[data-depth='2'] {
+  --row-text-inset: calc(var(--indent-tree) + var(--space-32));
+  --row-line-x: var(--space-32);
+}
+
+.row:hover {
+  background: var(--bg-hover);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* The owner's line runs on through this row; at depth 2 its dispatcher's line runs on too. */
+.row[data-line='true']::before,
+.row[data-pass='true']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: calc(-1 * var(--space-2));
+  border-left: 1px solid var(--border-default);
+  pointer-events: none;
+}
+
+.row[data-line='true']::before {
+  left: calc(var(--row-line-x) - 0.5px);
+}
+
+.row[data-pass='true']::after {
+  left: calc(var(--space-16) - 0.5px);
+}
+
+.chevron {
+  flex: none;
+  display: flex;
+  width: 16px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.row:hover .chevron {
+  color: var(--text-secondary);
+}
+
+.label {
+  flex: none;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.counts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.count svg {
+  width: 12px;
+  height: 12px;
+}

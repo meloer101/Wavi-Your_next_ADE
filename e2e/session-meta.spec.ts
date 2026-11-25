@@ -268,6 +268,13 @@ test.describe('session metrics: todo · context · usage', () => {
     repo.step({ hook: 'PreToolUse', payload: { transcript_path, agent_id: 'a22', agent_type: 'Explore', tool_name: 'Read', tool_input: { file_path: '/x/a.ts' } } })
 
     const rows = page.locator('[data-region="sidebar"] [data-testid="subagent-row"]')
+    // PRD v1.243: a new group is folded into one row that counts its members; a click on it opens the group.
+    const fold = page.locator('[data-region="sidebar"] [data-testid="fold-row"][data-group-owner="s-cookie"]')
+    await expect(fold).toContainText('2 个成员', WITHIN)
+    await expect(fold).toHaveAttribute('aria-expanded', 'false')
+    await expect(rows).toHaveCount(0)
+    await fold.click()
+    await expect(fold).toHaveAttribute('aria-expanded', 'true')
     await expect(rows).toHaveCount(2, WITHIN)
     await expect(rows.nth(0)).toHaveText('梳理 auth 中间件的调用点Fable 5.1')
     await expect(rows.nth(1)).toHaveText('查 SameSite 在 Safari 的行为Opus 5.5')
