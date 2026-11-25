@@ -212,7 +212,7 @@ export interface RemoteSettings {
   push: boolean
 }
 
-/** 设置 · 自动化 · 电源 (PRD v1.237): keep the Mac from idle-sleeping while Wavi runs. */
+/** 设置 · 自动化 · 电源 (PRD v1.238): keep the Mac from idle-sleeping while Wavi runs. */
 export interface PowerSettings {
   keepAwake: boolean
 }

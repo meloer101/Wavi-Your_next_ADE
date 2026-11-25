@@ -8,7 +8,8 @@
 
 ## 当前位置
 
-- 2026-11-24：Wavi 运行时阻止 Mac 空闲睡眠（PRD v1.237，设置 · 自动化 · 电源，`power.keepAwake` 默认开；`src/main/keep-awake.ts`）已做完，合盖睡眠的情况未实测。
+- 2026-11-24：Wavi 运行时阻止 Mac 空闲睡眠（PRD v1.238，设置 · 自动化 · 电源，`power.keepAwake` 默认开；`src/main/keep-awake.ts`）已做完，合盖睡眠的情况未实测。
+- 2026-11-24：GUI 对话表格的列宽和行高（PRD v1.237，`gui/table-cells.ts` 标短单元格，`gui/Chat.module.css` 的表格规则；e2e `gui-session.spec.ts` 加断言）已做完。
 - 2026-11-24：界面字号整体大一号（PRD v1.236，`src/renderer/styles/tokens.css` 的 `--text-*`）已做完。
 - 2026-11-24：侧栏原来的等宽字（时间、模型、快捷键、计数、版本号）改用 Google Sans 加 `tabular-nums`（PRD v1.235，`src/renderer/sidebar/*.module.css`）已做完。
 - 2026-11-24：界面字体换成 Google Sans（PRD v1.234，`@fontsource-variable/google-sans`，`--font-ui` 在 `src/renderer/styles/tokens.css`；对话区默认跟随，`appearance/map.ts`）已做完。

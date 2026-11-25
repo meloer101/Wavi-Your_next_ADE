@@ -1,4 +1,4 @@
-// Keep the Mac from idle-sleeping while Wavi runs (PRD v1.237, 设置 · 自动化 · 电源). 'prevent-app-suspension' is
+// Keep the Mac from idle-sleeping while Wavi runs (PRD v1.238, 设置 · 自动化 · 电源). 'prevent-app-suspension' is
 // IOKit PreventUserIdleSystemSleep: the display may still sleep, and it does not stop lid-close sleep on battery.
 import { app, powerSaveBlocker } from 'electron'
 import { getSettings, onSettingsChange } from './settings'

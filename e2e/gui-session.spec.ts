@@ -463,6 +463,20 @@ test.describe('F23 GUI session (Claude)', () => {
       return { h2: width('h2', 'Bottom'), hr: width('hr', 'Top'), th: width('th', 'Bottom'), td: width('td', 'Bottom') }
     })
     expect(lines).toEqual({ h2: '0px', hr: '0px', th: '1px', td: '0px' })
+    // PRD v1.237: a short cell stays on one line, a long one is never squeezed to a character a line, a path wraps.
+    const cells = await feed().evaluate((el) => {
+      const cell = (text: string): HTMLElement => [...el.querySelectorAll<HTMLElement>('th, td')].find((c) => c.textContent?.trim() === text)!
+      const lineCount = (c: HTMLElement): number => {
+        const range = document.createRange()
+        range.selectNodeContents(c)
+        return new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size
+      }
+      const evidence = [...el.querySelectorAll<HTMLElement>('td')].find((c) => c.textContent?.startsWith('左边是改前'))!
+      const fontSize = parseFloat(getComputedStyle(evidence).fontSize)
+      return { status: lineCount(cell('状态')), verified: lineCount(cell('已验证')), evidenceEm: evidence.getBoundingClientRect().width / fontSize, short: cell('已验证').hasAttribute('data-short'), long: evidence.hasAttribute('data-short') }
+    })
+    expect(cells).toMatchObject({ status: 1, verified: 1, short: true, long: false })
+    expect(cells.evidenceEm).toBeGreaterThanOrEqual(11)
     await bash.click()
     const output = feed().locator('pre').filter({ hasText: 'rotates the token' })
     const failed = output.locator('[data-fg="red"]').first()

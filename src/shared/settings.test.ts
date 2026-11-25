@@ -236,7 +236,7 @@ describe('设置 · 外观 · 对话 and the window material (PRD v1.127, Figma 
   })
 })
 
-describe('设置 · 自动化 · 电源 (PRD v1.237)', () => {
+describe('设置 · 自动化 · 电源 (PRD v1.238)', () => {
   it('keeps the Mac awake by default', () => {
     expect(DEFAULT_SETTINGS.power).toEqual({ keepAwake: true })
   })
