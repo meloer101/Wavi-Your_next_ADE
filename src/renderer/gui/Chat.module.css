@@ -1248,13 +1248,13 @@
 /* One 14×3 segment per task: done primary, in progress working, not started a hairline. */
 .todoSegments {
   display: flex;
-  gap: 3px;
+  gap: var(--space-4);
 }
 
 .todoSegment {
   width: 14px;
   height: 3px;
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
   background: var(--border-default);
 }
 
@@ -1410,7 +1410,7 @@
 }
 
 /* Question tray (Figma 113D′): the question 15/22 under the header, indented to the header's text; options are
-   borderless rows (the radius is 6, as --space-6): mark · label over its description · the key. */
+   borderless rows (radius --radius-md): mark · label over its description · the key. */
 .trayQuestion {
   margin: 0;
   padding: var(--space-4) 0 var(--space-8) var(--glyph-indent);
@@ -1430,7 +1430,7 @@
   gap: calc(var(--space-8) + var(--space-2));
   padding: var(--space-8) var(--space-6);
   border: 0;
-  border-radius: var(--space-6);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
   text-align: left;
@@ -1473,7 +1473,7 @@
 }
 
 .optionMark[data-multi='true'] {
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .optionMark[data-checked='true'] {
@@ -1512,10 +1512,10 @@
   align-items: center;
   box-sizing: border-box;
   height: 18px;
-  margin-top: 1px;
-  padding: 0 5px;
+  margin-top: calc(var(--space-2) / 2);
+  padding: 0 var(--space-4);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font: var(--fs-text-mono-s);
   color: var(--text-secondary);
 }
@@ -1531,7 +1531,7 @@
   height: 30px;
   padding: 0 var(--space-12);
   border: 1px solid var(--border-default);
-  border-radius: var(--space-6);
+  border-radius: var(--radius-md);
   background: transparent;
   font: var(--text-body);
   color: var(--text-primary);
