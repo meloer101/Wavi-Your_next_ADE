@@ -1,0 +1,176 @@
+/* Floating panes over the canvas: solid glass in its thickest finish (--float-bg, --float-edge, --shadow-glass-menu). */
+.activity,
+.toolbar,
+.zoom {
+  position: absolute;
+  z-index: 3;
+  background: var(--float-bg);
+  box-shadow: var(--float-edge), var(--shadow-glass-menu);
+  color: var(--text-primary);
+}
+
+.key {
+  font: var(--text-mono-s);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.activity {
+  top: var(--space-16);
+  right: var(--space-16);
+  width: 220px;
+  box-sizing: border-box;
+  padding: var(--space-8) var(--space-12) var(--space-12);
+  border-radius: var(--radius-window);
+}
+
+.activity[data-open='false'] {
+  padding-bottom: var(--space-8);
+}
+
+.activityHead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: var(--text-caption);
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.events {
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.event {
+  display: flex;
+  gap: var(--space-8);
+  align-items: flex-start;
+}
+
+.eventDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: var(--space-4);
+  border-radius: 50%;
+  background: var(--status-idle);
+}
+
+.eventDot[data-tone='working'] {
+  background: var(--status-working);
+}
+
+.eventDot[data-tone='attention'] {
+  background: var(--status-attention);
+}
+
+.eventDot[data-tone='done'] {
+  background: var(--status-done);
+}
+
+.eventDot[data-tone='error'] {
+  background: var(--status-error);
+}
+
+.eventBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.eventText {
+  font: var(--text-caption);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar {
+  left: 50%;
+  bottom: var(--space-16);
+  transform: translateX(-50%);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-window);
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  height: 24px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: var(--text-caption);
+  color: var(--text-primary);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.tool:hover {
+  background: var(--bg-hover);
+}
+
+.tool:focus-visible,
+.zoomButton:focus-visible,
+.activityHead:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.rule {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--space-4);
+  background: var(--border-default);
+}
+
+.zoom {
+  right: var(--space-16);
+  bottom: var(--space-16);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-window);
+}
+
+.zoomButton {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: default;
+}
+
+.zoomButton:hover {
+  background: var(--bg-hover);
+}
+
+.zoomValue {
+  min-width: 40px;
+  text-align: center;
+  font: var(--text-mono-s);
+  color: var(--text-primary);
+}

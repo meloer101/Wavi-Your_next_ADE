@@ -1,0 +1,8 @@
+.field {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  /* Black in the light theme, white in the dark: the canvas reads this as its dot colour. */
+  color: var(--text-primary);
+}

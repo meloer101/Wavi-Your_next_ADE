@@ -5,8 +5,8 @@ import type { SessionId } from '@shared/types'
 import { useWorkspace } from '../state/workspace'
 import { addToLayout, layoutIds, MAX_PANES, PICKER_SLOT, removeFromLayout, replaceInLayout, singleLayout, type PaneLayout, type Rect } from './pane-layout'
 
-/** 进度: the sessions by status (the board); GitHub: each project's open issues and PRs (v1.184). */
-export type BoardTab = 'progress' | 'github'
+/** 进度: the sessions by status (the board); 任务: the task notes on an infinite canvas (v1.246); GitHub: each project's open issues and PRs (v1.184). */
+export type BoardTab = 'progress' | 'tasks' | 'github'
 
 const PREFS_KEY = 'tr.overview.v1'
 
@@ -24,7 +24,7 @@ function loadPrefs(): Prefs {
     if (typeof raw !== 'object' || raw === null) return DEFAULT_PREFS
     const value = raw as Partial<Prefs>
     // Saved before v1.184 there was `view` (列表 / 看板) instead: both are 进度 now.
-    return { tab: value.tab === 'github' ? 'github' : 'progress', overlayRect: isRect(value.overlayRect) ? value.overlayRect : null }
+    return { tab: value.tab === 'github' || value.tab === 'tasks' ? value.tab : 'progress', overlayRect: isRect(value.overlayRect) ? value.overlayRect : null }
   } catch {
     return DEFAULT_PREFS
   }
