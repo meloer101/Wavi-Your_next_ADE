@@ -580,7 +580,7 @@ export const WAVI_HELP = [
   '',
   '  wavi task add "<title>" [--parent <card>] [--body "<text>"]   (cards on the task board)',
   '  wavi task update <card> [--title "<title>"] [--note "<one sentence>"] [--done] [--cancel]',
-  '  wavi task ls [--all]               (--all: leader only)',
+  '  wavi task ls [--all]               (--all: leader only, the whole project)',
   '  wavi task show <card>',
   '',
   'Add --json for JSON output. Pass - as the task or message to read it from stdin.'
@@ -609,7 +609,7 @@ export const WAVI_SKILL = [
   'The user keeps a task board in Wavi: cards (`#12`) that nest two levels. A message that starts with `[Wavi task board]` is a card for you to split and dispatch; a brief that names a card (`#12`) binds your session to it.',
   '- `wavi task add "<title>" [--parent <card>] [--body "<text>"]` pastes a sub-card and returns its number. Without `--parent` it goes under your own card; only a leader may add a card without one. Pass `-` as `--body` to read the text from stdin.',
   '- `wavi run <agent> "<task>" --task <card>` starts a session bound to that card; the user is not asked again, the card is the approval. The usual limits apply.',
-  '- `wavi task update <card> [--note "<one sentence>"] [--title "<title>"] [--done] [--cancel]` changes your own card or one below it. `--done` says your part is finished; the board shows the real state of each session, so there is no progress to report. `wavi task ls [--all]` lists the cards of this project (titles and states), `wavi task show <card>` prints one card in full.',
+  '- `wavi task update <card> [--note "<one sentence>"] [--title "<title>"] [--done] [--cancel]` changes your own card or one below it. `--done` says your part is finished; the board shows the real state of each session, so there is no progress to report. `wavi task ls` lists your card and the ones below it (titles and states; a leader sees the whole project, `--all` is its explicit spelling), `wavi task show <card>` prints one card in full.',
   '- A session at the last level cannot add cards: do the work yourself.',
   '',
   '## Writing a task',

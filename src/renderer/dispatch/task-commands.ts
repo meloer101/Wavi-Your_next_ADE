@@ -21,6 +21,20 @@ export interface TaskCaller {
 /** The caller as the rules see it. */
 export const taskCaller = (place: Place, depth: number, leader: boolean): TaskCaller => ({ sessionId: place.session.id, projectId: place.project.id, leader, depth })
 
+/** Cards a `wavi run --task` is starting a session for right now: a second request for one is a duplicate. */
+const starting = new Set<string>()
+
+/** Claims a card for a start in progress; false when another start already has it. */
+export function claimCard(id: string): boolean {
+  if (starting.has(id)) return false
+  starting.add(id)
+  return true
+}
+
+export const releaseCard = (id: string): void => void starting.delete(id)
+
+export const duplicateCard = (seq: number): WaviResult => waviFail('duplicate', `Card #${seq} is already being started. Use wavi send to its session instead.`)
+
 /** The card whose session is the caller (the first one, should the file ever hold two). */
 export const boundCardOf = (tasks: readonly Task[], sessionId: SessionId): Task | undefined => tasks.find((t) => t.sessionId === sessionId)
 
@@ -106,12 +120,11 @@ const STATE_TEXT: Record<TaskState, string> = {
   canceled: 'canceled'
 }
 
-function describe(tasks: readonly Task[], task: Task, sessions: readonly Session[], projects?: ReadonlyMap<string, string>): string {
+function describe(tasks: readonly Task[], task: Task, sessions: readonly Session[]): string {
   const session = task.sessionId !== undefined ? sessions.find((s) => s.id === task.sessionId) : undefined
   const parent = task.parentId !== undefined ? tasks.find((t) => t.id === task.parentId) : undefined
   const facts = [
     `#${task.seq}`,
-    ...(projects ? [projects.get(task.projectId) ?? task.projectId] : []),
     `"${task.title}"`,
     STATE_TEXT[taskState(task, session?.status === 'exited' ? undefined : session?.status)],
     ...(session ? [`session ${session.id} "${session.title}"`] : []),
@@ -120,12 +133,15 @@ function describe(tasks: readonly Task[], task: Task, sessions: readonly Session
   return facts.join(' · ')
 }
 
-export function listText(tasks: readonly Task[], caller: TaskCaller, all: boolean, sessions: readonly Session[], projects: ReadonlyMap<string, string>): WaviResult {
-  if (all && !caller.leader) return waviFail('not_allowed', "Only the project's leader lists every project. wavi task ls lists this project.")
-  const shown = tasks.filter((t) => all || t.projectId === caller.projectId)
-  if (shown.length === 0) return waviOk('No cards on the board.')
-  const byAge = [...shown].sort((a, b) => a.seq - b.seq)
-  return waviOk([...byAge.map((t) => `- ${describe(tasks, t, sessions, all ? projects : undefined)}`), '', 'wavi task show <card> prints one in full.'].join('\n'))
+/**
+ * `wavi task ls`: the cards the caller may touch (its own and below; a leader's are all of its project). `--all` is the
+ * leader's spelling of the whole project, finished and canceled cards included; no one sees another project's cards.
+ */
+export function listText(tasks: readonly Task[], caller: TaskCaller, all: boolean, sessions: readonly Session[]): WaviResult {
+  if (all && !caller.leader) return waviFail('not_allowed', "Only the project's leader lists the whole project. wavi task ls lists your card and the ones below it.")
+  const shown = tasks.filter((t) => mayTouch(tasks, caller, t)).sort((a, b) => a.seq - b.seq)
+  if (shown.length === 0) return waviOk(caller.leader ? 'No cards on the board.' : 'No cards for you: your session has no card of its own.')
+  return waviOk([...shown.map((t) => `- ${describe(tasks, t, sessions)}`), '', 'wavi task show <card> prints one in full.'].join('\n'))
 }
 
 export function showText(tasks: readonly Task[], caller: TaskCaller, seq: number, sessions: readonly Session[]): WaviResult {
@@ -145,10 +161,10 @@ export function showText(tasks: readonly Task[], caller: TaskCaller, seq: number
 export async function handleTaskCommand(caller: Place, depth: number, leader: boolean, command: TaskCommand): Promise<WaviResult> {
   const who = taskCaller(caller, depth, leader)
   const tasks = await window.tr.tasks.list()
-  const { sessions, projects } = useWorkspace.getState()
+  const { sessions } = useWorkspace.getState()
   switch (command.name) {
     case 'task-ls':
-      return listText(tasks, who, command.all === true, sessions, new Map(projects.map((p) => [p.id, p.name])))
+      return listText(tasks, who, command.all === true, sessions)
     case 'task-show':
       return showText(tasks, who, command.seq, sessions)
     case 'task-add': {

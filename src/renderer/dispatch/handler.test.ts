@@ -453,6 +453,28 @@ describe('wavi task and --task in a window (PRD F21 v1.246)', () => {
     expect(addBackgroundSession).not.toHaveBeenCalled()
   })
 
+  it('still answers "Started session" when binding the card fails, and frees the card for another try', async () => {
+    update.mockImplementationOnce(async () => null)
+    const failed = await call('lead', runCmd('Build the form', { agent: 'claude', card: 1 }))
+    expect(failed).toMatchObject({ ok: true, text: expect.stringContaining('Started session') })
+    expect(failed.text).toContain('could not bind it to card #1')
+    update.mockImplementationOnce(async () => {
+      throw new Error('ipc closed')
+    })
+    const thrown = await call('lead', runCmd('Build the form again', { agent: 'claude', card: 1 }))
+    expect(thrown).toMatchObject({ ok: true, text: expect.stringContaining('could not bind it to card #1') })
+    expect(addBackgroundSession).toHaveBeenCalledTimes(2)
+  })
+
+  it('lists only the caller’s own card and below for an agent, and the whole project for a leader', async () => {
+    board.push(card(3, { projectId: 'p2' }), card(4))
+    expect((await call('kid', { name: 'task-ls' })).text).not.toContain('Card 4')
+    const lead = (await call('lead', { name: 'task-ls', all: true })).text
+    expect(lead).toContain('#4 ')
+    expect(lead).not.toContain('Card 3')
+    expect(await call('kid', { name: 'task-ls', all: true })).toMatchObject({ ok: false, failure: 'not_allowed' })
+  })
+
   it('adds cards under the caller’s bound card, a root only for the leader, and nothing at the last level', async () => {
     expect(await call('kid', { name: 'task-add', title: 'Form' })).toMatchObject({ ok: true, text: expect.stringContaining('under #2') })
     expect(create).toHaveBeenLastCalledWith({ projectId: 'p1', title: 'Form', parentId: 't2', createdBy: 'kid' })
@@ -471,7 +493,7 @@ describe('wavi task and --task in a window (PRD F21 v1.246)', () => {
   })
 
   it('lists the project’s cards with their states', async () => {
-    const listed = await call('top', { name: 'task-ls' })
+    const listed = await call('lead', { name: 'task-ls' })
     expect(listed.text).toContain('#1 · "Card 1" · not started')
     expect(listed.text).toContain('#2 · "Card 2" · working · session kid "kid" · under #1')
   })

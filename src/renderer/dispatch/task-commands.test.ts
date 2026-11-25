@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Task } from '@shared/task-board'
 import type { Session } from '@shared/types'
-import { boundCardOf, listText, mayTouch, planAdd, planRunCard, showText, type TaskCaller } from './task-commands'
+import { boundCardOf, claimCard, releaseCard, listText, mayTouch, planAdd, planRunCard, showText, type TaskCaller } from './task-commands'
 
 vi.mock('../state/workspace', () => ({ useWorkspace: { getState: () => ({ sessions: [], projects: [] }) } }))
 
@@ -72,15 +72,23 @@ describe('wavi run --task', () => {
 
 describe('what the agent reads', () => {
   const sessions = [session('kid', { status: 'running', title: 'Login work' })]
-  const projects = new Map([['p1', 'repo'], ['p2', 'other']])
-  it('lists titles and states of the project, every project for a leader’s --all', () => {
-    const own = listText(tasks, kid, false, sessions, projects)
+  it('lists the cards the caller may touch, with their states', () => {
+    const own = listText(tasks, kid, false, sessions)
     expect(own).toMatchObject({ ok: true })
     expect(own.text).toContain('#1 · "Card 1" · working · session kid "Login work"')
     expect(own.text).toContain('#2 · "Card 2" · not started · under #1')
+    expect(own.text).not.toContain('Card 4')
     expect(own.text).not.toContain('Card 5')
-    expect(listText(tasks, lead, true, sessions, projects).text).toContain('#5 · other · "Card 5"')
-    expect(listText(tasks, kid, true, sessions, projects)).toMatchObject({ ok: false, failure: 'not_allowed' })
+    expect(listText(tasks, stranger, false, sessions).text).toContain('No cards for you')
+  })
+  it('lets a leader list its whole project, finished and canceled cards too, and never another project', () => {
+    const board = [...tasks, card(6, { manual: 'done' }), card(7, { manual: 'canceled' })]
+    for (const all of [false, true]) {
+      const text = listText(board, lead, all, sessions).text
+      expect([1, 2, 3, 4, 6, 7].every((n) => text.includes(`#${n} `))).toBe(true)
+      expect(text).not.toContain('Card 5')
+    }
+    expect(listText(tasks, kid, true, sessions)).toMatchObject({ ok: false, failure: 'not_allowed' })
   })
   it('shows a card with body, note and sub-cards, only to those who may touch it', () => {
     const board = [card(1, { body: 'Build the form.', note: 'half done' }), card(2, { parentId: 't1' })]
@@ -90,5 +98,17 @@ describe('what the agent reads', () => {
     expect(shown.text).toContain('- #2 · "Card 2"')
     expect(showText(tasks, kid, 4, [])).toMatchObject({ ok: false, failure: 'not_allowed' })
     expect(showText(tasks, kid, 5, [])).toMatchObject({ ok: false, failure: 'not_found' })
+  })
+})
+
+describe('a card being started', () => {
+  it('can be claimed by one start at a time until it is released', () => {
+    expect(claimCard('t1')).toBe(true)
+    expect(claimCard('t1')).toBe(false)
+    expect(claimCard('t2')).toBe(true)
+    releaseCard('t1')
+    expect(claimCard('t1')).toBe(true)
+    releaseCard('t1')
+    releaseCard('t2')
   })
 })

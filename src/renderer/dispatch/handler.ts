@@ -46,7 +46,7 @@ import { useWorkspace } from '../state/workspace'
 import { randomId } from '../state/workspace-model'
 import { handleScheduleCommand } from '../schedules/agent-requests'
 import { checksOf, childrenOf, conflictsOf, isLeaderSession, placeOf, type Place } from './places'
-import { handleTaskCommand, planRunCard, taskCaller } from './task-commands'
+import { claimCard, duplicateCard, handleTaskCommand, planRunCard, releaseCard, taskCaller } from './task-commands'
 import { deliverMessage, queueReport } from './reports'
 import { addConfirm, queueOf, setLaunch, setQueue, setReported, setTell, takeConfirms, useDispatch, type PendingStart } from './store'
 
@@ -214,9 +214,7 @@ function load(caller: Place): { openTasks: string[]; treeSize: number } {
 }
 
 async function start(caller: Place, request: DispatchRequest, command: Extract<WaviCommand, { name: 'run' }>): Promise<WaviResult> {
-  const callId = request.callId
   const depth = depthOf(caller.session)
-  const waiting = useDispatch.getState().confirms.flatMap((c) => (c.kind === 'start' ? [c] : []))
   const refusal = startRefusal({ depth, toolsOn: settings.tools, ...load(caller), task: command.task })
   if (refusal) return refusal
   // `--task`: the card must be this session's to hand out (PRD F21 v1.246).
@@ -224,8 +222,25 @@ async function start(caller: Place, request: DispatchRequest, command: Extract<W
   if (command.card !== undefined) {
     const found = planRunCard(await window.tr.tasks.list(), taskCaller(caller, depth, isLeaderSession(caller.session.id)), command.card, (id) => placeOf(id) !== null)
     if ('ok' in found) return found
+    if (!claimCard(found.id)) return duplicateCard(found.seq)
     card = found
   }
+  try {
+    return await startNow(caller, request, command, depth, card)
+  } finally {
+    if (card) releaseCard(card.id)
+  }
+}
+
+async function startNow(
+  caller: Place,
+  request: DispatchRequest,
+  command: Extract<WaviCommand, { name: 'run' }>,
+  depth: number,
+  card: Task | undefined
+): Promise<WaviResult> {
+  const callId = request.callId
+  const waiting = useDispatch.getState().confirms.flatMap((c) => (c.kind === 'start' ? [c] : []))
   // In parallel: `wavi` waits 5 s for the whole answer (PRD F21 接口). A card is the user's own approval (v1.246).
   const autoStart = settings.autoApprove || depth >= 1 || card !== undefined
   const [installed, info, uncommitted] = await Promise.all([
@@ -273,7 +288,8 @@ async function start(caller: Place, request: DispatchRequest, command: Extract<W
   if (autoStart) {
     const started = launch(caller, plan, childId, base ?? 'HEAD', depth + 1, card)
     if (!started) return waviFail('failed', 'Wavi could not add the session.')
-    const bound = card ? ((await window.tr.tasks.update(card.id, { sessionId: started.id })) ? ` It is bound to card #${card.seq}.` : ` Wavi could not bind it to card #${card.seq}.`) : ''
+    // The session is running with the card in its brief: a failed binding is told, never thrown.
+    const bound = card ? await bindCard(card, started.id) : ''
     return waviOk(
       `Started session ${started.id} (${command.agent}${model}, ${where(plan)}).${bound}${note} It works on its own: Wavi sends you its report when it finishes a turn, fails or exits. End your turn now instead of waiting.`
     )
@@ -285,6 +301,15 @@ async function start(caller: Place, request: DispatchRequest, command: Extract<W
       'wavi does not wait: end your turn now. Wavi sends you a message when the user decides, and a report when the session finishes a turn, fails or exits.'
     ].join('\n')
   )
+}
+
+async function bindCard(card: Task, sessionId: SessionId): Promise<string> {
+  try {
+    if (await window.tr.tasks.update(card.id, { sessionId })) return ` It is bound to card #${card.seq}.`
+  } catch {
+    // Told below, like a refusal.
+  }
+  return ` Wavi could not bind it to card #${card.seq} (the board shows the card unstarted); tell the user.`
 }
 
 /** A request waits for 开始 under the dispatcher's terminal (10 minutes), with a notification when Wavi is not in front. */

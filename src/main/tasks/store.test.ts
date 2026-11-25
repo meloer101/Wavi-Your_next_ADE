@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -121,6 +121,55 @@ describe('TaskBoard', () => {
     expect(existsSync(t.path)).toBe(false)
     expect(readdirSync(t.dir).some((f) => f.startsWith('tasks.json.bad-'))).toBe(true)
     expect(board.create({ projectId: 'p1', title: 'a' })!.seq).toBe(1)
+  })
+})
+
+describe('TaskBoard and a file that cannot be read or written', () => {
+  it('never writes over a file that exists but cannot be read; the board works in memory', () => {
+    const t = setup()
+    mkdirSync(t.path) // a directory where the file should be: reading it fails with EISDIR
+    const board = t.open()
+    expect(board.create({ projectId: 'p1', title: 'a' })).toMatchObject({ seq: 1 })
+    expect(board.list()).toHaveLength(1)
+    expect(readdirSync(t.path)).toEqual([])
+    expect(readdirSync(t.dir).filter((f) => f.includes('.tmp'))).toEqual([])
+  })
+
+  it('treats valid JSON of another shape like a corrupt file', () => {
+    for (const body of ['[]', '{"tasks":"x"}', '{}', '3']) {
+      const t = setup()
+      writeFileSync(t.path, body)
+      const board = t.open()
+      expect(board.list()).toEqual([])
+      expect(readdirSync(t.dir).some((f) => f.startsWith('tasks.json.bad-'))).toBe(true)
+      expect(readFileSync(join(t.dir, readdirSync(t.dir).find((f) => f.startsWith('tasks.json.bad-'))!), 'utf8')).toBe(body)
+    }
+  })
+
+  it('keeps the board as it was and does not announce a change when a save fails', () => {
+    const t = setup()
+    const a = t.board.create({ projectId: 'p1', title: 'a' })!
+    mkdirSync(`${t.path}.tmp`) // writing the temporary file now fails
+    const before = t.changes.length
+    expect(t.board.create({ projectId: 'p1', title: 'b' })).toBeNull()
+    expect(t.board.update(a.id, { title: 'A' })).toBeNull()
+    expect(t.board.remove(a.id)).toBe(false)
+    expect(t.board.list().map((x) => x.title)).toEqual(['a'])
+    expect(t.changes.length).toBe(before)
+    rmSync(`${t.path}.tmp`, { recursive: true })
+    // The seq of the refused card was not used up.
+    expect(t.board.create({ projectId: 'p1', title: 'c' })!.seq).toBe(2)
+  })
+
+  it('refuses a session that is already bound to another card', () => {
+    const t = setup()
+    const a = t.board.create({ projectId: 'p1', title: 'a' })!
+    const b = t.board.create({ projectId: 'p1', title: 'b' })!
+    expect(t.board.update(a.id, { sessionId: 's1' })).toMatchObject({ sessionId: 's1' })
+    expect(t.board.update(b.id, { sessionId: 's1' })).toBeNull()
+    expect(t.board.update(a.id, { sessionId: 's1', note: 'again' })).toMatchObject({ note: 'again' })
+    t.board.update(a.id, { sessionId: null })
+    expect(t.board.update(b.id, { sessionId: 's1' })).toMatchObject({ sessionId: 's1' })
   })
 })
 
