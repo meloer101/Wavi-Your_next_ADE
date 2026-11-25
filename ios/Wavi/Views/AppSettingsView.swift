@@ -68,7 +68,7 @@ struct AppSettingsView: View {
   @State private var cacheBytes: Int64?
   @State private var picking: Pick?
 
-  /// The two rows that choose from a few values in a sheet (PRD v1.233, Figma 109).
+  /// The two rows that choose from a few values in a sheet (PRD v1.239, Figma 109).
   enum Pick: Identifiable {
     case theme, start
     var id: Self { self }

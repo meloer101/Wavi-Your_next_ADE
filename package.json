@@ -1,7 +1,7 @@
 {
   "name": "wavi",
   "productName": "Wavi",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "A macOS terminal built for running many CLI coding agents in parallel",
   "license": "MIT",
   "repository": "github:meloer101/Wavi-Your_next_ADE",
@@ -33,6 +33,7 @@
     "readme:shots": "scripts/readme-shots/run.sh"
   },
   "dependencies": {
+    "@fontsource-variable/google-sans": "^5.3.2",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@hugeicons/core-free-icons": "^4.4.0",
     "@hugeicons/react": "^1.1.10",

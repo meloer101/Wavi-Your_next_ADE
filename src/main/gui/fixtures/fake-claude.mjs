@@ -104,7 +104,7 @@ function reply(text) {
     out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu3', name: 'Bash', input: { command: 'pnpm vitest run server/auth' } }] }, session_id: SESSION, parent_tool_use_id: null })
     const colored = '\x1b[32m✓\x1b[39m server/auth/login.test.ts \x1b[2m(8 tests)\x1b[22m\n\x1b[31m✗ server/auth/refresh.test.ts > rotates the token\x1b[39m\n\x1b[1mTests\x1b[22m  \x1b[91m1 failed\x1b[39m | \x1b[92m8 passed\x1b[39m'
     out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu3', content: colored, is_error: true }] }, session_id: SESSION, parent_tool_use_id: null })
-    const markdown = '## 测试结果\n\n1 个失败：刷新接口还在读 `localStorage`。\n\n- 登录改成 Set-Cookie\n- 删掉 `session.ts` 里的 localStorage\n\n```ts\nres.cookie(\'session\', token, { httpOnly: true })\n```\n\n---\n\n| 文件 | 结果 |\n| --- | --- |\n| login.test.ts | 通过 |\n| refresh.test.ts | 失败 |'
+    const markdown = '## 测试结果\n\n1 个失败：刷新接口还在读 `localStorage`。\n\n- 登录改成 Set-Cookie\n- 删掉 `session.ts` 里的 localStorage\n\n```ts\nres.cookie(\'session\', token, { httpOnly: true })\n```\n\n---\n\n| 文件 | 结果 |\n| --- | --- |\n| login.test.ts | 通过 |\n| refresh.test.ts | 失败 |\n\n| 检查 | 状态 | 证据 |\n| --- | --- | --- |\n| 改前改后对比 | 已验证 | 左边是改前，右边是改后，三行之间有了呼吸感，选中块也跟着长高：`/private/tmp/wavi-e2e/scratchpad/rows-before-and-after-comparison.png` |\n| `npm run check` | 已验证 | exit 0；297 个测试文件，3977 passed，1 skipped |\n| e2e dispatch / session-meta / sidebar-projects / merge-chain | 已验证 | 14 / 17 / 4 / 5 全部通过 |'
     return finish({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: markdown }] }, session_id: SESSION, parent_tool_use_id: null })
   }
   if (text.includes('visuals')) {
@@ -270,6 +270,8 @@ function onUser(message) {
 
 function control(message) {
   const r = message.request
+  // FAKE_CONTROL_LOG: every control request, one JSON line each, for a test to read what the app asked.
+  if (process.env.FAKE_CONTROL_LOG) appendFileSync(process.env.FAKE_CONTROL_LOG, `${JSON.stringify(r)}\n`)
   const reply = (response) => out({ type: 'control_response', response: { subtype: 'success', request_id: message.request_id, response } })
   if (r.subtype === 'initialize') {
     reply({
@@ -277,11 +279,17 @@ function control(message) {
         { name: 'review', description: 'Review the diff (project)', argumentHint: '[path]' },
         { name: 'research', description: 'Research a topic and write a report (user)', argumentHint: '<topic>' }
       ],
-      models: [
-        { value: 'default', displayName: 'Default (recommended)', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
-        { value: 'opus', displayName: 'Opus', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
-        { value: 'haiku', displayName: 'Haiku' }
-      ],
+      // FAKE_MODELS: "value|label, …" in place of the default list (default and Opus keep their effort levels), as Claude lists its versions.
+      models: process.env.FAKE_MODELS
+        ? process.env.FAKE_MODELS.split(', ').map((row) => {
+            const [value, displayName] = row.split('|')
+            return value === 'opus' || value === 'default' ? { value, displayName, resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true } : { value, displayName }
+          })
+        : [
+            { value: 'default', displayName: 'Default (recommended)', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
+            { value: 'opus', displayName: 'Opus', resolvedModel: 'claude-opus-fake', supportsEffort: true, supportedEffortLevels: ['low', 'high', 'max'], supportsFastMode: true },
+            { value: 'haiku', displayName: 'Haiku' }
+          ],
       current_permission_mode: 'default'
     })
   } else if (r.subtype === 'get_settings') reply({ effective: { effortLevel: 'max' }, sources: [], applied: { ultracode, ultracodeRequested: ultracode, ultracodeAvailable: true } })

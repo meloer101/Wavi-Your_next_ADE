@@ -83,7 +83,7 @@ describe('对话 and the window base layer (PRD v1.127, Figma 51)', () => {
   it('reads as today by default: 720 column, system UI font first, 14 / 22; cards at 85% (PRD v1.179)', () => {
     const vars = toAppearanceDom(base, true).vars
     expect(vars['--chat-column']).toBe('720px')
-    expect(vars['--chat-font']).toBe('-apple-system, BlinkMacSystemFont, "PingFang SC", var(--font-ui)')
+    expect(vars['--chat-font']).toBe("'Google Sans Variable', \"PingFang SC\", var(--font-ui)")
     expect(vars['--chat-leading']).toBe('22px')
     expect(vars['--tr-chat-bg']).toBe('color-mix(in srgb, var(--bg-app) 85%, transparent)')
     expect(vars['--tr-term-ring']).toBe('color-mix(in srgb, var(--term-bg) 85%, transparent)')
