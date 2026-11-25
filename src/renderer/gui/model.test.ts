@@ -8,6 +8,7 @@ import {
   feedBlocks,
   flightOf,
   galleryOf,
+  markdownImageKey,
   markdownImagePath,
   markdownImageSources,
   foldsMessage,
@@ -837,6 +838,25 @@ describe('the pictures of a session (Figma 112F / 112G)', () => {
     expect(markdownImagePath('data:image/png;base64,AAAA', '/repo')).toBeNull()
     expect(markdownImagePath('/a/b.svg', '/repo')).toBeNull()
     expect(markdownImagePath('/a/b.png?raw=1', '/repo')).toBe('/a/b.png')
+  })
+
+  it('keys a Markdown picture by its file, so the percent-encoded src the renderer gets finds its entry; non-pictures stay out', () => {
+    const items: ChatItem[] = [
+      { kind: 'user', id: 'u1', at: 0, text: 'x', images: 2, attachments: ['/tmp/notes.md', '/tmp/sent-a.png'] },
+      { kind: 'text', id: 'x1', at: 0, text: '![a](截图.png) ![b](<a b.png>) ![c](/a%20b.png) plain' },
+      { kind: 'text', id: 'x2', at: 0, text: 'no pictures here' }
+    ]
+    const gallery = galleryOf(items, '/repo')
+    // The user's picture keeps its place in the item (1), the markdown file is left out; a b.png is one picture.
+    expect(gallery.map((g) => [g.key, g.path])).toEqual([
+      ['u1:1', '/tmp/sent-a.png'],
+      ['x1:md:/repo/截图.png', '/repo/截图.png'],
+      ['x1:md:/repo/a b.png', '/repo/a b.png'],
+      ['x1:md:/a b.png', '/a b.png']
+    ])
+    // What react-markdown hands `img` is encoded; its path resolves to the same key.
+    expect(markdownImageKey('x1', markdownImagePath('%E6%88%AA%E5%9B%BE.png', '/repo')!)).toBe(gallery[1]!.key)
+    expect(markdownImageKey('x1', markdownImagePath('a%20b.png', '/repo')!)).toBe(gallery[2]!.key)
   })
 
   it('finds the pictures a text writes, once each and not inside code blocks', () => {

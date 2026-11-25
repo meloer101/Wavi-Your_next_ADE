@@ -1,5 +1,5 @@
-/* The image preview (Figma 112G / 112G′ fitted, 112H zoomed): a layer over the whole window, its colour the app's at 94%.
-   The top bar leaves the traffic lights (left, 84) alone; the stage takes the rest. */
+/* The image preview (Figma 112G / 112G′ fitted, 112H zoomed): a layer over the whole window, the app's own colour and
+   opaque (at 94% the chat read through it; PRD v1.243 said 94%). The top bar leaves the traffic lights (left, 84) alone; the stage takes the rest. */
 .layer {
   position: fixed;
   inset: 0;
@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   --traffic-lights: 84px;
-  background: color-mix(in srgb, var(--bg-app) 94%, transparent);
+  background: var(--bg-app);
   color: var(--text-primary);
   outline: none;
   user-select: none;
@@ -124,6 +124,15 @@
 
 .picture[data-following] {
   transition: none;
+}
+
+.missing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font: var(--text-caption);
+  color: var(--text-tertiary);
+  transform: translate(-50%, -50%);
 }
 
 .nav {

@@ -1169,8 +1169,8 @@ export interface GalleryImage {
 
 /** The key of the picture `n` of an item's own pictures (a user's attachments, a tool's or a text's `images`). */
 export const imageKey = (itemId: string, n: number): string => `${itemId}:${n}`
-/** The key of a picture the agent's Markdown wrote as `src`. */
-export const markdownImageKey = (itemId: string, src: string): string => `${itemId}:md:${src}`
+/** The key of a picture the agent's Markdown wrote, by the file it names (`markdownImagePath`): the renderer's `src` is percent-encoded, the text's is not, the path is the same. */
+export const markdownImageKey = (itemId: string, path: string): string => `${itemId}:md:${path}`
 
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp)$/i
 const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
@@ -1236,18 +1236,27 @@ export function markdownImageSources(text: string): string[] {
  */
 export function galleryOf(items: readonly ChatItem[], cwd: string | undefined): GalleryImage[] {
   const out: GalleryImage[] = []
+  // Only files the chat draws; `n` stays the picture's place in its item, as its thumbnail counts it.
   const own = (item: ChatItem, paths: readonly string[], title?: string): void => {
-    paths.forEach((path, i) => out.push({ key: imageKey(item.id, i), path, title: title ?? fileName(path) }))
+    paths.forEach((path, i) => {
+      if (thumbnailUrl(path) !== null) out.push({ key: imageKey(item.id, i), path, title: title ?? fileName(path) })
+    })
   }
   for (const item of items) {
     if (item.kind === 'user') own(item, item.attachments ?? [])
     else if (item.kind === 'tool') {
+      if (!item.images) continue
       const view = toolView(item, false)
-      own(item, item.images ?? [], [view.verb, view.arg].filter(Boolean).join(' · '))
+      own(item, item.images, [view.verb, view.arg].filter(Boolean).join(' · '))
     } else if (item.kind === 'text') {
-      for (const src of markdownImageSources(item.text)) {
-        const path = markdownImagePath(src, cwd)
-        if (path) out.push({ key: markdownImageKey(item.id, src), path, title: src })
+      const seen = new Set<string>()
+      if (item.text.includes('![')) {
+        for (const src of markdownImageSources(item.text)) {
+          const path = markdownImagePath(src, cwd)
+          if (!path || seen.has(path)) continue
+          seen.add(path)
+          out.push({ key: markdownImageKey(item.id, path), path, title: src })
+        }
       }
       own(item, item.images ?? [])
     }

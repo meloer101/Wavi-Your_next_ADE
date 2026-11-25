@@ -5,10 +5,11 @@
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { defineMessages } from '@shared/i18n'
+import type { ImageZoomAction } from '@shared/ipc'
 import { Check, ChevronLeft, ChevronRight, Copy, FolderOpen, Minus, Plus, X } from '../ui/icons'
 import { useMessages } from '../ui/i18n'
 import { canPan, clampOffset, clampScale, fitScale, ratioLabel, zoomOffset, ZOOM_STEP, type Offset, type Size } from './image-zoom'
-import type { GalleryImage } from './model'
+import { thumbnailUrl, type GalleryImage } from './model'
 import styles from './ImagePreview.module.css'
 
 const M = defineMessages({
@@ -74,9 +75,10 @@ const sizeOf = (el: HTMLElement): Size => ({ w: el.clientWidth, h: el.clientHeig
 function ImagePreview({ images, startKey, onClose }: { images: readonly GalleryImage[]; startKey: string; onClose(): void }) {
   const m = useMessages(M)
   const [key, setKey] = useState(startKey)
-  const found = images.findIndex((image) => image.key === key)
-  const index = found >= 0 ? found : 0
+  // The picture is found by its key; one that is gone (a rewind took it) closes the layer, never shows another.
+  const index = images.findIndex((image) => image.key === key)
   const image = images[index]
+  const [failed, setFailed] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [natural, setNatural] = useState<Size | null>(null)
@@ -92,10 +94,10 @@ function ImagePreview({ images, startKey, onClose }: { images: readonly GalleryI
   const pressedPicture = useRef(false)
   const followTimer = useRef<number | undefined>(undefined)
 
-  // Nothing left to show (a rewind took the pictures away): the layer closes.
+  // Nothing to show (a rewind took the picture away): the layer closes.
   useEffect(() => {
-    if (images.length === 0) onClose()
-  }, [images.length, onClose])
+    if (!image) onClose()
+  }, [image, onClose])
 
   const fit = natural ? fitScale(natural, stage) : 1
   const scale = zoom ?? fit
@@ -157,12 +159,13 @@ function ImagePreview({ images, startKey, onClose }: { images: readonly GalleryI
       setZoom(null)
       setOffset({ x: 0, y: 0 })
       setCopied(false)
+      setFailed(null)
     },
     [images, index]
   )
 
-  // Keys, in the capture phase on the document: ⎋ must not reach the chat (it interrupts the agent), and the arrows and
-  // zoom keys must move neither the composer's caret nor the page's zoom.
+  // Keys, in the capture phase on the document: ⎋ must not reach the chat (it interrupts the agent), and the arrows must
+  // not move the composer's caret.
   const onKey = useEffectEvent((e: KeyboardEvent): void => {
     const mod = e.metaKey || e.ctrlKey
     if (e.key === 'Tab') {
@@ -185,13 +188,21 @@ function ImagePreview({ images, startKey, onClose }: { images: readonly GalleryI
     if (e.key === 'Escape') onClose()
     else if (e.key === 'ArrowLeft' && !mod) go(-1)
     else if (e.key === 'ArrowRight' && !mod) go(1)
-    else if (mod && (e.key === '+' || e.key === '=')) zoomTo(scale * ZOOM_STEP)
-    else if (mod && (e.key === '-' || e.key === '_')) zoomTo(scale / ZOOM_STEP)
-    else if (mod && e.key === '0') fitView()
     else return
     e.preventDefault()
     e.stopPropagation()
   })
+  // ⌘+ ⌘= ⌘− ⌘0 are the View menu's font size items: while the layer is open, main sends them here instead (one path, so
+  // a key is never both a font step and a zoom).
+  const onMenuZoom = useEffectEvent((action: ImageZoomAction): void => (action === 'in' ? zoomTo(scale * ZOOM_STEP) : action === 'out' ? zoomTo(scale / ZOOM_STEP) : fitView()))
+  useEffect(() => {
+    window.tr.ui.setImagePreviewOpen(true)
+    const off = window.tr.ui.onImageZoom((action) => onMenuZoom(action))
+    return () => {
+      off()
+      window.tr.ui.setImagePreviewOpen(false)
+    }
+  }, [])
   useEffect(() => {
     const listener = (e: KeyboardEvent): void => onKey(e)
     document.addEventListener('keydown', listener, true)
@@ -300,15 +311,17 @@ function ImagePreview({ images, startKey, onClose }: { images: readonly GalleryI
           if (e.target === e.currentTarget && !pressedPicture.current) onClose()
         }}
       >
+        {failed === image.key && <span className={styles.missing}>{image.path.slice(image.path.lastIndexOf('/') + 1)}</span>}
         <img
-          key={image.path}
+          key={image.key}
           className={styles.picture}
-          src={`file://${image.path.split('/').map(encodeURIComponent).join('/')}`}
+          src={thumbnailUrl(image.path) ?? undefined}
           alt={image.title}
           draggable={false}
           style={{ ...(natural ? { width: natural.w, height: natural.h } : {}), transform, opacity: natural ? 1 : 0 }}
           data-following={following || dragging || undefined}
           data-testid="gui-image-preview-picture"
+          onError={() => setFailed(image.key)}
           onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
         />
         <button type="button" className={`${styles.nav} ${styles.prev}`} aria-label={m.previous} title={m.previous} disabled={index === 0} onClick={() => go(-1)}>

@@ -106,7 +106,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({ sessionId, text, classN
     img: ({ src, alt }) => {
       const path = typeof src === 'string' ? markdownImagePath(src, worktreeOf(sessionId)) : null
       if (!path) return alt ? <span>{alt}</span> : null
-      return <ImageThumb path={path} {...(itemId ? { galleryKey: markdownImageKey(itemId, src as string) } : {})} />
+      return <ImageThumb path={path} {...(itemId ? { galleryKey: markdownImageKey(itemId, path) } : {})} />
     },
     pre: ({ node }) => (
       <div className={styles.codeWrap}>

@@ -1,5 +1,5 @@
 // Native pickers and system services the renderer cannot reach itself.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, nativeImage, Notification, shell } from 'electron'
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, nativeImage, Notification, shell, type WebContents } from 'electron'
 import { existsSync } from 'node:fs'
 import { extname, isAbsolute } from 'node:path'
 import { IPC } from '@shared/ipc'
@@ -10,6 +10,16 @@ import { defineMessages, pick } from '@shared/i18n'
 const M = defineMessages({ zh: { openProject: '打开项目', add: '添加' }, en: { openProject: 'Open project', add: 'Add' } })
 
 const COPYABLE_IMAGE: ReadonlySet<string> = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
+
+// Pages whose image preview is open: the View menu's font size items zoom the picture there (windows.ts).
+const previewOpen = new Set<number>()
+
+/** A font size step picked in the menu while `page` shows the image preview goes to the preview; false when it does not. */
+export function routeToImagePreview(page: WebContents | undefined, step: 'bigger' | 'smaller' | 'reset'): boolean {
+  if (!page || page.isDestroyed() || !previewOpen.has(page.id)) return false
+  page.send(IPC.uiImageZoom, step === 'bigger' ? 'in' : step === 'smaller' ? 'out' : 'fit')
+  return true
+}
 
 const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
 
@@ -31,6 +41,14 @@ export function registerUiHandlers(): void {
     if (image.isEmpty()) return false
     await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) })])
     return true
+  })
+
+  ipcMain.on(IPC.uiSetImagePreviewOpen, (event, open: unknown) => {
+    if (typeof open !== 'boolean') return
+    const page = event.sender
+    if (!open) return void previewOpen.delete(page.id)
+    previewOpen.add(page.id)
+    page.once('destroyed', () => previewOpen.delete(page.id))
   })
 
   ipcMain.on(IPC.uiSetBadge, (_event, count: unknown) => {

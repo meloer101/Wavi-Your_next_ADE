@@ -17,10 +17,15 @@ export const MAX_SCALE = 16
 /** One step of ⌘+ / ⌘− and the buttons. */
 export const ZOOM_STEP = 1.25
 
-/** The scale that shows the whole picture in the stage, never above 100%. */
-export function fitScale(image: Size, stage: Size): number {
-  if (image.w <= 0 || image.h <= 0 || stage.w <= 0 || stage.h <= 0) return 1
-  return Math.min(1, stage.w / image.w, stage.h / image.h)
+/** Figma 112G: a fitted picture keeps this much clear on each side: room for the 32 px buttons 20 px from the edge, and a margin above and below. */
+export const FIT_MARGIN: Offset = { x: 72, y: 32 }
+
+/** The scale that shows the whole picture inside the stage less `margin` on each side, never above 100%. Zoomed views use the whole stage. */
+export function fitScale(image: Size, stage: Size, margin: Offset = FIT_MARGIN): number {
+  const w = stage.w - 2 * margin.x
+  const h = stage.h - 2 * margin.y
+  if (image.w <= 0 || image.h <= 0 || w <= 0 || h <= 0) return 1
+  return Math.min(1, w / image.w, h / image.h)
 }
 
 export const clampScale = (scale: number): number => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))

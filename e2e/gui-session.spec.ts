@@ -750,11 +750,26 @@ test.describe('F23 GUI session (Claude)', () => {
     const fitted = Number.parseInt((await ratio.textContent()) ?? '0')
     await page.waitForTimeout(250)
     await screenshots('image-preview')
-    // ⌘+ zooms, ⌘0 fits again; a double click toggles fit and 100%.
-    await page.keyboard.press('Meta+=')
+    // The fitted picture keeps its margins (Figma 112G): 72 at the sides, 32 above and below; the layer is opaque.
+    const stageBox = (await dialog.locator('[class*="stage"]').boundingBox())!
+    const pictureBox = (await dialog.getByTestId('gui-image-preview-picture').boundingBox())!
+    expect(pictureBox.x - stageBox.x).toBeGreaterThanOrEqual(71.5)
+    expect(pictureBox.y - stageBox.y).toBeGreaterThanOrEqual(31.5)
+    expect(await dialog.evaluate((el) => getComputedStyle(el).backgroundColor)).toMatch(/^rgb\(/)
+    // ⌘+ / ⌘= / ⌘0 are the View menu's font size items: with the preview open they zoom it and leave the font alone.
+    const chatSize = (): Promise<number> => page.evaluate(async () => ((await (globalThis as unknown as { tr: { settings: { get(): Promise<{ appearance: { fontSize: number } }> } } }).tr.settings.get()).appearance.fontSize))
+    const fontBefore = await chatSize()
+    const menuKey = (accelerator: string): Promise<boolean> =>
+      app.evaluate(({ Menu }, accelerator) => {
+        const walk = (items: Electron.MenuItem[]): boolean => items.some((item) => (item.accelerator === accelerator ? (item.click(), true) : item.submenu ? walk(item.submenu.items) : false))
+        return walk(Menu.getApplicationMenu()!.items)
+      }, accelerator)
+    expect(await menuKey('CmdOrCtrl+=')).toBe(true)
     await expect.poll(async () => Number.parseInt((await ratio.textContent()) ?? '0')).toBeGreaterThan(fitted)
     await expect(fit).toBeEnabled()
-    await page.keyboard.press('Meta+0')
+    expect(await menuKey('CmdOrCtrl+-')).toBe(true)
+    expect(await menuKey('CmdOrCtrl+=')).toBe(true)
+    expect(await menuKey('CmdOrCtrl+0')).toBe(true)
     await expect(fit).toBeDisabled()
     await dialog.getByTestId('gui-image-preview-picture').dblclick()
     await expect(ratio).toHaveText('100%')
@@ -762,6 +777,7 @@ test.describe('F23 GUI session (Claude)', () => {
     await screenshots('image-preview-zoomed')
     await dialog.getByTestId('gui-image-preview-picture').dblclick()
     await expect(ratio).toHaveText(`${fitted}%`)
+    expect(await chatSize()).toBe(fontBefore)
     // ← goes to the picture you sent with that message (named by its file).
     await page.keyboard.press('ArrowLeft')
     await expect(position).toHaveText(`${total! - 1} / ${total}`)
@@ -801,6 +817,24 @@ test.describe('F23 GUI session (Claude)', () => {
     expect(interrupts()).toBe(before)
     await composer().getByRole('button', { name: '停止' }).click()
     await settled()
+
+    // The same screenshot again is the same file (named by its content): ← still loads it, and the menu's font keys
+    // leave the font alone once the preview is closed.
+    await send('shoot again')
+    await expect(feed().getByText('Hello: shoot again')).toBeVisible(WITHIN)
+    await settled()
+    await feed().getByTestId('gui-chat-images').getByRole('button', { name: /^预览图片 sent-/ }).last().click()
+    await expect(dialog).toBeVisible(WITHIN)
+    await page.keyboard.press('ArrowLeft')
+    await expect(position).toHaveText(new RegExp(`^${total} / ${total! + 1}$`))
+    await expect(dialog.getByTestId('gui-image-preview-picture')).toHaveCSS('opacity', '1')
+    await expect(dialog.getByText('get_screenshot · 1:2')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    expect(await menuKey('CmdOrCtrl+=')).toBe(true)
+    await expect.poll(chatSize).not.toBe(fontBefore)
+    expect(await menuKey('CmdOrCtrl+0')).toBe(true)
+    await expect.poll(chatSize).toBe(fontBefore)
   })
 
   /**

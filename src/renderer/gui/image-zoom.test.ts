@@ -3,10 +3,15 @@ import { canPan, clampOffset, clampScale, fitScale, MAX_SCALE, MIN_SCALE, ratioL
 
 describe('image view math', () => {
   it('fits the whole picture in the stage and never scales it up past 100%', () => {
-    expect(fitScale({ w: 2000, h: 1000 }, { w: 1000, h: 800 })).toBe(0.5)
-    expect(fitScale({ w: 1000, h: 3000 }, { w: 1000, h: 750 })).toBe(0.25)
+    const none = { x: 0, y: 0 }
+    expect(fitScale({ w: 2000, h: 1000 }, { w: 1000, h: 800 }, none)).toBe(0.5)
+    expect(fitScale({ w: 1000, h: 3000 }, { w: 1000, h: 750 }, none)).toBe(0.25)
     expect(fitScale({ w: 200, h: 100 }, { w: 1000, h: 800 })).toBe(1)
     expect(fitScale({ w: 0, h: 0 }, { w: 1000, h: 800 })).toBe(1)
+    // The default keeps 72 px at the sides and 32 above and below (Figma 112G).
+    expect(fitScale({ w: 2000, h: 1000 }, { w: 1144, h: 800 })).toBe(0.5)
+    expect(fitScale({ w: 1000, h: 2000 }, { w: 1600, h: 1064 })).toBe(0.5)
+    expect(fitScale({ w: 1000, h: 1000 }, { w: 100, h: 50 })).toBe(1)
   })
 
   it('keeps the point under the cursor fixed when it zooms', () => {
