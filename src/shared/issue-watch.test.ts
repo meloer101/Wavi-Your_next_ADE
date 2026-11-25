@@ -283,7 +283,7 @@ describe('the permission cap', () => {
     expect(cappedPermission('all', false, 'auto')).toBe('accept-edits')
     expect(cappedPermission('all', false, 'accept-edits')).toBe('accept-edits')
     expect(cappedPermission('all', false, 'ask')).toBe('ask')
-    expect(cappedPermission('all', false, undefined)).toBeUndefined()
+    expect(cappedPermission('all', false, undefined)).toBe('accept-edits')
     // A member's issue keeps what was picked.
     expect(cappedPermission('all', true, 'full-access')).toBe('full-access')
     // Unknown permission keeps it too (only an author known not to write is capped).

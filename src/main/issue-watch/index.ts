@@ -19,6 +19,7 @@ const TICK_MS = 15_000
 
 /** The page that said it can open sessions (its workspace is loaded); a reload has to say it again. */
 let readyPage: WebContents | null = null
+const watchedPages = new WeakSet<WebContents>()
 
 let watcher: IssueWatcher | null = null
 
@@ -37,7 +38,7 @@ async function alreadyMerged(record: IssueRecord): Promise<boolean> {
   const configured = branch ? (await gitOut(worktree, ['config', `branch.${branch}.base`])).trim() : ''
   const base = configured || 'main'
   if ((await git(worktree, ['merge-base', '--is-ancestor', head, `refs/heads/${base}`])).code === 0) return true
-  const closing = await gitOut(worktree, ['log', '-n', '200', '--format=%H', `refs/heads/${base}`, '--grep', `Closes #${record.number}`])
+  const closing = await gitOut(worktree, ['log', '-n', '200', '--format=%H', '-E', `--grep=Closes #${record.number}([^0-9]|$)`, `refs/heads/${base}`])
   return closing.trim() !== ''
 }
 
@@ -118,15 +119,21 @@ export function registerIssueWatchHandlers(): void {
   })
   ipcMain.on(ISSUE_WATCH_IPC.ready, (event) => {
     if (!isMainPage(event)) return
-    readyPage = event.sender
-    event.sender.once('destroyed', () => {
-      if (readyPage === event.sender) readyPage = null
-      current.windowGone()
-    })
-    event.sender.once('did-start-navigation', () => {
-      if (readyPage === event.sender) readyPage = null
-      current.windowGone()
-    })
+    const page = event.sender
+    readyPage = page
+    // Once per page: its reloads say ready again on the same webContents.
+    if (!watchedPages.has(page)) {
+      watchedPages.add(page)
+      const gone = (): void => {
+        if (readyPage === page) readyPage = null
+        current.windowGone()
+      }
+      page.once('destroyed', gone)
+      // Only a load of the page itself, as in windows.ts: a frame or an in-page navigation leaves it ready.
+      page.on('did-start-navigation', (details) => {
+        if (details.isMainFrame && !details.isSameDocument) gone()
+      })
+    }
     current.windowReady()
     // A page that just loaded checks at once (each project still waits for its own interval after that).
     void current.tick()

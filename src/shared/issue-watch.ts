@@ -341,7 +341,9 @@ const PERMISSION_RANK: Readonly<Record<GuiPermission, number>> = { ask: 0, 'acce
  * 接受编辑 (PRD F26): the settings say more, the session gets no more. Everything else keeps what was picked.
  */
 export function cappedPermission(mode: IssueWatchMode, authorCanWrite: boolean | null, chosen: GuiPermission | undefined): GuiPermission | undefined {
-  if (mode !== 'all' || authorCanWrite !== false || chosen === undefined) return chosen
+  if (mode !== 'all' || authorCanWrite !== false) return chosen
+  // Nothing picked would be the session's own default, which can be higher than the cap: the cap is set instead.
+  if (chosen === undefined) return 'accept-edits'
   const cap = PERMISSION_RANK['accept-edits']
   return PERMISSION_RANK[chosen] > cap ? 'accept-edits' : chosen
 }

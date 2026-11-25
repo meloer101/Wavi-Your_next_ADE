@@ -11,7 +11,7 @@ import type { SessionId } from '@shared/types'
 import { loadPreflight } from '../pull-requests/chain-store'
 import { chainPlace, runChainCommand } from '../pull-requests/chain-actions'
 import { shipContextFor } from '../pull-requests/exit-model'
-import { startShip, useShips } from '../pull-requests/ship-runner'
+import { shipCompleted, startShip, useShips } from '../pull-requests/ship-runner'
 import { setPrNotice, usePullRequests } from '../pull-requests/store'
 import { useSessionMeta } from '../session-meta/store'
 
@@ -37,7 +37,7 @@ const M = defineMessages({
 export type ApprovalResult = { ok: true } | { ok: false; message: string }
 
 /**
- * Whether a chain run in the worktree finished cleanly, stopped at a failed step, or never started. The run is started
+ * Whether a chain run in the worktree finished cleanly, stopped at a failed step or was cancelled, or never started. The run is started
  * after this call, so it waits a while for the block to appear.
  */
 function watchRun(worktree: string, startWaitMs = 30_000): Promise<'done' | 'stopped' | 'none'> {
@@ -63,7 +63,8 @@ function watchRun(worktree: string, startWaitMs = 30_000): Promise<'done' | 'sto
       if (!seen) return
       clearTimeout(timer)
       off()
-      resolve('done')
+      // The block also goes away on 取消: only a run that went through counts as done.
+      resolve(shipCompleted(worktree) ? 'done' : 'stopped')
     }
     const off = useShips.subscribe(check)
     check()

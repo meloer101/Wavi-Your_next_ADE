@@ -184,6 +184,13 @@ export interface ShipStartOptions {
 }
 
 const runs = new Map<string, Run>()
+/** Worktrees whose last run went through (finish), not 取消: a block that went away is either. */
+const completed = new Set<string>()
+
+/** Whether the last run in this worktree ended by going through rather than by 取消. */
+export function shipCompleted(worktree: string): boolean {
+  return completed.has(worktree)
+}
 let counter = 0
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error))
@@ -324,6 +331,7 @@ export function startShipRuns(): () => void {
 
 export function startShip(ctx: ShipContext, kind: ShipKind, title: string, options: ShipStartOptions = {}): void {
   if (runs.has(ctx.worktree)) return
+  completed.delete(ctx.worktree)
   const token = ++counter
   // The tip the starting command just read (or the run's own, carried over by 改为创建 PR); never an older preflight a
   // panel left in the chain store, which would make the reload check judge commits made before the run.
@@ -361,6 +369,7 @@ export function cancelShip(worktree: string): void {
   const run = runs.get(worktree)
   if (!run) return
   runs.delete(worktree)
+  completed.delete(worktree)
   window.tr.pr.cancelWrite(worktree)
   if (useBackgroundReview.getState().byRoot[worktree]?.phase === 'running' && current(worktree)?.steps.some((s) => s.id === 'review' && s.state === 'working'))
     cancelBackgroundReview(worktree)
@@ -1205,6 +1214,7 @@ function finish(worktree: string, token: number, notice: string): void {
   if (isExitRun(run.kind)) remember(run.ctx.root, run.kind)
   window.tr.pr.refresh(worktree)
   runs.delete(worktree)
+  completed.add(worktree)
   useShips.setState((s) => {
     const { [worktree]: _gone, ...rest } = s.byWorktree
     return { byWorktree: rest }
