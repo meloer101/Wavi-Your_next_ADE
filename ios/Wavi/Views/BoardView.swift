@@ -172,8 +172,7 @@ struct ProgressBoard: View {
           title(group, top: 20)
           if !folded.contains(group.key.rawValue) {
             ForEach(group.cards) { card in
-              NavigationLink(value: Route.session(card.session.id)) { ProgressCardView(card: card, now: now, stale: stale) }
-                .buttonStyle(.plain)
+              ProgressCardView(card: card, list: list, now: now, stale: stale)
             }
           }
         }
@@ -238,11 +237,33 @@ struct ProgressBoard: View {
 /// checks and `+N −M`, on the status's fill; the quieter lines in its `-meta` colour.
 struct ProgressCardView: View {
   let card: BoardCard
+  /// For the members of a card that has a fold (PRD v1.243, Figma 111′C / 111′D).
+  var list: RemoteSessionList = .empty
   let now: Double
   var stale = false
+  @AppStorage(FoldOpen.key) private var openFolds = ""
 
   var body: some View {
     let tone = card.tone
+    VStack(alignment: .leading, spacing: 0) {
+      NavigationLink(value: Route.session(card.session.id)) { summary(tone) }
+        .buttonStyle(.plain)
+      if let group = card.session.group {
+        let open = FoldOpen.ids(openFolds).contains(card.session.id)
+        Rectangle().fill(Color.cardMeta(tone).opacity(0.3)).frame(height: 1).padding(.top, 10)
+        MemberFoldRow(group: group, open: open, leading: 0, trailing: 0) { openFolds = FoldOpen.toggled(openFolds, card.session.id) }
+        if open { CardMembers(session: card.session, list: list, now: now, tone: tone) }
+      }
+    }
+    .padding(12)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Color.card(tone), in: RoundedRectangle(cornerRadius: Metric.radiusCard))
+    .opacity(stale ? 0.55 : 1)
+    .padding(.horizontal, Metric.margin)
+    .padding(.bottom, 8)
+  }
+
+  private func summary(_ tone: CardTone) -> some View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(spacing: 8) {
         StatusGlyph(status: card.session.status)
@@ -263,12 +284,7 @@ struct ProgressCardView: View {
         Text(statText(stat)).font(.mono(.caption, medium: true)).foregroundStyle(Color.cardMeta(tone))
       }
     }
-    .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color.card(tone), in: RoundedRectangle(cornerRadius: Metric.radiusCard))
-    .opacity(stale ? 0.55 : 1)
-    .padding(.horizontal, Metric.margin)
-    .padding(.bottom, 8)
     .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
   }

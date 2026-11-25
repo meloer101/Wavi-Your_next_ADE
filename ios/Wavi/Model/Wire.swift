@@ -81,6 +81,76 @@ struct RemoteSession: Codable, Hashable, Sendable, Identifiable {
   /// The vendor (claude / codex) whose plan windows in `RemoteSessionList.usage` apply to this session, as the Mac picks it;
   /// absent when none applies, so the sheet shows no plan windows.
   var usageVendor: String? = nil
+  /// The session that dispatched this one, only when that session is in the same list (PRD v1.243): the list and the board
+  /// fold it under its parent. An older Mac sends none and the list stays flat.
+  var parentId: String? = nil
+  /// The members folded under this session, counted on the Mac; the phone never counts. A group this phone cannot read
+  /// is left off (decoded with `try?`): the session still shows.
+  var group: RemoteGroup? = nil
+
+  private enum CodingKeys: String, CodingKey {
+    case id, projectId, title, agent, status, action, since, activity, branch, model, reply, ship, shipNotice, settings, checks, stat, github, context, usageVendor, parentId, group
+  }
+}
+
+// In an extension so the struct keeps its memberwise initializer.
+extension RemoteSession {
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(String.self, forKey: .id)
+    projectId = try c.decode(String.self, forKey: .projectId)
+    title = try c.decode(String.self, forKey: .title)
+    agent = try c.decode(String.self, forKey: .agent)
+    status = try c.decode(SessionStatus.self, forKey: .status)
+    action = try c.decodeIfPresent(String.self, forKey: .action)
+    since = try c.decodeIfPresent(Double.self, forKey: .since)
+    activity = try c.decode(Double.self, forKey: .activity)
+    branch = try c.decodeIfPresent(String.self, forKey: .branch)
+    model = try c.decodeIfPresent(String.self, forKey: .model)
+    reply = try c.decodeIfPresent(String.self, forKey: .reply)
+    ship = try c.decodeIfPresent(RemoteShip.self, forKey: .ship)
+    shipNotice = try c.decodeIfPresent(String.self, forKey: .shipNotice)
+    settings = try c.decodeIfPresent(SessionSettings.self, forKey: .settings)
+    checks = try c.decodeIfPresent(RemoteChecks.self, forKey: .checks)
+    stat = try c.decodeIfPresent(RemoteStat.self, forKey: .stat)
+    github = try c.decodeIfPresent(GitHubLink.self, forKey: .github)
+    context = try c.decodeIfPresent(RemoteContext.self, forKey: .context)
+    usageVendor = try c.decodeIfPresent(String.self, forKey: .usageVendor)
+    parentId = try c.decodeIfPresent(String.self, forKey: .parentId)
+    group = try? c.decodeIfPresent(RemoteGroup.self, forKey: .group)
+  }
+}
+
+/// A session's members (src/shared/remote.ts `RemoteGroup`): direct ones in the group's order, `total` and `counts` at any depth.
+struct RemoteGroup: Codable, Hashable, Sendable {
+  let total: Int
+  /// Most urgent status first; statuses with none are left out.
+  let counts: [Count]
+  let members: [RemoteMember]
+
+  struct Count: Codable, Hashable, Sendable {
+    let status: SessionStatus
+    let count: Int
+  }
+}
+
+struct RemoteMember: Codable, Hashable, Sendable, Identifiable {
+  /// session / subagent / teammate / workflow; one this phone does not know reads as a subagent (a line, not tappable).
+  enum Kind: String, Codable, Hashable, Sendable {
+    case session, subagent, teammate, workflow
+
+    init(from decoder: Decoder) throws {
+      self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .subagent
+    }
+  }
+
+  /// A `session` member's id is a session id in the same list.
+  let id: String
+  let kind: Kind
+  let title: String
+  let status: SessionStatus
+  /// The model of a subagent / teammate, the phase of a workflow run.
+  let meta: String?
 }
 
 /// One session's context window (src/shared/remote.ts `RemoteContext`). `high` is worked out on the Mac; the phone never

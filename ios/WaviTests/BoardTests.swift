@@ -254,3 +254,19 @@ private let projects = [RemoteProject(id: "p1", name: "acme-web"), RemoteProject
     #expect(detailFailure("gh 没有登录") == "gh 没有登录")
   }
 }
+
+// PRD v1.243: the board's sections keep every session; a member's card stays in its own status section.
+@Suite struct BoardGroupFoldTests {
+  @Test func aMembersCardStaysInItsOwnSection() {
+    var kid = session("kid", .needsYou, activity: 5, since: 5)
+    kid.parentId = "parent"
+    var parent = session("parent", .running, activity: 9)
+    parent.group = RemoteGroup(total: 1, counts: [.init(status: .needsYou, count: 1)], members: [
+      RemoteMember(id: "kid", kind: .session, title: "kid", status: .needsYou, meta: nil)
+    ])
+    let groups = boardGroups(RemoteSessionList(projects: projects, sessions: [parent, kid]))
+    #expect(groups.map(\.key) == [.needsYou, .running])
+    #expect(groups.map { $0.cards.map(\.id) } == [["kid"], ["parent"]])
+    #expect(groups[1].cards[0].session.group?.total == 1)
+  }
+}

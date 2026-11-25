@@ -14,7 +14,7 @@ extension RemoteSession {
   /// 推送 it showed then may be over. The Mac's snapshot sends the exit again if it still runs (PRD v1.223).
   var withoutShip: RemoteSession {
     RemoteSession(id: id, projectId: projectId, title: title, agent: agent, status: status, action: action, since: since,
-      activity: activity, branch: branch, model: model, reply: reply, ship: nil, shipNotice: shipNotice, settings: settings)
+      activity: activity, branch: branch, model: model, reply: reply, ship: nil, shipNotice: shipNotice, settings: settings, parentId: parentId, group: group)
   }
 }
 
