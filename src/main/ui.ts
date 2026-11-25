@@ -13,6 +13,7 @@ const COPYABLE_IMAGE: ReadonlySet<string> = new Set(['.png', '.jpg', '.jpeg', '.
 
 // Pages whose image preview is open: the View menu's font size items zoom the picture there (windows.ts).
 const previewOpen = new Set<number>()
+const watchedPages = new WeakSet<WebContents>()
 
 /** A font size step picked in the menu while `page` shows the image preview goes to the preview; false when it does not. */
 export function routeToImagePreview(page: WebContents | undefined, step: 'bigger' | 'smaller' | 'reset'): boolean {
@@ -47,8 +48,12 @@ export function registerUiHandlers(): void {
     if (typeof open !== 'boolean') return
     const page = event.sender
     if (!open) return void previewOpen.delete(page.id)
-    previewOpen.add(page.id)
-    page.once('destroyed', () => previewOpen.delete(page.id))
+    const id = page.id
+    previewOpen.add(id)
+    // One `destroyed` listener per page, not one per opening.
+    if (watchedPages.has(page)) return
+    watchedPages.add(page)
+    page.once('destroyed', () => previewOpen.delete(id))
   })
 
   ipcMain.on(IPC.uiSetBadge, (_event, count: unknown) => {
