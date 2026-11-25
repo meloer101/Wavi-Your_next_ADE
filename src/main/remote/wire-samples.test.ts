@@ -130,6 +130,17 @@ const session: RemoteSession = {
   stat: { added: 12, removed: 3 },
   context: { percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true },
   usageVendor: 'claude',
+  parentId: 's0',
+  group: {
+    total: 5,
+    counts: [{ status: 'needs_you', count: 1 }, { status: 'running', count: 3 }, { status: 'done_unread', count: 1 }],
+    members: [
+      { id: 's3', kind: 'session', title: '补测试', status: 'needs_you' },
+      { id: 'agent-1', kind: 'subagent', title: '查调用点', status: 'running', meta: 'Opus 5.5' },
+      { id: 'teammate:a1', kind: 'teammate', title: 'reviewer', status: 'running', meta: 'Sonnet 5' },
+      { id: 'workflow:w1', kind: 'workflow', title: '发版检查', status: 'done_unread', meta: '测试' }
+    ]
+  },
   github: { repo: 'github.com/acme/web', kind: 'issue', number: 139 },
   settings: {
     items: [

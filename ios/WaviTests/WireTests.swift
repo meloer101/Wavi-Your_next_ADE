@@ -253,6 +253,25 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
     #expect(decodedOld.usage == nil && decodedOld.sessions.first?.context == nil)
   }
 
+  /// PRD v1.243: `parentId` and the group, read by value; an older Mac sends neither, a kind this phone does not know is a subagent line.
+  @Test func collaborationGroupsDecodeWithTheMacsValues() throws {
+    let list = try decoded(try Samples.load().events["sessions"]?["data"], RemoteSessionList.self, "event sessions")
+    let first = try #require(list.sessions.first)
+    #expect(first.parentId == "s0")
+    let group = try #require(first.group)
+    #expect(group.total == 5)
+    #expect(group.counts.map(\.status) == [.needsYou, .running, .doneUnread] && group.counts.map(\.count) == [1, 3, 1])
+    #expect(group.members.map(\.kind) == [.session, .subagent, .teammate, .workflow])
+    #expect(group.members[1].meta == "Opus 5.5" && group.members[0].meta == nil)
+    #expect(list.sessions.last?.parentId == nil && list.sessions.last?.group == nil)
+    // A group this phone cannot read is dropped for that session; the list still decodes.
+    let bad = Data(#"{"projects":[],"sessions":[{"id":"a","projectId":"p","title":"t","agent":"claude","status":"idle","activity":1,"parentId":"z","group":{"total":"many","members":7}},{"id":"b","projectId":"p","title":"u","agent":"claude","status":"idle","activity":2}]}"#.utf8)
+    let lenient = try JSONDecoder().decode(RemoteSessionList.self, from: bad)
+    #expect(lenient.sessions.map(\.id) == ["a", "b"] && lenient.sessions[0].group == nil && lenient.sessions[0].parentId == "z")
+    let odd = Data(#"{"id":"x","kind":"robot","title":"t","status":"running"}"#.utf8)
+    #expect(try JSONDecoder().decode(RemoteMember.self, from: odd).kind == .subagent)
+  }
+
   /// As the screens that ask decode each answer's `data`.
   @Test func answersDecodeAsTheAppReadsThem() throws {
     let samples = try Samples.load().results

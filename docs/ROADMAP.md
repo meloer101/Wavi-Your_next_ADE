@@ -314,7 +314,7 @@ PR 闭环（2026-10-21 定，PRD F16 / F13 v1.63；排在第三批之前；外�
 - [ ] 协作队伍默认折叠（PRD v1.243，Figma 111G / 111H / 111I · 111E / 111F · 111′A–D，2026-11-25 定）：主对话的成员（子会话、subagent、队友、workflow）收成一行折叠行，点开展开一层，选中底色罩住整组
   - [x] ① `src/shared/session-group.ts` + 桌面侧栏（折叠行、整组选中、⌘J 展开、`expandedGroups` 持久化）
   - [x] ② 看板 · 进度：主对话卡片的成员摘要和展开列表（`src/renderer/overview/CardMembers.tsx`、`members.ts`，折叠状态与侧栏共用 `expandedGroups`）
-  - [ ] ③ 手机：`RemoteSession.parentId` / `group`，会话列表和看板的折叠
+  - [x] ③ 手机（2026-11-25）：`RemoteSession.parentId` / `group`（`src/shared/remote.ts`，加字段，旧手机忽略、旧 Mac 不发）由 `remoteGroups`（`src/renderer/remote/model.ts`，用侧栏的 `groupsOf`）算好；会话列表和看板卡片折叠，展开状态按设备记（`@AppStorage` `group.expanded`）。手机端只在测试宿主里渲染截图核对过，没在连着 Mac 的真会话里看过
 - [ ] agent 自带的 subagent 只显示、不接管（PRD F21 v1.66 改，v1.109 改为读文件）：在所在会话下列出 subagent 的任务、模型和状态，不变成 Wavi 会话；状态来自 hook 的 `agent_id` / `SubagentStop`，名字、类型、模型、上一级读 agent 自己的 `subagents/agent-<id>.meta.json`（做法参照 yetone/magpie @ d714c42 `internal/sessions/subagents.go`）
   - [x] 实测 Claude 2.1.316 的 subagent 文件（2026-10-31，PRD §6.14 v1.109）
   - [ ] 实测 Codex 0.165 `spawn_agent` 的 rollout（`thread_spawn.parent_thread_id`）：2026-10-31 服务商对 `gpt-6-sol` 返回 503，阻塞

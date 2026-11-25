@@ -41,16 +41,64 @@ struct SessionGroup: Identifiable, Sendable {
 /// 等你处理 first (with each row's project), then one group per project in the window's order; newest first (45B).
 func groupSessions(_ list: RemoteSessionList) -> [SessionGroup] {
   let names = Dictionary(list.projects.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+  // A session under a parent that is listed too is a member of its fold (PRD v1.243), no row of its project; it stays
+  // in 等你处理 while it needs the user.
+  let held = foldedIds(list)
   let waiting = list.sessions.filter { $0.status == .needsYou }.sorted { ($0.since ?? $0.activity) > ($1.since ?? $1.activity) }
   var groups: [SessionGroup] = []
   if !waiting.isEmpty {
     groups.append(SessionGroup(id: SessionGroup.needsYouId, title: String(localized: "等你处理"), rows: waiting.map { .init(session: $0, projectName: names[$0.projectId]) }))
   }
   for project in list.projects {
-    let rows = list.sessions.filter { $0.projectId == project.id && $0.status != .needsYou }.sorted { $0.activity > $1.activity }
+    let rows = list.sessions.filter { $0.projectId == project.id && $0.status != .needsYou && !held.contains($0.id) }.sorted { $0.activity > $1.activity }
     if !rows.isEmpty { groups.append(SessionGroup(id: project.id, title: project.name, rows: rows.map { .init(session: $0, projectName: nil) })) }
   }
   return groups
+}
+
+/// The sessions some listed parent's fold holds: a session leaves its project's rows only when a parent lists it among its
+/// members, so it always has an entry — a `parentId` whose parent does not list it (or a cut-down or older cache) keeps it.
+func foldedIds(_ list: RemoteSessionList) -> Set<String> {
+  let listed = Set(list.sessions.map(\.id))
+  var held: Set<String> = []
+  for session in list.sessions {
+    for member in session.group?.members ?? [] where member.kind == .session && listed.contains(member.id) && member.id != session.id { held.insert(member.id) }
+  }
+  return held
+}
+
+/// One line under a fold: a member and, for a session member, the session itself.
+struct FoldMember: Identifiable, Sendable {
+  let member: RemoteMember
+  /// The listed session a `session` member stands for; nil for the others (and for a session the list no longer has).
+  let session: RemoteSession?
+  var id: String { member.id }
+}
+
+/// The direct members of `session`'s group, in the Mac's order.
+func foldMembers(of session: RemoteSession, in list: RemoteSessionList) -> [FoldMember] {
+  guard let group = session.group else { return [] }
+  let byId = Dictionary(list.sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+  return group.members.map { FoldMember(member: $0, session: $0.kind == .session ? byId[$0.id] : nil) }
+}
+
+/// Which sessions' folds are open: ids kept on this phone as one string (ids hold no newline), shared by the list and the
+/// board. A fold is closed until opened.
+enum FoldOpen {
+  static let key = "group.expanded"
+
+  static func ids(_ raw: String) -> Set<String> { Set(raw.split(separator: "\n").map(String.init)) }
+
+  static func toggled(_ raw: String, _ id: String) -> String {
+    var open = ids(raw)
+    if open.contains(id) { open.remove(id) } else { open.insert(id) }
+    return open.sorted().joined(separator: "\n")
+  }
+
+  /// Drops the ids of sessions that are gone.
+  static func pruned(_ raw: String, keeping live: Set<String>) -> String {
+    ids(raw).intersection(live).sorted().joined(separator: "\n")
+  }
 }
 
 /// Figma 91D: how long a turn has run — tenths under a minute (`4.3s`), then `1m 05s`, then `1h 02m`.
