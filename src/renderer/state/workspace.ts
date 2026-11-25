@@ -10,6 +10,7 @@ import type { WorktreeArchive } from '@shared/archive'
 import type { GuiPicks } from '@shared/gui-chat'
 import { rememberUi, rememberWorkdir, type Workdir } from '@shared/new-session'
 import type { AgentKind, ProjectId, Session, SessionId, SessionStatus, SessionUi, Worktree, WorktreeId } from '@shared/types'
+import { dispatchAncestors } from '@shared/session-group'
 import { hasPane, pane, paneIds, PICKER_PANE, placeSession, removePane, replacePane, sessionsIn, splitPane, type DropZone, type Side, type SplitNode } from '@shared/split-layout'
 import {
   closeWindow,
@@ -100,6 +101,8 @@ interface WorkspaceState extends WorkspaceData {
   sidebarGroupBy: SidebarGroupBy
   /** Status groups folded in the sidebar's 按状态 view. */
   collapsedStatusGroups: readonly SessionStatus[]
+  /** Sessions whose collaboration group is open in the sidebar (PRD v1.243); absent = folded. */
+  expandedGroups: readonly SessionId[]
   mainView: MainView
   /** Folders opened as projects, most recent first (first-run screen). */
   recentProjects: readonly string[]
@@ -149,6 +152,10 @@ interface WorkspaceState extends WorkspaceData {
   toggleProjectCollapsed(id: ProjectId): void
   setSidebarGroupBy(groupBy: SidebarGroupBy): void
   toggleStatusGroupCollapsed(status: SessionStatus): void
+  /** Opens or folds one session's collaboration group in the sidebar. */
+  toggleGroupExpanded(id: SessionId): void
+  /** Opens these sessions' groups (⌘J lands on a folded member: every ancestor opens). */
+  expandGroups(ids: readonly SessionId[]): void
   /** Adds (or finds) the project for a folder. */
   addProject(rootPath: string): ProjectId
   removeProject(id: ProjectId): void
@@ -321,6 +328,7 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => {
     collapsedProjectIds: saved?.collapsedProjectIds ?? [],
     sidebarGroupBy: saved?.sidebarGroupBy ?? 'project',
     collapsedStatusGroups: saved?.collapsedStatusGroups ?? [],
+    expandedGroups: saved?.expandedGroups ?? [],
     mainView: 'session',
     recentProjects: saved?.recentProjects ?? [],
     newSessionWorkdir: saved?.newSessionWorkdir ?? {},
@@ -400,6 +408,13 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => {
           : [...s.collapsedProjectIds, id]
       })),
     setSidebarGroupBy: (groupBy) => set({ sidebarGroupBy: groupBy }),
+    toggleGroupExpanded: (id) =>
+      set((s) => ({ expandedGroups: s.expandedGroups.includes(id) ? s.expandedGroups.filter((x) => x !== id) : [...s.expandedGroups, id] })),
+    expandGroups: (ids) =>
+      set((s) => {
+        const add = ids.filter((id) => !s.expandedGroups.includes(id))
+        return add.length === 0 ? s : { expandedGroups: [...s.expandedGroups, ...add] }
+      }),
     toggleStatusGroupCollapsed: (status) =>
       set((s) => ({
         collapsedStatusGroups: s.collapsedStatusGroups.includes(status)
@@ -554,6 +569,7 @@ setSnapshotProvider(() => {
       collapsedProjectIds: state.collapsedProjectIds,
       sidebarGroupBy: state.sidebarGroupBy,
       collapsedStatusGroups: state.collapsedStatusGroups,
+      expandedGroups: state.expandedGroups,
       recentProjects: state.recentProjects,
       newSessionWorkdir: state.newSessionWorkdir,
       newSessionAgent: state.newSessionAgent,
@@ -581,6 +597,15 @@ export function shownSessionIds(state: Pick<WorkspaceState, 'split' | 'activeSes
   if (state.split) return sessionsIn(state.split)
   return state.activeSessionId ? [state.activeSessionId] : []
 }
+
+// A session that becomes active from anywhere (a click, ⌘1–9, ⌘J, ⌘K, the board, a notification) is drawn in the sidebar:
+// the groups above it open (PRD v1.243). Only on a change, so folding the group by hand while it is selected sticks.
+useWorkspace.subscribe((state, prev) => {
+  const id = state.activeSessionId
+  if (id === null || id === prev.activeSessionId || state.sidebarGroupBy === 'status') return
+  const above = dispatchAncestors(state.sessions, id)
+  if (above.some((a) => !state.expandedGroups.includes(a))) state.expandGroups(above)
+})
 
 /** The sessions every window shows (F20 · 多窗口): they all have a terminal on screen. */
 export function shownEverywhere(state: Pick<WorkspaceState, 'windows' | 'keyWindow' | 'windowViews' | 'split' | 'activeSessionId'>): SessionId[] {

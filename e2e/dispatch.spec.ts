@@ -296,6 +296,11 @@ test.describe('派活与回报 · wavi', () => {
     expect(git(project, 'branch', '--format=%(refname:short)').trim().split('\n').sort()).toEqual(['jacob/fix-login', 'main'])
     // The other project's Cursor session is not part of this tree.
     const rows = sidebar().locator('[data-session-id]:not([data-session-id="s-cursor"])')
+    // PRD v1.243: the children are folded under the dispatcher until its fold row is clicked, which selects nothing.
+    const fold = sidebar().locator('[data-testid="fold-row"][data-group-owner="s-plan"]')
+    await expect(fold).toContainText('2 个成员', WITHIN)
+    await expect(rows).toHaveCount(1)
+    await fold.click()
     await expect(rows).toHaveCount(3, WITHIN)
     await expect(rows.nth(1)).toHaveAttribute('data-depth', '1')
     await expect(rows.nth(2)).toHaveAttribute('data-depth', '1')
@@ -314,6 +319,9 @@ test.describe('派活与回报 · wavi', () => {
     expect(argv.slice(argv.indexOf('--model'), argv.indexOf('--model') + 2)).toEqual(['--model', 'haiku'])
     expect(argv[argv.indexOf('--') + 1]).toContain('这一层不能再派活')
     const row = sidebar().locator(`[data-session-id="${ids.types}"]`)
+    // The child's own group is folded, one level in, until it is opened itself.
+    await expect(row).toHaveCount(0)
+    await sidebar().locator(`[data-testid="fold-row"][data-group-owner="${ids.fix}"]`).click()
     await expect(row).toHaveAttribute('data-depth', '2', WITHIN)
     await expect(row).toContainText('haiku')
     await expect.poll(() => read(dirs.types, '.fake-env'), WITHIN).not.toBe('')
@@ -379,6 +387,21 @@ test.describe('派活与回报 · wavi', () => {
     await expect.poll(() => existsSync(dirs.review), WITHIN).toBe(false)
     await expect(sidebar().locator(`[data-session-id="${ids.review}"]`)).toHaveCount(0)
     expect(readdirSync(worktreesDir)).toHaveLength(2)
+  })
+
+  // PRD v1.243: ⌘J still lands on a member that is folded away, and opens every group above it.
+  test('⌘J on a folded member that needs you opens its groups and selects it', async () => {
+    await sidebar().locator('[data-session-id="s-plan"]').click()
+    const planFold = sidebar().locator('[data-testid="fold-row"][data-group-owner="s-plan"]')
+    await planFold.click()
+    await expect(planFold).toHaveAttribute('aria-expanded', 'false')
+    await expect(sidebar().locator(`[data-session-id="${ids.fix}"]`)).toHaveCount(0)
+    step(dirs.fix, { hook: 'PermissionRequest', payload: { tool_name: 'Bash', tool_input: { command: 'npm test' } } })
+    await expect(planFold.getByRole('img', { name: '等你处理' })).toBeVisible(WITHIN)
+    await page.keyboard.press('Meta+KeyJ')
+    await expect(planFold).toHaveAttribute('aria-expanded', 'true', WITHIN)
+    await expect(sidebar().locator(`[data-session-id="${ids.fix}"]`)).toHaveAttribute('aria-current', 'true', WITHIN)
+    step(dirs.fix, { hook: 'PostToolUse', payload: { tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_response: {} } })
   })
 
   test('the child’s header names its dispatcher, and the overview lists them together', async () => {
@@ -622,6 +645,11 @@ test.describe('leader 会话', () => {
     await shoot('confirm')
     await strip().getByTestId('dispatch-start').click()
     await expect(strip()).toBeHidden()
+    // The adopted session is a member now: folded into the leader's row until that is opened (PRD v1.243).
+    const leaderFold = sidebar().locator(`[data-testid="fold-row"][data-group-owner="${id}"]`)
+    await expect(leaderFold).toContainText(/\d+ 个成员/, WITHIN)
+    await expect(sidebar().locator('[data-session-id="s-user"]')).toHaveCount(0)
+    await leaderFold.click()
     await expect(sidebar().locator('[data-session-id="s-user"]')).toHaveAttribute('data-depth', '1', WITHIN)
     await expect(sidebar().locator(`[data-session-id="${id}"]`)).not.toContainText('想开')
   })
