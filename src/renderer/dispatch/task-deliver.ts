@@ -1,4 +1,4 @@
-// A card the user pastes on the board reaches the project's leader (PRD F21 v1.246): once, as one message through the
+// A card the user pastes on the board reaches the project's leader (PRD F21 v1.249): once, as one message through the
 // same delivery as `wavi send` and a session's brief (`deliverMessage`: the vendor's own channel, else typed in while
 // nobody types there, else held under the terminal for 送进去). A project without a leader leaves the card waiting
 // (待派发) on the board; Wavi never starts one.

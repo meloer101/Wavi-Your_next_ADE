@@ -1,4 +1,4 @@
-// 任务看板's IPC in main (PRD F9 v1.246): the TaskBoard (./store.ts) owns `<userData>/tasks.json`; the windows reach it
+// 任务看板's IPC in main (PRD F9 v1.249): the TaskBoard (./store.ts) owns `<userData>/tasks.json`; the windows reach it
 // only through these handlers (`window.tr.tasks`), and `wavi task` goes through the window's handler to the same ones.
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'

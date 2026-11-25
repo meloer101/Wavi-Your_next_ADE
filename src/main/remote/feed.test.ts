@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PhoneEvent } from '@shared/remote'
-import { FeedHub, type FeedSource } from './feed'
+import type { ChatItem } from '@shared/transcript-chat'
+import { FeedHub, forPhone, type FeedSource } from './feed'
 
 const line = (o: object): string => JSON.stringify({ timestamp: '2026-11-01T10:00:00.000Z', cwd: '/w', ...o }) + '\n'
 const user = (text: string) => line({ type: 'user', message: { content: text } })
@@ -162,5 +163,19 @@ describe('FeedHub', () => {
     await vi.waitFor(() => expect(pushed.at(-1)).toMatchObject({ event: { data: { start: 2 } } }))
     hub.drop('c1')
     expect(hub.retry()).toBeUndefined()
+  })
+})
+
+describe('forPhone', () => {
+  it('drops a tool’s full command and the pictures of tool and text items (they are files of this Mac), and leaves the rest as it is', () => {
+    const tool: ChatItem = { kind: 'tool', id: 't', at: 0, name: 'Bash', arg: 'ls', state: 'ok', input: 'ls -la', images: ['/a.png'] }
+    const text: ChatItem = { kind: 'text', id: 'x', at: 0, text: 'hi', images: ['/b.png'] }
+    const user: ChatItem = { kind: 'user', id: 'u', at: 0, text: 'hey', images: 1, attachments: ['/c.png'] }
+    const plain: ChatItem = { kind: 'text', id: 'p', at: 0, text: 'plain' }
+    const out = forPhone([tool, text, user, plain])
+    expect(out[0]).toEqual({ kind: 'tool', id: 't', at: 0, name: 'Bash', arg: 'ls', state: 'ok' })
+    expect(out[1]).toEqual({ kind: 'text', id: 'x', at: 0, text: 'hi' })
+    expect(out[2]).toBe(user)
+    expect(out[3]).toBe(plain)
   })
 })

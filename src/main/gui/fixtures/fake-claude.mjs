@@ -12,9 +12,11 @@
 // `get_settings` says ultracode can be on and `apply_flag_settings` turns it on or off. With
 // CLAUDE_CONFIG_DIR set it writes its messages to a transcript there like the real CLI (`uuid` / `parentUuid`, a
 // `--resume-session-at` resume hangs the next message under that message). `--version` answers as Claude Code 2.1.318.
+// "shoot" calls an MCP screenshot tool whose result carries a 1600×1000 PNG (a tool that returns a picture, Figma 112F).
 import { spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { crc32, deflateSync } from 'node:zlib'
 
 const SESSION = 'fake-claude-session'
 const args = process.argv.slice(2)
@@ -69,6 +71,26 @@ function startTurn(text) {
   }, 1200)
 }
 
+/** A PNG of vertical stripes, as base64: big enough that the preview fits it to the window. */
+function stripedPng(width, height) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data])
+    const head = Buffer.alloc(4)
+    head.writeUInt32BE(data.length)
+    const tail = Buffer.alloc(4)
+    tail.writeUInt32BE(crc32(body))
+    return Buffer.concat([head, body, tail])
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr.set([8, 2, 0, 0, 0], 8)
+  const row = Buffer.alloc(1 + width * 3)
+  for (let x = 0; x < width; x++) row.set(Math.floor(x / 100) % 2 === 0 ? [47, 111, 214] : [236, 239, 244], 1 + x * 3)
+  const raw = Buffer.concat(Array.from({ length: height }, () => row))
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]).toString('base64')
+}
+
 function reply(text) {
   out({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }, session_id: SESSION })
   out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hel' } }, session_id: SESSION })
@@ -96,6 +118,16 @@ function reply(text) {
       out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: printed, is_error: r.status !== 0 }] }, session_id: SESSION, parent_tool_use_id: null })
     })
     return finish({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '两个会话做完会报告回来，这一轮先到这里。' }] }, session_id: SESSION, parent_tool_use_id: null })
+  }
+  if (text.includes('shoot')) {
+    const id = `tu-shot-${++tools}`
+    out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'mcp__figma__get_screenshot', input: { nodeId: '1:2' } }] }, session_id: SESSION, parent_tool_use_id: null })
+    const content = [
+      { type: 'text', text: 'node 1:2' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: stripedPng(1600, 1000) } }
+    ]
+    out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content }] }, session_id: SESSION, parent_tool_use_id: null })
+    return finish({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '截图在上面。' }] }, session_id: SESSION, parent_tool_use_id: null })
   }
   if (text.includes('colors')) {
     // A command with colored output and a reply in rich Markdown (Figma 59J's tool rows and type scale).

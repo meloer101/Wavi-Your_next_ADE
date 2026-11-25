@@ -1,4 +1,4 @@
-// The dot grid's hover glow (PRD F9 v1.246 · Figma 115A4): the maths, apart from the canvas that draws it.
+// The dot grid's hover glow (PRD F9 v1.249 · Figma 115A4): the maths, apart from the canvas that draws it.
 //
 // The author's complaint was that the glow had no transition (「鼠标交互不是很有过渡」). So nothing here switches: the glow's
 // strength moves toward 0 or 1 by exponential smoothing every frame (in ≈ 120 ms, out ≈ 400 ms), its centre follows

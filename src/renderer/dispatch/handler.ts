@@ -217,7 +217,7 @@ async function start(caller: Place, request: DispatchRequest, command: Extract<W
   const depth = depthOf(caller.session)
   const refusal = startRefusal({ depth, toolsOn: settings.tools, ...load(caller), task: command.task })
   if (refusal) return refusal
-  // `--task`: the card must be this session's to hand out (PRD F21 v1.246).
+  // `--task`: the card must be this session's to hand out (PRD F21 v1.249).
   let card: Task | undefined
   if (command.card !== undefined) {
     const found = planRunCard(await window.tr.tasks.list(), taskCaller(caller, depth, isLeaderSession(caller.session.id)), command.card, (id) => placeOf(id) !== null)
@@ -241,7 +241,7 @@ async function startNow(
 ): Promise<WaviResult> {
   const callId = request.callId
   const waiting = useDispatch.getState().confirms.flatMap((c) => (c.kind === 'start' ? [c] : []))
-  // In parallel: `wavi` waits 5 s for the whole answer (PRD F21 接口). A card is the user's own approval (v1.246).
+  // In parallel: `wavi` waits 5 s for the whole answer (PRD F21 接口). A card is the user's own approval (v1.249).
   const autoStart = settings.autoApprove || depth >= 1 || card !== undefined
   const [installed, info, uncommitted] = await Promise.all([
     window.tr.app.detectAgents(),

@@ -1,4 +1,4 @@
-// 看板 · 任务 (PRD F9 v1.246, Figma 115A4 / 115A4′ / 115A4b) against main's real task handlers (`src/main/tasks`, stored in
+// 看板 · 任务 (PRD F9 v1.249, Figma 115A4 / 115A4′ / 115A4b) against main's real task handlers (`src/main/tasks`, stored in
 // `<userData>/tasks.json`): open the tab, paste a card with 贴一张 (N), zoom with ⌘-scroll, keep it across a reload, remove
 // a parent with its children, and draw a seeded board in both themes at 100 % and 50 %. Cards are made through
 // `window.tr.tasks`; every test starts from an empty board and finds notes by the id `create` returned. Screenshots go

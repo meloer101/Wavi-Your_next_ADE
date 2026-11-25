@@ -228,7 +228,7 @@ export type WaviBase = 'head' | 'snapshot'
 
 export type WaviCommand =
   /** `ui`: `--ui`, when given (else the child opens as its dispatcher does, `childUi`). */
-  /** `card`: `--task <seq>`, the 任务看板 card the session is bound to (PRD F21 v1.246). */
+  /** `card`: `--task <seq>`, the 任务看板 card the session is bound to (PRD F21 v1.249). */
   | { name: 'run'; agent: DispatchAgent; task: string; title?: string; model?: string; base: WaviBase; ui?: SessionUi; card?: number }
   | { name: 'send'; id: string; text: string }
   | { name: 'report'; text: string }
@@ -244,7 +244,7 @@ export type WaviCommand =
   | { name: 'schedule'; text: string; when: WaviWhen; title?: string; agent?: CliAgent }
   | { name: 'schedules' }
   | { name: 'unschedule'; id: string }
-  /** 任务看板 (PRD F21 v1.246): cards are addressed by their `seq`. */
+  /** 任务看板 (PRD F21 v1.249): cards are addressed by their `seq`. */
   | { name: 'task-add'; title: string; parent?: number; body?: string }
   | { name: 'task-update'; seq: number; title?: string; note?: string; done?: true; cancel?: true }
   | { name: 'task-ls'; all?: true }
@@ -851,7 +851,7 @@ export function childBrief(input: {
   snapshot: boolean
   /** The dispatcher is its project's leader (PRD F21 v1.198 · 问题): questions go in the reply, not a question tool. */
   leader?: boolean
-  /** The 任务看板 card this session is bound to (`wavi run --task`, PRD F21 v1.246). */
+  /** The 任务看板 card this session is bound to (`wavi run --task`, PRD F21 v1.249). */
   card?: { seq: number; title: string }
 }): string {
   const m = pick(M)

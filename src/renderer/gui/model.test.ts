@@ -7,6 +7,10 @@ import {
   composerKey,
   feedBlocks,
   flightOf,
+  galleryOf,
+  markdownImageKey,
+  markdownImagePath,
+  markdownImageSources,
   foldsMessage,
   permissionBody,
   permissionButtons,
@@ -805,5 +809,58 @@ describe('modelFamilies', () => {
 
   it('returns nothing for an empty list', () => {
     expect(modelFamilies([])).toEqual([])
+  })
+})
+
+describe('the pictures of a session (Figma 112F / 112G)', () => {
+  it('lists them in feed order, titled by where they come from, markdown ones before a text’s own', () => {
+    const items: ChatItem[] = [
+      { kind: 'user', id: 'u1', at: 0, text: '看图', images: 2, attachments: ['/tmp/sent-a.png', '/tmp/sent-b.jpg'] },
+      tool('t1', { name: 'ViewImage', arg: 'docs/a.png', images: ['/repo/docs/a.png'] }),
+      tool('t2', { name: 'get_screenshot', arg: '登录页 localhost:3000/login', images: ['/tmp/sent-c.png', '/tmp/sent-c2.png'] }),
+      tool('t3'),
+      { kind: 'text', id: 'x1', at: 0, text: '对比：\n![前](shots/before.png) 和 ![后](/abs/after.webp) ![远](https://x/y.png)', images: ['/tmp/sent-d.png'] }
+    ]
+    const gallery = galleryOf(items, '/repo')
+    expect(gallery.map((g) => g.path)).toEqual(['/tmp/sent-a.png', '/tmp/sent-b.jpg', '/repo/docs/a.png', '/tmp/sent-c.png', '/tmp/sent-c2.png', '/repo/shots/before.png', '/abs/after.webp', '/tmp/sent-d.png'])
+    expect(gallery.map((g) => g.title)).toEqual(['sent-a.png', 'sent-b.jpg', '查看图片 · docs/a.png', 'get_screenshot · 登录页 localhost:3000/login', 'get_screenshot · 登录页 localhost:3000/login', 'shots/before.png', '/abs/after.webp', 'sent-d.png'])
+    expect(new Set(gallery.map((g) => g.key)).size).toBe(gallery.length)
+    expect(galleryOf([], '/repo')).toEqual([])
+  })
+
+  it('reads the file a Markdown picture names: absolute, file:// or relative to the session folder; nothing remote or of another type', () => {
+    expect(markdownImagePath('/a/b.png', '/repo')).toBe('/a/b.png')
+    expect(markdownImagePath('file:///a/b%20c.JPG', undefined)).toBe('/a/b c.JPG')
+    expect(markdownImagePath('./out/../shots/x.gif', '/repo/')).toBe('/repo/shots/x.gif')
+    expect(markdownImagePath('shots/x%201.webp', '/repo')).toBe('/repo/shots/x 1.webp')
+    expect(markdownImagePath('shots/x.png', undefined)).toBeNull()
+    expect(markdownImagePath('https://x/y.png', '/repo')).toBeNull()
+    expect(markdownImagePath('data:image/png;base64,AAAA', '/repo')).toBeNull()
+    expect(markdownImagePath('/a/b.svg', '/repo')).toBeNull()
+    expect(markdownImagePath('/a/b.png?raw=1', '/repo')).toBe('/a/b.png')
+  })
+
+  it('keys a Markdown picture by its file, so the percent-encoded src the renderer gets finds its entry; non-pictures stay out', () => {
+    const items: ChatItem[] = [
+      { kind: 'user', id: 'u1', at: 0, text: 'x', images: 2, attachments: ['/tmp/notes.md', '/tmp/sent-a.png'] },
+      { kind: 'text', id: 'x1', at: 0, text: '![a](截图.png) ![b](<a b.png>) ![c](/a%20b.png) plain' },
+      { kind: 'text', id: 'x2', at: 0, text: 'no pictures here' }
+    ]
+    const gallery = galleryOf(items, '/repo')
+    // The user's picture keeps its place in the item (1), the markdown file is left out; a b.png is one picture.
+    expect(gallery.map((g) => [g.key, g.path])).toEqual([
+      ['u1:1', '/tmp/sent-a.png'],
+      ['x1:md:/repo/截图.png', '/repo/截图.png'],
+      ['x1:md:/repo/a b.png', '/repo/a b.png'],
+      ['x1:md:/a b.png', '/a b.png']
+    ])
+    // What react-markdown hands `img` is encoded; its path resolves to the same key.
+    expect(markdownImageKey('x1', markdownImagePath('%E6%88%AA%E5%9B%BE.png', '/repo')!)).toBe(gallery[1]!.key)
+    expect(markdownImageKey('x1', markdownImagePath('a%20b.png', '/repo')!)).toBe(gallery[2]!.key)
+  })
+
+  it('finds the pictures a text writes, once each and not inside code blocks', () => {
+    const text = '![a](x.png) and ![b](<y z.png> "title") ![a](x.png)\n```md\n![c](code.png)\n```\n'
+    expect(markdownImageSources(text)).toEqual(['x.png', 'y z.png'])
   })
 })

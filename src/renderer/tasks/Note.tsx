@@ -1,4 +1,4 @@
-// A card on the board (PRD F9 v1.246 · Figma 115A4 / 115A4b): a note at 100 %, a one-line chip when zoomed out, a dot
+// A card on the board (PRD F9 v1.249 · Figma 115A4 / 115A4b): a note at 100 %, a one-line chip when zoomed out, a dot
 // when far out. Status is the glyph's shape and the words, never only the colour; the agent's mark is a pin on the top
 // edge, so a card nobody took has no pin.
 import { memo, type CSSProperties } from 'react'

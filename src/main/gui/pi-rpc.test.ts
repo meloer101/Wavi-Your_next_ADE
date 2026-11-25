@@ -47,6 +47,24 @@ describe('the stream', () => {
     expect(state.items[0]).toMatchObject({ kind: 'user', text: '看图', images: 1, attachments: ['/kept/AAAA.jpeg'] })
   })
 
+  it('keeps the pictures a tool returns as files (Figma 112F; pi-ai ImageContent { type, data, mimeType })', () => {
+    const keep = (image: { mediaType: string; data: string }): string => `/kept/${image.data}.${image.mediaType.slice(6)}`
+    const n = createPiNormalizer('/w', () => 1000, keep)
+    const result = { content: [{ type: 'text', text: 'Read image file [image/png]' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }] }
+    const state = fold([...n.event({ type: 'tool_execution_start', toolCallId: 'r', toolName: 'read', args: { path: 'a.png' } }), ...n.event({ type: 'tool_execution_end', toolCallId: 'r', toolName: 'read', result, isError: false })])
+    expect(state.items[0]).toMatchObject({ kind: 'tool', name: 'Read', state: 'ok', images: ['/kept/AAAA.png'] })
+    const history = piHistoryItems(
+      [
+        { role: 'assistant', timestamp: 1, content: [{ type: 'toolCall', id: 'c', name: 'read', arguments: { path: 'a.png' } }] },
+        { role: 'toolResult', toolCallId: 'c', isError: false, content: result.content }
+      ],
+      '/w',
+      keep
+    )
+    expect(history[0]).toMatchObject({ kind: 'tool', images: ['/kept/AAAA.png'] })
+    expect(piHistoryItems([{ role: 'toolResult', toolCallId: 'c', content: result.content }], '/w')).toEqual([])
+  })
+
   it('streams text, folds it into an item, draws a bash row from start to end and ends the turn on agent_end', () => {
     const n = createPiNormalizer('/w', () => 1000)
     const events = [

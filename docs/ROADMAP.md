@@ -8,8 +8,11 @@
 
 ## 当前位置
 
-- 2026-11-25：任务看板（PRD v1.246，Figma 115A4）开工：设计定稿；共享契约 `src/shared/task-board.ts`、`TrApi.tasks`（`TaskApi`，preload 已接）已提交，纯逻辑 19 个单测通过；基线 `npm run check` 改动前通过（304 个测试文件、4089 个用例）。下面「进行中：任务看板」是剩下的步骤。
+- 2026-11-25：任务看板（PRD v1.249，Figma 115A4）开工：设计定稿；共享契约 `src/shared/task-board.ts`、`TrApi.tasks`（`TaskApi`，preload 已接）已提交，纯逻辑 19 个单测通过；基线 `npm run check` 改动前通过（304 个测试文件、4089 个用例）。下面「进行中：任务看板」是剩下的步骤。
+- 2026-11-25：GUI 对话显示 agent 回传的图片、所有缩略图点开预览（PRD v1.246，Figma 112F–112H）已做完：Claude / Codex（app-server 与 rollout）/ Pi / ACP 的工具结果和消息里的图片存成 `sent-<哈希>` 文件，`tool` / `text` 条目多 `images`（`src/shared/transcript-chat.ts`，手机不发）；工具行下方 120 高缩略图（折叠时也显示）、正文 markdown 本地图片；预览层 `src/renderer/gui/ImagePreview.tsx`（本会话图片一组，缩放平移、在 Finder 中显示、复制图片 `ui.copyImage`，⎋ 只关预览）。已验证：单测、typecheck、lint、`e2e/gui-session.spec.ts` 新增用例；未验证：真机按 ⌘= 时 View 菜单的字号加速键是否抢先于预览。
 - 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
+- 2026-11-25：全屏且侧栏折叠时，会话头的折叠按钮图标对齐终端文字（PRD v1.248，`session-header/SessionHeader.*`）已做完。真实 app 里还没看过。
+- 2026-11-25：侧栏会话行固定两行（标题行 + 分支行），行距 4px，时间不写 ago / 前，`needs_you` 改给分支行上色（PRD v1.247，`sidebar/SessionRow.*`、`format-elapsed.ts`）已做完。真实 app 里还没看过。
 - 2026-11-25：协作队伍默认折叠（PRD v1.243，Figma 111 / 111′）三步都做完：侧栏（`src/shared/session-group.ts`、`sidebar/FoldRow.tsx`，选中底色罩住整组，`expandedGroups`）、看板卡片的成员摘要（`overview/CardMembers.tsx`）、手机（`RemoteSession.parentId` / `group`，会话列表和看板）。手机端只在测试宿主里看过截图，没连着真 Mac 用过；`e2e/overview.spec.ts` 的 :78 / :175 在机器负载高时会失败（改动前后都一样），没有处理。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
@@ -503,7 +506,7 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
   - [x] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线（2026-11-22）：`ios/Wavi/App/WaviApp.swift`（标签栏、两个栈、记住的页签）、`App/Orientation.swift`（只有进度能横屏）、`Model/Board.swift`（分组和卡片色、检查行、横屏第三行、GitHub 列表和详情、旧 Mac）、`Views/BoardView.swift`、`Views/GitHubItemView.swift`、`Views/NewSessionView.swift`（任务模式）、`Views/Theme.swift`（`card-*`、卡片圆角）、`Model/AppModel.swift`（每次请求的超时）、`project.yml`（横屏）；`src/main/remote/phone-assets.test.ts` 加 15 个 `card-*` 颜色和 7 个图标，重生成 `ios/Wavi/Resources/Shared.json` 和 `ios/Wavi/Assets.xcassets/Icons`。单测 `WaviTests/BoardTests.swift`（分组顺序、颜色、横屏第三行、旧 Mac、GitHub 列表和详情），截图 `WaviTests/BoardShots.swift` → `test-results/board/`（进度竖排 / 横排、GitHub 列表、issue / PR 详情、交给 agent、gh 没登录、离线，深浅各一）。真机上还没看过
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
 
-## 进行中：任务看板（2026-11-25 定，PRD v1.246）
+## 进行中：任务看板（2026-11-25 定，PRD v1.249）
 
 - [x] 设计：Figma 第 114 / 115 节，定稿 115A4；PRD v1.246
 - [x] 共享契约：`src/shared/task-board.ts`（类型、`taskState`、树、校验、文件解析）、`TrApi.tasks`、preload

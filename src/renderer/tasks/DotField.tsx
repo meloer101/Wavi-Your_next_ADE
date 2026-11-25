@@ -1,4 +1,4 @@
-// The board's dot grid (PRD F9 v1.246 · Figma 115A4): one <canvas> behind the cards, 10 px apart in world space so it
+// The board's dot grid (PRD F9 v1.249 · Figma 115A4): one <canvas> behind the cards, 10 px apart in world space so it
 // pans and zooms with the board, black or white only (the text colour), a small glow where the pointer is.
 //
 // It draws only when something changed: the viewport moved, or the glow is still easing. At rest no frame is asked for,

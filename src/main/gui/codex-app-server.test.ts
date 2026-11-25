@@ -157,6 +157,26 @@ describe('createCodexNormalizer', () => {
     expect(s.items[2]).toMatchObject({ kind: 'tool', name: 'lookup', state: 'error', output: 'no such key' })
   })
 
+  // Shapes from the generated schema (`codex app-server generate-json-schema`, codex-cli 0.167.0): McpToolCallResult.content
+  // is MCP content (`{ type: 'image', data, mimeType }`), a dynamic tool's contentItems `{ type: 'inputImage', imageUrl }`,
+  // `imageView` is `{ id, path }`, `imageGeneration` has `savedPath` and `revisedPrompt`. Not run against a real Codex.
+  it('keeps the pictures of an MCP result, a dynamic tool, an image view and a generated image as files (Figma 112F)', () => {
+    const n = createCodexNormalizer('/repo', () => 0, (image) => `/kept/${image.data}.${image.mediaType.slice(6)}`)
+    const s = fold([
+      ...n.notification('item/completed', { item: { type: 'mcpToolCall', id: 'm1', server: 'figma', tool: 'get_screenshot', status: 'completed', result: { content: [{ type: 'text', text: 'node' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }] }, error: null } }),
+      ...n.notification('item/completed', { item: { type: 'dynamicToolCall', id: 'd1', tool: 'shot', status: 'completed', success: true, contentItems: [{ type: 'inputImage', imageUrl: 'data:image/jpeg;base64,BBBB' }, { type: 'inputImage', imageUrl: 'https://x/y.png' }] } }),
+      ...n.notification('item/completed', { item: { type: 'imageView', id: 'v1', path: '/repo/docs/a.png' } }),
+      ...n.notification('item/completed', { item: { type: 'imageGeneration', id: 'g1', status: 'completed', revisedPrompt: 'a red fox', savedPath: '/Users/m/.codex/generated_images/g1.png', failure: null, inputImages: [] } }),
+      ...n.notification('item/completed', { item: { type: 'imageGeneration', id: 'g2', status: 'failed', revisedPrompt: null, savedPath: null, failure: { message: 'no' }, inputImages: [] } })
+    ])
+    expect(s.items[0]).toMatchObject({ name: 'get_screenshot', output: 'node', images: ['/kept/AAAA.png'] })
+    expect(s.items[1]).toMatchObject({ name: 'shot', images: ['/kept/BBBB.jpeg'] })
+    expect(s.items[2]).toMatchObject({ name: 'ViewImage', arg: 'docs/a.png', state: 'ok', images: ['/repo/docs/a.png'] })
+    expect(s.items[3]).toMatchObject({ name: 'ImageGeneration', arg: 'a red fox', images: ['/Users/m/.codex/generated_images/g1.png'] })
+    expect(s.items[4]).toMatchObject({ name: 'ImageGeneration', state: 'error' })
+    expect(s.items[4]).not.toHaveProperty('images')
+  })
+
   // Field names from the generated types (v2/ThreadItem.ts `collabAgentToolCall`, codex 0.166.0); not run against a
   // real Codex spawning an agent.
   it('shows a collab agent call as one 子 agent row: its prompt, status and duration', () => {

@@ -5,7 +5,7 @@ import type { SessionId } from '@shared/types'
 import { useWorkspace } from '../state/workspace'
 import { addToLayout, layoutIds, MAX_PANES, PICKER_SLOT, removeFromLayout, replaceInLayout, singleLayout, type PaneLayout, type Rect } from './pane-layout'
 
-/** 进度: the sessions by status (the board); 任务: the task notes on an infinite canvas (v1.246); GitHub: each project's open issues and PRs (v1.184). */
+/** 进度: the sessions by status (the board); 任务: the task notes on an infinite canvas (v1.249); GitHub: each project's open issues and PRs (v1.184). */
 export type BoardTab = 'progress' | 'tasks' | 'github'
 
 const PREFS_KEY = 'tr.overview.v1'

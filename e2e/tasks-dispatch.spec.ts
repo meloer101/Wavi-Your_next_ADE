@@ -1,4 +1,4 @@
-// 任务看板 end to end (PRD F9 / F21 v1.246) through real processes: a card the user pastes (`window.tr.tasks.create`, what
+// 任务看板 end to end (PRD F9 / F21 v1.249) through real processes: a card the user pastes (`window.tr.tasks.create`, what
 // the board's 「贴一张」 does) reaches the project's leader once; the leader and other sessions run `wavi task …` and
 // `wavi run … --task` in their own shells (the same fake `claude` as e2e/dispatch.spec.ts), and every assertion reads
 // main's store through `window.tr.tasks.list()`, not the canvas. Fake agents only, no model.

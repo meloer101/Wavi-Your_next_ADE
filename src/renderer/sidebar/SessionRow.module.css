@@ -1,16 +1,17 @@
 /*
- * Figma 34P SessionRow — lines of 20 (title) and 18 (the text tokens' line heights, PRD v1.236), 2 apart, padding 6/8. The status glyph hangs in a 16px column,
+ * Figma 34P SessionRow — two lines of 20 (title) and 18 (the text tokens' line heights, PRD v1.236), --row-gap apart, padding 6/8. The status glyph hangs in a 16px column,
  * so every line's text starts on the sidebar's text line (--indent-tree: 8 + 16 + 8), where the nav labels and project
- * names start too. selected = --bg-selected; attention recolors the activity line only.
+ * names start too. selected = --bg-selected; attention recolors the branch line only.
  */
 .row {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--row-gap);
   width: 100%;
   /* Where the text starts in this row; the todo line (SessionMeta.module.css) starts there too. */
   --row-text-inset: var(--indent-tree);
+  --row-gap: var(--space-4);
   /* Centre of the glyph column its dispatcher's line runs down (Figma 40C / 44B). */
   --row-line-x: var(--space-16);
   padding: var(--space-6) var(--space-8) var(--space-6) var(--row-text-inset);
@@ -52,14 +53,14 @@
 }
 
 .row[data-tree='parent']::after {
-  top: calc(var(--space-6) + 18px + var(--space-2));
-  bottom: calc(-1 * var(--space-2));
+  top: calc(var(--space-6) + 18px + var(--row-gap));
+  bottom: calc(-1 * var(--row-gap));
   border-left: 1px solid var(--border-default);
 }
 
 .row[data-tree='child']::after {
   top: 0;
-  bottom: calc(-1 * var(--space-2));
+  bottom: calc(-1 * var(--row-gap));
   border-left: 1px solid var(--border-default);
 }
 
@@ -85,8 +86,8 @@
 .opens {
   position: absolute;
   left: calc(var(--space-32) - 0.5px);
-  top: calc(var(--space-6) + 18px + var(--space-2));
-  bottom: calc(-1 * var(--space-2));
+  top: calc(var(--space-6) + 18px + var(--row-gap));
+  bottom: calc(-1 * var(--row-gap));
   border-left: 1px solid var(--border-default);
   pointer-events: none;
 }
@@ -96,7 +97,7 @@
   position: absolute;
   left: calc(var(--space-16) - 0.5px);
   top: 0;
-  bottom: calc(-1 * var(--space-2));
+  bottom: calc(-1 * var(--row-gap));
   border-left: 1px solid var(--border-default);
   pointer-events: none;
 }
@@ -160,7 +161,6 @@
 
 /* Text takes what it needs; tags follow it, and the time or mark is pushed to the right edge. */
 .title,
-.activity,
 .branch {
   flex: 0 1 auto;
   min-width: 0;
@@ -174,18 +174,13 @@
   color: var(--text-primary);
 }
 
-.activity {
-  font: var(--text-caption);
-  color: var(--text-secondary);
-}
-
-.row[data-attention='true'] .activity {
-  color: var(--status-attention);
-}
-
 .branch {
   font: var(--text-caption);
   color: var(--text-tertiary);
+}
+
+.row[data-attention='true'] .branch {
+  color: var(--status-attention);
 }
 
 .time {

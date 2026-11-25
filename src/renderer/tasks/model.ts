@@ -1,4 +1,4 @@
-// 任务 board's pure model (PRD F9 v1.246): a card is a task joined with the session it is bound to, and the 「动态」
+// 任务 board's pure model (PRD F9 v1.249): a card is a task joined with the session it is bound to, and the 「动态」
 // panel's events are what changed between two looks at the board.
 import { taskState, type Task, type TaskId, type TaskState } from '@shared/task-board'
 import type { Session } from '@shared/types'

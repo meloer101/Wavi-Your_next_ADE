@@ -529,7 +529,7 @@ describe('leader session (PRD F21 v1.198)', () => {
   })
 })
 
-describe('wavi task and wavi run --task (PRD F21 v1.246)', () => {
+describe('wavi task and wavi run --task (PRD F21 v1.249)', () => {
   const command = (...argv: string[]) => {
     const args = parseWaviArgv(argv)
     return args.kind === 'command' ? parseWaviCommand(args.command) : args

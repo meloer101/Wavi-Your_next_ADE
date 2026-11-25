@@ -1,4 +1,4 @@
-// 任务 board's state (PRD F9 v1.246): the cards main holds, the viewport, what is selected and the 「动态」 log.
+// 任务 board's state (PRD F9 v1.249): the cards main holds, the viewport, what is selected and the 「动态」 log.
 //
 // Main is the only writer of tasks (src/main/tasks); this store reads `window.tr.tasks.list()` once and takes every
 // `onChanged` after it. The viewport is a per-device convenience kept in localStorage, losing it is harmless. The log

@@ -1,4 +1,4 @@
-// 「任务」 (PRD F9 v1.246 · Figma 115A4): every project's cards on one infinite canvas. Drag empty canvas (or hold Space
+// 「任务」 (PRD F9 v1.249 · Figma 115A4): every project's cards on one infinite canvas. Drag empty canvas (or hold Space
 // and drag), or scroll with two fingers, to pan; ⌘-scroll and pinch zoom around the pointer. Notes shrink to chips and
 // dots as it zooms out. Layout and viewport maths are in layout.ts, the dot grid in DotField.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'

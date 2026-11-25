@@ -1,4 +1,4 @@
-// `wavi task …` and `wavi run --task` in a window (PRD F21 v1.246): which cards a session may touch, and what the agent
+// `wavi task …` and `wavi run --task` in a window (PRD F21 v1.249): which cards a session may touch, and what the agent
 // is told. The cards live in main (`window.tr.tasks`, one writer); this file only decides and words. The rules are
 // pure functions of the card list and the caller, tested without a window.
 import { waviFail, waviOk, DISPATCH_LIMITS, type WaviCommand, type WaviResult } from '@shared/dispatch'

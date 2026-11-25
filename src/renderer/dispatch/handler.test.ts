@@ -383,7 +383,7 @@ describe('wavi for a project’s leader (PRD F21 v1.198)', () => {
   })
 })
 
-describe('wavi task and --task in a window (PRD F21 v1.246)', () => {
+describe('wavi task and --task in a window (PRD F21 v1.249)', () => {
   let board: Task[] = []
   const update = vi.fn(async (id: string, patch: Partial<Task>) => {
     const at = board.findIndex((t) => t.id === id)

@@ -117,7 +117,12 @@ const api: TrApi = {
     onWindowState: (listener) => listen(IPC.uiWindowState, listener),
     onFullScreen: (listener) => listen(IPC.uiFullScreen, listener),
     confirm: (options) => ipcRenderer.invoke(IPC.uiConfirm, options),
-    revealInFinder: (path) => ipcRenderer.send(IPC.uiRevealInFinder, path)
+    revealInFinder: (path) => ipcRenderer.send(IPC.uiRevealInFinder, path),
+    copyImage: (path) => ipcRenderer.invoke(IPC.uiCopyImage, path),
+    setImagePreviewOpen: (open) => ipcRenderer.send(IPC.uiSetImagePreviewOpen, open),
+    onImageZoom: (listener) => listen(IPC.uiImageZoom, (action: unknown) => {
+      if (action === 'in' || action === 'out' || action === 'fit') listener(action)
+    })
   },
   agent: {
     onEvent: (listener) => listen(IPC.agentEvent, listener),

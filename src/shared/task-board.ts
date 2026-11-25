@@ -1,4 +1,4 @@
-// 任务看板 (PRD F9 v1.246 · F21 `wavi task`): persistent task cards ("便利贴") a user pastes on the board and agents
+// 任务看板 (PRD F9 v1.249 · F21 `wavi task`): persistent task cards ("便利贴") a user pastes on the board and agents
 // split into sub-cards. Pure types and logic shared by main (the single writer, src/main/tasks) and the renderer
 // (src/renderer/tasks). No Electron, no node built-ins.
 //

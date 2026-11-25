@@ -1,4 +1,4 @@
-// 任务看板's store (PRD F9 v1.246): main is the only writer of `<userData>/tasks.json`. Windows and `wavi task` read and
+// 任务看板's store (PRD F9 v1.249): main is the only writer of `<userData>/tasks.json`. Windows and `wavi task` read and
 // change cards through it (IPC), so two writers never overwrite each other. No Electron imports: unit-tested with a
 // fake clock and ids.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'

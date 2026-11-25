@@ -1,4 +1,4 @@
-// 任务 board layout (PRD F9 v1.246 · Figma 115A4 / 115A4b): pure maths, no React, no DOM.
+// 任务 board layout (PRD F9 v1.249 · Figma 115A4 / 115A4b): pure maths, no React, no DOM.
 //
 // Three things live here: where each card goes (a tidy tree per project, the projects packed on one canvas), how the
 // viewport (pan + zoom) moves, and which drawing a zoom level gets (note → chip → dot).
