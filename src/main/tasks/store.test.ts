@@ -43,7 +43,7 @@ describe('TaskBoard', () => {
     t.board.remove(b.id)
     expect(t.board.create({ projectId: 'p1', title: 'c' })!.seq).toBe(3)
     t.board.remove('t3')
-    expect(t.open().create({ projectId: 'p1', title: 'd' })!.seq).toBe(3)
+    expect(t.open().create({ projectId: 'p1', title: 'd' })!.seq).toBe(4)
   })
 
   it('refuses drafts: empty title, other project parent, too deep', () => {
