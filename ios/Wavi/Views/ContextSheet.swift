@@ -1,4 +1,5 @@
-// The context ring and its sheet (PRD F22 v1.230 ④, Figma 104C1–104C3; the desktop's is ContextButton.tsx, Figma 52F / 52G).
+// The context ring and its sheet (PRD F22 v1.230 ④, Figma 104C1 / 104C2; the sheet since v1.232 is Figma 108; the desktop's is
+// ContextButton.tsx, Figma 52F / 52G).
 // A 16 pt ring at the right end of the 会话设置 row says how full the session's context window is; at the point where the
 // agent itself starts warning (`high`, decided on the Mac) it is drawn in the text colour with the percent beside it.
 // Tapping it opens the window's figures, the agent vendor's plan windows, and, when `high`, 「放进 /compact」, which puts
@@ -79,6 +80,17 @@ func planUsage(for session: RemoteSession, in list: RemoteSessionList) -> Remote
   return list.usage?.first { $0.vendor == vendor }
 }
 
+/// The plan windows the phone shows: those for the whole plan (5 小时, 7 天). The ones that belong to one model
+/// (`scope`, such as 7 天 · Sonnet) stay on the Mac (PRD v1.232).
+func shownWindows(_ usage: RemoteVendorUsage) -> [RemoteVendorUsage.Window] { usage.windows.filter { $0.scope == nil } }
+
+/// How many ticks of a 40-tick gauge are filled for `percent`, and which tick is the compaction point (`mark`, a percent;
+/// nil when the agent's is not known). Both are clamped to the gauge: the mark is at most the last tick.
+func tickMarks(percent: Double, mark: Double?, count: Int = 40) -> (filled: Int, mark: Int?) {
+  func tick(_ value: Double) -> Int { Int((min(100, max(0, value)) / 100 * Double(count)).rounded()) }
+  return (tick(percent), mark.map { min(count - 1, tick($0)) })
+}
+
 /// What the composer's text becomes when something is put into it: replaces an empty draft, goes on a new line under a
 /// draft that has words.
 func inserting(_ command: String, into draft: String) -> String {
@@ -129,7 +141,7 @@ struct ContextRing: View {
   }
 }
 
-// MARK: - The sheet (104C3)
+// MARK: - The sheet (108)
 
 /// The sheet over a session: the figures come from the model's list, and 「放进 /compact」 hands the command to the
 /// composer through the model.
@@ -155,100 +167,106 @@ struct ContextSheet: View {
   }
 }
 
-/// The sheet's content with everything it shows passed in (the shots draw it without a model).
+/// The sheet's content with everything it shows passed in (the shots draw it without a model). The system's glass is the
+/// sheet's background, and its height is the content's (Figma 108).
 struct ContextSheetContent: View {
   let context: RemoteContext
   let agent: String
   let usage: RemoteVendorUsage?
   let now: Double
   let compact: () -> Void
+  @State private var height: CGFloat = 360
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    let windows = usage.map(shownWindows) ?? []
+    VStack(alignment: .leading, spacing: 24) {
       figures
-      if let usage, !usage.windows.isEmpty {
-        Rectangle().fill(Color.hairline).frame(height: 1)
-        vendor(usage)
-      }
-      Spacer(minLength: 0)
+      if let usage, !windows.isEmpty { vendor(usage, windows) }
       if context.high {
-        Button(action: compact) { Text("放进 /compact") }.buttonStyle(WaviButtonStyle())
+        Button(action: compact) { Text("放进 /compact") }.buttonStyle(WaviButtonStyle(primary: true))
       }
     }
     .padding(.horizontal, 20)
-    .padding(.top, 28)
-    .padding(.bottom, 12)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .presentationDetents([.medium])
+    // The system's grabber sits in the first 40 points.
+    .padding(.top, 40)
+    .padding(.bottom, 20)
+    .frame(maxWidth: .infinity, alignment: .topLeading)
+    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+    .presentationDetents([.height(height)])
     .presentationDragIndicator(.visible)
-    .presentationBackground(Color.bgSheet.opacity(0.9))
   }
 
   private var figures: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        if let title = contextTitle(context) {
-          Text(title).font(.ui(.title2, medium: true)).foregroundStyle(Color.textPrimary)
-          Text(percentText(context.percent)).font(.ui(.callout)).foregroundStyle(Color.textSecondary)
-        } else {
-          Text(percentText(context.percent)).font(.ui(.title2, medium: true)).foregroundStyle(Color.textPrimary)
-        }
+    let ticks = tickMarks(percent: context.percent, mark: context.markPercent)
+    return VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 8) {
+        Text("上下文").foregroundStyle(Color.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
+        Text(percentText(context.percent)).font(.ui(.footnote, medium: context.high)).monospacedDigit()
+          .foregroundStyle(context.high ? Color.textPrimary : Color.textSecondary)
       }
-      .accessibilityElement(children: .combine)
-      Meter(percent: context.percent, mark: context.markPercent, height: 4, markHeight: 8, tickOnFill: Color.bgSheet)
+      .font(.ui(.footnote))
+      VStack(alignment: .leading, spacing: 16) {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
+          if let used = context.usedTokens, let window = context.windowTokens {
+            Text(tokenText(used)).font(.fixed(40, medium: true)).foregroundStyle(Color.textPrimary)
+            Text("/ \(tokenText(window))").font(.fixed(20)).foregroundStyle(Color.textSecondary)
+          } else {
+            Text(percentText(context.percent)).font(.fixed(40, medium: true)).foregroundStyle(Color.textPrimary)
+          }
+        }
+        .monospacedDigit()
+        TickGauge(filled: ticks.filled, mark: ticks.mark, tickHeight: 18)
+      }
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("上下文")
+    .accessibilityValue([contextTitle(context), percentText(context.percent)].compactMap { $0 }.joined(separator: " · "))
   }
 
-  private func vendor(_ usage: RemoteVendorUsage) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
+  private func vendor(_ usage: RemoteVendorUsage, _ windows: [RemoteVendorUsage.Window]) -> some View {
+    VStack(alignment: .leading, spacing: 16) {
       HStack(spacing: 8) {
         Text(vendorName(usage.vendor)).font(.ui(.callout, medium: true)).foregroundStyle(Color.textPrimary)
         if let plan = usage.plan, !plan.isEmpty { Text(plan).font(.ui(.callout)).foregroundStyle(Color.textSecondary) }
       }
-      ForEach(usage.windows) { window in
-        HStack(spacing: 10) {
-          Text(windowLabel(vendor: usage.vendor, minutes: window.minutes, scope: window.scope))
-            .font(.ui(.callout)).foregroundStyle(Color.textPrimary)
-            .lineLimit(1).minimumScaleFactor(0.8)
-            .frame(width: 84, alignment: .leading)
-          Meter(percent: window.percent, mark: nil, height: 4, markHeight: 0)
-          Text(percentText(window.percent)).font(.ui(.callout)).foregroundStyle(Color.textPrimary)
-            .frame(width: 44, alignment: .trailing)
-          if let resetsAt = window.resetsAt {
-            Text(resetText(resetsAt, now: now)).font(.ui(.caption)).foregroundStyle(Color.textSecondary)
-              .lineLimit(1).minimumScaleFactor(0.8)
-              .frame(width: 84, alignment: .trailing)
+      VStack(alignment: .leading, spacing: 20) {
+        ForEach(windows) { window in
+          VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+              Text(windowLabel(vendor: usage.vendor, minutes: window.minutes, scope: window.scope))
+                .font(.ui(.callout)).foregroundStyle(Color.textPrimary).frame(maxWidth: .infinity, alignment: .leading)
+              Text(percentText(window.percent)).font(.ui(.callout, medium: true)).monospacedDigit().foregroundStyle(Color.textPrimary)
+            }
+            TickGauge(filled: tickMarks(percent: window.percent, mark: nil).filled, mark: nil, tickHeight: 12)
+            if let resetsAt = window.resetsAt {
+              Text(resetText(resetsAt, now: now)).font(.fixed(12)).foregroundStyle(Color.textSecondary)
+            }
           }
+          .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
       }
     }
   }
 }
 
-/// A capsule bar filled to `percent`, with a 2-wide tick at `mark` when there is one.
-private struct Meter: View {
-  let percent: Double
-  let mark: Double?
-  let height: CGFloat
-  let markHeight: CGFloat
-  /// The tick's colour once the fill has passed it (the sheet's background); before that it is text/primary.
-  var tickOnFill: Color = .textPrimary
+/// 40 ticks, 3 wide, spread over the full width: `filled` of them in the text colour, the rest in fill/strong. The compaction
+/// point (`mark`, a tick index) stands out at 28 high in the text colour, in place of the tick that would be there.
+private struct TickGauge: View {
+  static let count = 40
+  let filled: Int
+  let mark: Int?
+  let tickHeight: CGFloat
 
   var body: some View {
-    GeometryReader { proxy in
-      let width = proxy.size.width
-      ZStack(alignment: .leading) {
-        Capsule().fill(Color.fillStrong).frame(height: height)
-        Capsule().fill(Color.textPrimary).frame(width: width * min(1, max(0, percent / 100)), height: height)
-        if let mark {
-          Rectangle().fill(percent >= mark ? tickOnFill : Color.textPrimary).frame(width: 2, height: markHeight)
-            .offset(x: min(width - 2, max(0, width * min(1, max(0, mark / 100)) - 1)))
-        }
+    HStack(spacing: 0) {
+      ForEach(0..<Self.count, id: \.self) { index in
+        RoundedRectangle(cornerRadius: 1.5)
+          .fill(index == mark || index < filled ? Color.textPrimary : Color.fillStrong)
+          .frame(width: 3, height: index == mark ? 28 : tickHeight)
+        if index < Self.count - 1 { Spacer(minLength: 0) }
       }
-      .frame(maxHeight: .infinity)
     }
-    .frame(height: max(height, markHeight))
+    .frame(height: mark == nil ? tickHeight : 28)
     .accessibilityHidden(true)
   }
 }

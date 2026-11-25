@@ -8,6 +8,11 @@
 
 ## 当前位置
 
+- 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
+- 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
+- 2026-11-24：手机设置页的「主题」和「启动时打开」改成全宽玻璃 sheet（PRD v1.239，Figma 109，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：不再用系统 `Menu`，点一行改值并关闭，高度贴合内容。已验证：`xcodebuild test` 通过，109A / 109B 深浅色四张截图对过；未验证：系统 sheet 的真实玻璃和拖动条位置（窗口截图画不出系统的 sheet）。
+- 2026-11-24：手机 context sheet 重画（PRD v1.232，Figma 108，`ios/Wavi/Views/ContextSheet.swift`）已做完：去掉不透明底和 Spacer，用系统玻璃，高度贴合内容；横条换成 40 根刻度（`tickMarks`），压缩点是替换掉的那一根；上下文头一行的百分比不再包胶囊；只显示 5 小时和 7 天窗口（`shownWindows` 去掉带 `scope` 的）；「放进 /compact」用主按钮样式。已验证：`xcodebuild test` 通过，Figma 108A / 108B / 108C 深浅色六张截图对过；未验证：系统 sheet 在真机上的玻璃和高度（窗口截图画不出系统的 sheet）。
+- 2026-11-23：手机 App 设置页（PRD v1.231，Figma 105，`ios/Wavi/Views/AppSettingsView.swift`）已做完：会话列表左上角头像按钮推入设置页，标题菜单只剩「设置」和「取消配对」；主题（`WaviApp.swift` 的 `.preferredColorScheme`）、启动时打开、灵动岛和锁屏卡片（`LiveActivities.enabled` / `endAll`）、触感反馈、清除本机缓存（`PhoneCache.wipe()` / `size()`，不动配对和头像）、版本和协议号；新增手机图标 user-round（桌面 `glyphs.ts` 加 `UserRound`）。已验证：`xcodebuild test` 156 个通过（基线 149 + 新增 7），深浅色截图对过 Figma 105A / 105C / 105C′；未验证：真机上的主题切换、系统菜单（105B 的对话框、105D 的主题菜单）在模拟器里的样子。
 - 2026-11-24：Wavi 运行时阻止 Mac 空闲睡眠（PRD v1.238，设置 · 自动化 · 电源，`power.keepAwake` 默认开；`src/main/keep-awake.ts`）已做完，合盖睡眠的情况未实测。
 - 2026-11-24：GUI 对话表格的列宽和行高（PRD v1.237，`gui/table-cells.ts` 标短单元格，`gui/Chat.module.css` 的表格规则；e2e `gui-session.spec.ts` 加断言）已做完。
 - 2026-11-24：界面字号整体大一号（PRD v1.236，`src/renderer/styles/tokens.css` 的 `--text-*`）已做完。

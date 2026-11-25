@@ -7,8 +7,24 @@ import UIKit
 @MainActor
 final class LiveActivities {
   private var activity: Activity<WaviActivityAttributes>?
-  private var shown: ActivityState?
-  private var pushedAt: Date?
+  /// Internal so a test can stand in for a card that is on screen (ActivityKit does not run there).
+  var shown: ActivityState?
+  var pushedAt: Date?
+
+  /// 设置 · 会话 · 灵动岛和锁屏卡片: on unless the user switched it off.
+  static var enabled: Bool { UserDefaults.standard.object(forKey: "activity.enabled") as? Bool ?? true }
+
+  /// The switch was turned off: the card on screen goes (and any other of this app's), and what this instance remembers of
+  /// it goes too — a card shown again after the switch is back on must not be taken for the one that was already there.
+  /// The task is the end, for a caller that has to wait for it.
+  @discardableResult
+  func reset() -> Task<Void, Never> {
+    let all = Activity<WaviActivityAttributes>.activities
+    activity = nil
+    shown = nil
+    pushedAt = nil
+    return Task { for activity in all { await activity.end(nil, dismissalPolicy: .immediate) } }
+  }
 
   /// What the card shows now.
   var current: ActivityState? { shown }
@@ -35,6 +51,8 @@ final class LiveActivities {
   /// that has to wait for it (an intent, before the system suspends the app again).
   @discardableResult
   func show(_ state: ActivityState?, mac: String, alert: Bool = false) -> Task<Void, Never>? {
+    // Switched off: no card is shown, and the one that is goes (the same as a session list with nothing to show).
+    let state = Self.enabled ? state : nil
     // The same card again is not sent (Wavi lists sessions every 250 ms); only its stale date is renewed, at half the
     // window, so a card that stays the same while the Mac is there does not read 已过期.
     func card(_ s: ActivityState?) -> ActivityState? {

@@ -118,6 +118,23 @@ final class PhoneCache: Sendable {
   /// Every pairing's folder (a test's clean-up; the app clears one pairing at a time).
   func clearAll() { sink.clear(root) }
 
+  /// 清除本机缓存 (设置 · 存储): everything cached, for every pairing, goes — the lists and the conversations, not the
+  /// pairing itself (Keychain). Unlike `clear` / `clearAll` this does not block the folder: what the Mac says next is
+  /// cached again.
+  func wipe() async { await Task.detached { [sink, root] in sink.wipe(root) }.value }
+
+  /// What the cache takes on disk, in bytes (the number next to 清除本机缓存). Reads the folder: off the main actor.
+  func size() -> Int64 {
+    let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .isRegularFileKey]
+    guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys) else { return 0 }
+    var total: Int64 = 0
+    for case let url as URL in files {
+      guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+      total += Int64(values.totalFileAllocatedSize ?? 0)
+    }
+    return total
+  }
+
   /// Writes what is waiting now and returns once it is on disk (a test waits for this; the app never has to).
   func flush() async { await Task.detached { [sink] in sink.drain() }.value }
 
@@ -180,6 +197,16 @@ final class PhoneCache: Sendable {
       }
       cleared.append(folder.path)
       try? FileManager.default.removeItem(at: folder)
+    }
+
+    /// 清除本机缓存: the waiting writes and every file go, under the one lock; nothing is blocked afterwards.
+    func wipe(_ root: URL) {
+      lock.lock()
+      defer { lock.unlock() }
+      pending.removeAll()
+      timer?.cancel()
+      timer = nil
+      try? FileManager.default.removeItem(at: root)
     }
 
     /// The Mac's list: the waiting writes for sessions it does not have are dropped, and so are their files, under the one
