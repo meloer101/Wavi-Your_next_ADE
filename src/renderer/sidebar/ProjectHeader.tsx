@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Ellipsis, Plus } from '../ui/icons'
+import { Ellipsis, FolderSolid, Plus } from '../ui/icons'
 import { defineMessages } from '@shared/i18n'
 import type { SessionStatus } from '@shared/types'
 import { useMessages } from '../ui/i18n'
@@ -67,7 +67,7 @@ export function ProjectHeader({ name, count, collapsed, attention, onToggle, onN
         title={collapsed ? m.expand : m.collapse}
         onClick={onToggle}
       >
-        <span className={styles.chevron}>{collapsed ? <ChevronRight {...ICON} /> : <ChevronDown {...ICON} />}</span>
+        <span className={styles.chevron}><FolderSolid {...ICON} /></span>
         <h2 className={styles.name}>{name}</h2>
       </button>
       {collapsed && attention && (
