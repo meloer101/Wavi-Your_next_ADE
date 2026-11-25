@@ -19,11 +19,12 @@ import { registerIssueWatchHandlers } from './issue-watch'
 import { selectProfile } from './profile'
 import { ptySessionOwner, registerPtyHandlers } from './pty'
 import { installQuitGuard } from './quit'
+import { installKeepAwake } from './keep-awake'
 import { registerSettingsHandlers } from './settings'
 import { registerLanguage } from './language'
 import { registerThemeImportHandler } from './theme-import'
 import { registerUiHandlers } from './ui'
-import { registerUpdateHandlers } from './updates'
+import { appVersion, registerUpdateHandlers } from './updates'
 import { registerUsageStatsHandlers } from './usage-stats'
 import { registerLiveRebuilds } from './live-rebuilds'
 import { createMainWindow, getMainWindow, installAppMenu, showMainWindow, showSettings } from './windows'
@@ -57,7 +58,7 @@ process.on('unhandledRejection', (reason) => console.error('[main] unhandledReje
 
 function registerAppHandlers(): void {
   ipcMain.on(IPC.appVersion, (event) => {
-    event.returnValue = app.getVersion()
+    event.returnValue = appVersion()
   })
   ipcMain.on(IPC.uiOpenSettings, (event) => showSettings(BrowserWindow.fromWebContents(event.sender)))
 }
@@ -131,6 +132,7 @@ function boot(): void {
   registerUpdateHandlers()
   installAppMenu()
   installQuitGuard(getMainWindow)
+  installKeepAwake()
   createMainWindow()
   registerLiveRebuilds()
   // Dock icon click: the close button only hid the window. With a secondary window in front, macOS brings that one.

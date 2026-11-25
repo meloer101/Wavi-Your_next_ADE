@@ -67,9 +67,19 @@ export const AGENT_PROFILES: Record<ClaudeOrCodex, AgentSendProfile> = {
  */
 export const GENERIC_SEND_PROFILE: AgentSendProfile = { placeholderOverChars: Number.POSITIVE_INFINITY, placeholderAtNewlines: null, placeholderNeedle: null, preEnterDelayMs: 150 }
 
+/**
+ * Read from the other CLIs' sources rather than measured in a terminal. Pi 1.5.2 (pi-tui `Editor.handlePaste`): a
+ * paste of more than 10 lines or more than 1000 chars (UTF-16, control chars other than `\n` dropped) becomes
+ * `[paste #N +K lines]` / `[paste #N K chars]`, and the model gets the text verbatim.
+ */
+export const OTHER_AGENT_PROFILES: Partial<Record<Exclude<AgentKind, 'shell' | ClaudeOrCodex>, AgentSendProfile>> = {
+  pi: { placeholderOverChars: 1000, placeholderAtNewlines: 10, placeholderNeedle: '[paste #', preEnterDelayMs: 150 }
+}
+
 export function sendProfile(agent: Exclude<AgentKind, 'shell'>): AgentSendProfile {
   const own = claudeOrCodex(agent)
-  return own ? AGENT_PROFILES[own] : GENERIC_SEND_PROFILE
+  if (own) return AGENT_PROFILES[own]
+  return OTHER_AGENT_PROFILES[agent as Exclude<AgentKind, 'shell' | ClaudeOrCodex>] ?? GENERIC_SEND_PROFILE
 }
 
 /** Gap between the `/` keystroke and the bracketed paste carrying the rest of a slash command. */

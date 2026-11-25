@@ -212,6 +212,11 @@ export interface RemoteSettings {
   push: boolean
 }
 
+/** 设置 · 自动化 · 电源 (PRD v1.238): keep the Mac from idle-sleeping while Wavi runs. */
+export interface PowerSettings {
+  keepAwake: boolean
+}
+
 export interface AppSettings {
   version: 1
   appearance: AppearanceSettings
@@ -223,6 +228,7 @@ export interface AppSettings {
   dispatch: DispatchSettings
   remote: RemoteSettings
   schedules: ScheduleSettings
+  power: PowerSettings
 }
 
 /** An appearance patch; its nested object (chat) merges one level deeper. */
@@ -240,6 +246,7 @@ export interface SettingsPatch {
   dispatch?: Partial<DispatchSettings>
   remote?: Partial<RemoteSettings>
   schedules?: Partial<ScheduleSettings>
+  power?: Partial<PowerSettings>
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -290,7 +297,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   dispatch: { tools: true, autoApprove: false, leader: false },
   remote: { enabled: false, port: DEFAULT_REMOTE_PORT, push: true },
-  schedules: { paused: false, whileClosed: true, openAtLogin: false, agents: true }
+  schedules: { paused: false, whileClosed: true, openAtLogin: false, agents: true },
+  power: { keepAwake: true }
 }
 
 const MAX_REVIEW_RULES = 8000
@@ -426,6 +434,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
   const rm = typeof v.remote === 'object' && v.remote !== null ? (v.remote as Record<string, unknown>) : {}
   const sc = typeof v.schedules === 'object' && v.schedules !== null ? (v.schedules as Record<string, unknown>) : {}
   const sd = DEFAULT_SETTINGS.schedules
+  const pw = typeof v.power === 'object' && v.power !== null ? (v.power as Record<string, unknown>) : {}
   return {
     version: 1,
     appearance: appearance(v.appearance),
@@ -449,7 +458,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       whileClosed: typeof sc.whileClosed === 'boolean' ? sc.whileClosed : sd.whileClosed,
       openAtLogin: typeof sc.openAtLogin === 'boolean' ? sc.openAtLogin : sd.openAtLogin,
       agents: typeof sc.agents === 'boolean' ? sc.agents : sd.agents
-    }
+    },
+    power: { keepAwake: typeof pw.keepAwake === 'boolean' ? pw.keepAwake : DEFAULT_SETTINGS.power.keepAwake }
   }
 }
 
@@ -494,6 +504,7 @@ export function applySettingsPatch(current: AppSettings, patch: unknown): AppSet
   const nextDispatch = typeof p.dispatch === 'object' && p.dispatch !== null ? { ...current.dispatch, ...(p.dispatch as object) } : current.dispatch
   const nextRemote = typeof p.remote === 'object' && p.remote !== null ? { ...current.remote, ...(p.remote as object) } : current.remote
   const nextSchedules = typeof p.schedules === 'object' && p.schedules !== null ? { ...current.schedules, ...(p.schedules as object) } : current.schedules
+  const nextPower = typeof p.power === 'object' && p.power !== null ? { ...current.power, ...(p.power as object) } : current.power
   return sanitizeSettings({
     ...current,
     appearance: nextAppearance,
@@ -504,6 +515,7 @@ export function applySettingsPatch(current: AppSettings, patch: unknown): AppSet
     pr: nextPr,
     dispatch: nextDispatch,
     remote: nextRemote,
-    schedules: nextSchedules
+    schedules: nextSchedules,
+    power: nextPower
   })
 }

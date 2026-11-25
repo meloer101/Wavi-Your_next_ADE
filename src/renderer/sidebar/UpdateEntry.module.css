@@ -17,7 +17,8 @@
 }
 
 .number {
-  font: var(--text-mono-s);
+  font: var(--text-caption);
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   user-select: text;
 }

@@ -75,6 +75,11 @@ describe('becomesPlaceholder (measured thresholds)', () => {
     ['codex', 'a'.repeat(1000), false],
     ['codex', 'a'.repeat(1001), true],
     ['codex', Array.from({ length: 30 }, () => 'x').join('\n'), false],
+    ['pi', 'a'.repeat(1000), false],
+    ['pi', 'a'.repeat(1001), true],
+    ['pi', Array.from({ length: 10 }, () => 'x').join('\n'), false],
+    ['pi', Array.from({ length: 11 }, () => 'x').join('\n'), true],
+    ['gemini', 'a'.repeat(5000), false],
     ['shell', 'a'.repeat(5000), false]
   ] as const)('%s %s -> %s', (agent, text, expected) => {
     expect(becomesPlaceholder(text, agent)).toBe(expected)
@@ -105,6 +110,9 @@ describe('echoNeedles', () => {
     expect(echoNeedles('a'.repeat(900), 'claude')).toEqual(['[Pasted text'])
     expect(echoNeedles('a\nb\nc\nd', 'claude')).toEqual(['[Pasted text'])
     expect(echoNeedles('a'.repeat(1500), 'codex')).toEqual(['[Pasted Content'])
+    // Pi folds a paste of more than 10 lines into `[paste #1 +14 lines]`: its first line never shows.
+    expect(echoNeedles(Array.from({ length: 14 }, (_, i) => `line ${i}`).join('\n'), 'pi')).toEqual(['[paste #'])
+    expect(echoNeedles('reply with just OK', 'pi')).toEqual(['reply with just OK', '[paste #'])
   })
 
   it('has none for the shell', () => {

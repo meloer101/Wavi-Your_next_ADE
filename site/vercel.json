@@ -3,5 +3,20 @@
   "framework": "astro",
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "cookie", "key": "lang", "value": { "eq": "zh" } }],
+      "destination": "/zh/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "header", "key": "accept-language", "value": { "pre": "zh" } }],
+      "missing": [{ "type": "cookie", "key": "lang" }],
+      "destination": "/zh/",
+      "permanent": false
+    }
+  ]
 }

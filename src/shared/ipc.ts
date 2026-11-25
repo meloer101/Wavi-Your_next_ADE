@@ -358,6 +358,12 @@ export interface UpdateInfo {
   notes?: string
 }
 
+/**
+ * The result of a manual 检查更新 (PRD v1.228): no newer release, a newer one, or no answer at all
+ * (offline, timeout, GitHub error, no repository configured).
+ */
+export type UpdateCheck = { status: 'latest' } | { status: 'available'; info: UpdateInfo } | { status: 'failed' }
+
 /** Whether each agent CLI is on the user's login-shell PATH (first-run screen B10, 新建会话, 设置 · 智能体). */
 export type AgentAvailability = Partial<Record<CliAgent, boolean>> & {
   /** GUI sessions' ACP adapters (amp-acp; PRD F23) by binary name. */
@@ -374,8 +380,8 @@ export interface AppInfoApi {
   language: Lang
   /** Later changes of the interface language. */
   onLanguage(listener: (lang: Lang) => void): Unsubscribe
-  /** Latest GitHub release if newer than the running version, else null. Never throws. */
-  checkForUpdates(): Promise<UpdateInfo | null>
+  /** Latest GitHub release if newer than the running version, else whether it is up to date or the check failed. Never throws. */
+  checkForUpdates(): Promise<UpdateCheck>
   /** Keeps main informed about live sessions (quit confirmation). */
   reportActivity(summary: ActivitySummary): void
   /**

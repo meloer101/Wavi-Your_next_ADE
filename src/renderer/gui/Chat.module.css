@@ -866,18 +866,46 @@
 
 .markdown table {
   display: block;
+  width: fit-content;
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
   font: var(--type-step);
+  font-variant-numeric: tabular-nums;
 }
 
-/* One line, under the header: rows read apart by their spacing (no line between rows). */
+/* One line, under the header: rows read apart by their spacing (no line between rows). Column widths (PRD v1.237, as
+   Claude's desktop app): a short cell (table-cells.ts, data-short) stays on one line; a longer one is at least 11em
+   (8em for a header) so it is never squeezed to a character a line; past the chat's width the table scrolls. */
 .markdown :is(th, td) {
-  padding: var(--space-4) var(--space-12) var(--space-4) 0;
+  min-width: 2.5em;
+  padding: var(--space-8) var(--space-24) var(--space-8) 0;
   text-align: left;
   vertical-align: top;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
+}
+
+/* 24 between columns (Claude ~26, Streamdown 32); none after the last. */
+.markdown :is(th, td):last-child {
+  padding-right: 0;
+}
+
+.markdown :is(th, td)[data-short] {
+  white-space: nowrap;
+}
+
+.markdown td:not([data-short]) {
+  min-width: 11em;
+}
+
+.markdown th:not([data-short]) {
+  min-width: 8em;
+  text-wrap: balance;
+}
+
+/* A path or command in a cell breaks anywhere rather than widening its column. */
+.markdown td:not([data-short]) code {
+  overflow-wrap: anywhere;
 }
 
 .markdown th {
@@ -1386,7 +1414,8 @@
 }
 
 /* Figma 79B: a see-through fill one step lighter than the card and a hairline round the box, drawn inside it so it
-   takes no room (59J, as Paseo); stronger while typing. 实色 keeps the opaque bg/section (tokens.css). */
+   takes no room (59J, as Paseo); stronger while typing. 实色 keeps the opaque bg/section and adds a lit top line and a soft
+   shadow (--composer-finish, Figma 103; nothing in other materials). */
 .composer {
   display: flex;
   flex-direction: column;
@@ -1394,11 +1423,11 @@
   padding: var(--space-8);
   border-radius: var(--radius-window);
   background: var(--composer-bg);
-  box-shadow: inset 0 0 0 1px var(--border-default);
+  box-shadow: inset 0 0 0 1px var(--border-default), var(--composer-finish);
 }
 
 .composer:focus-within {
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong), var(--composer-finish);
 }
 
 .editBox:focus-within {
@@ -1952,6 +1981,25 @@
 
 .pickerColumn + .pickerColumn {
   width: 180px;
+}
+
+/* Figma 103C: a model menu's first column and, out of the flow beside it, the versions of the hovered family. */
+.familyHost {
+  position: relative;
+  flex: none;
+}
+
+.versionsColumn {
+  left: calc(100% + var(--space-2));
+  width: 180px;
+  max-height: 360px;
+  transform-origin: top left;
+}
+
+.versionsColumn[data-side='left'] {
+  right: calc(100% + var(--space-2));
+  left: auto;
+  transform-origin: top right;
 }
 
 .pickerRow[data-muted] {

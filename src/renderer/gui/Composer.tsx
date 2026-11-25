@@ -4,7 +4,7 @@
 // is a newline — a new item in a list; in a code block ⏎ is a newline too (an input method's Enter is left to it).
 // Formats are always on: there is no 格式 button, a selection gets the format buttons over it (50E).
 // Before anything is said (`switchable`) the model menu lists the agents first, each with its models (Figma 65B).
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Editor } from '@tiptap/react'
 import { ArrowUp, Check, ChevronDown, ChevronRight, Gauge, ListTodo, Pencil, Plus, Shield, ShieldAlert, ShieldCheck, Square, Workflow, X, Zap } from '../ui/icons'
 import { agentName, type CliAgent } from '@shared/agents'
@@ -23,6 +23,7 @@ import {
   composerKey,
   guiAgentMenu,
   modeChanges,
+  modelFamilies,
   pickCommand,
   pickerButtons,
   pickerSectionTitle,
@@ -497,6 +498,7 @@ function PickerMenu({ button, anchor, below, agent, switchable, onPick, onMode, 
   const option = button.options[0]
   const label = button.mode ? m.mode : option ? pickerSectionTitle(option) : m.model
   let body: ReactNode
+  let families = false
   // 65B: the agents and the hovered one's models, two menus side by side.
   const pair = isModelButton(button) && switchable && agent !== 'shell'
   if (pair) {
@@ -535,16 +537,29 @@ function PickerMenu({ button, anchor, below, agent, switchable, onPick, onMode, 
         })}
       </div>
     )
-  } else if (option) {
+  } else if (option && option.category === 'model' && agent !== 'shell') {
+    // 65C / 103C: the agent's models under its name, a row for each family; a family's versions in a column beside it.
+    families = true
     body = (
-      <div className={styles.pickerSection} role="menu" aria-label={label}>
-        {/* 65C: the agent's models under its name. */}
-        {option.category === 'model' && agent !== 'shell' && (
+      <FamilyColumns
+        values={option.values}
+        current={option.current}
+        label={label}
+        header={
           <span className={`${styles.popoverTitle} ${styles.agentTitle}`}>
             <AgentIcon kind={agent} size={14} />
             {agentName(agent)}
           </span>
-        )}
+        }
+        onPick={(value) => {
+          onPick(option.id, value)
+          onClose()
+        }}
+      />
+    )
+  } else if (option) {
+    body = (
+      <div className={styles.pickerSection} role="menu" aria-label={label}>
         {option.values.map((v) => (
           <PickerRow
             key={v.value}
@@ -563,15 +578,17 @@ function PickerMenu({ button, anchor, below, agent, switchable, onPick, onMode, 
   return (
     <div
       ref={ref}
-      className={pair ? styles.pickerPair : `${styles.popover} ${styles.pickerMenu}`}
+      className={pair || families ? styles.pickerPair : `${styles.popover} ${styles.pickerMenu}`}
       data-below={below || undefined}
       role="dialog"
       aria-label={label}
       style={place ?? { visibility: 'hidden' }}
       onKeyDown={(e) => {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          const rows = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"], [role="switch"]') ?? [])]
-          const at = rows.indexOf(e.currentTarget.ownerDocument.activeElement as HTMLElement)
+          // ↑ ↓ walk the column the focus is in (a family's versions are a column of their own).
+          const active = e.currentTarget.ownerDocument.activeElement as HTMLElement
+          const rows = [...((active.closest('[role="menu"]') ?? ref.current)?.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"], [role="switch"]') ?? [])]
+          const at = rows.indexOf(active)
           rows[stepIndex(at, e.key === 'ArrowDown' ? 1 : -1, rows.length)]?.focus()
           e.preventDefault()
         }
@@ -589,6 +606,137 @@ function PickerRow({ checked, mark, label, onClick }: { checked: boolean; mark?:
       <span className={styles.pickerLabel}>{label}</span>
       {checked && <Check {...ICON} />}
     </button>
+  )
+}
+
+/** The box that clips what is drawn inside `el`: its nearest ancestor that hides overflow, else the window. */
+function clippingBox(el: HTMLElement): { left: number; right: number } {
+  for (let up = el.parentElement; up; up = up.parentElement) {
+    const { overflowX } = up.ownerDocument.defaultView!.getComputedStyle(up)
+    if (overflowX !== 'visible') {
+      const box = up.getBoundingClientRect()
+      return { left: box.left, right: box.right }
+    }
+  }
+  const view = el.ownerDocument.defaultView!
+  return { left: 0, right: view.innerWidth }
+}
+
+/**
+ * Figma 103C: a model list as one row per family, showing the family's newest version (or the current one, when it is an
+ * older version of that family, with its ✓). A family with versions to choose from ends in › and opens them in a column
+ * beside it — on hover or →, aligned with its row (← returns), headed by the family's name; the row itself picks what it
+ * shows. The versions' column is out of the flow (beside the host), so opening it never changes the menu's size.
+ */
+function FamilyColumns({ values, current, label, header, testId, onPick }: { values: readonly { value: string; label: string }[]; current: string | undefined; label: string; header?: ReactNode; testId?: string; onPick(value: string): void }) {
+  const families = useMemo(() => modelFamilies(values), [values])
+  const [open, setOpen] = useState<string | null>(null)
+  const [drop, setDrop] = useState(0)
+  // Which side of the first column the versions open on, and where when neither side has room.
+  const [side, setSide] = useState<{ at: 'right' | 'left' | 'inset'; left: number }>({ at: 'right', left: 0 })
+  const host = useRef<HTMLDivElement>(null)
+  const column = useRef<HTMLDivElement>(null)
+  const flyout = useRef<HTMLDivElement>(null)
+  const rows = useRef(new Map<string, HTMLElement>())
+  const enter = useRef(false)
+  const family = families.find((f) => f.key === open)
+  // Its family left the list (the models were refreshed): nothing is open.
+  if (open !== null && !family) setOpen(null)
+
+  // The versions' column starts level with its row; a row so far down that it would stand out under the first column's
+  // foot moves up (to the top at most). It opens on the right of the first column, on the left when the right runs past
+  // the pane that clips it, and — with room on neither side — over the first column's right part, inside the pane.
+  // Measured again when the list changes under an open family (its models arrive or refresh).
+  useLayoutEffect(() => {
+    const row = open ? rows.current.get(open) : undefined
+    const first = column.current
+    const second = flyout.current
+    const at = host.current
+    if (!row || !first || !second || !at) return
+    setDrop(Math.max(0, Math.min(row.offsetTop - first.offsetTop - first.scrollTop, first.offsetHeight - second.offsetHeight)))
+    const clip = clippingBox(at)
+    const box = at.getBoundingClientRect()
+    const gap = 2
+    const room = { left: clip.left, right: clip.right }
+    if (box.right + gap + second.offsetWidth <= room.right) setSide({ at: 'right', left: 0 })
+    else if (box.left - gap - second.offsetWidth >= room.left) setSide({ at: 'left', left: 0 })
+    else setSide({ at: 'inset', left: Math.max(room.left - box.left, room.right - second.offsetWidth - box.left) })
+    if (enter.current) {
+      enter.current = false
+      second.querySelector<HTMLElement>('[aria-checked="true"], [role="menuitemradio"]')?.focus()
+    }
+  }, [open, family, families])
+
+  return (
+    <div ref={host} className={styles.familyHost}>
+      <div ref={column} className={`${styles.popover} ${styles.pickerColumn}`} role="menu" aria-label={label} data-testid={testId}>
+        {header}
+        {families.map((f) => {
+          const shown = f.versions.find((v) => v.value === current) ?? f.versions[0]!
+          const several = f.versions.length > 1
+          return (
+            <button
+              key={f.key}
+              ref={(el) => {
+                if (el) rows.current.set(f.key, el)
+                else rows.current.delete(f.key)
+              }}
+              type="button"
+              role="menuitemradio"
+              aria-checked={shown.value === current}
+              aria-haspopup={several ? 'menu' : undefined}
+              aria-expanded={several ? open === f.key : undefined}
+              className={styles.pickerRow}
+              // A pointer passing over rows while the keyboard is in the versions column leaves it as it is.
+              onMouseEnter={() => {
+                if (!flyout.current?.contains(flyout.current.ownerDocument.activeElement)) setOpen(several ? f.key : null)
+              }}
+              // ↑ ↓ through the rows take the versions column along, once it is open.
+              onFocus={() => {
+                if (open !== null) setOpen(several ? f.key : null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'ArrowRight' || !several) return
+                e.preventDefault()
+                if (open === f.key) flyout.current?.querySelector<HTMLElement>('[aria-checked="true"], [role="menuitemradio"]')?.focus()
+                else {
+                  enter.current = true
+                  setOpen(f.key)
+                }
+              }}
+              onClick={() => onPick(shown.value)}
+            >
+              <span className={styles.pickerLabel}>{shown.label}</span>
+              {shown.value === current && <Check {...ICON} />}
+              {several && <ChevronRight {...SMALL} />}
+            </button>
+          )
+        })}
+      </div>
+      {family && (
+        <div
+          ref={flyout}
+          className={`${styles.popover} ${styles.versionsColumn}`}
+          style={side.at === 'inset' ? { top: drop, left: side.left } : { top: drop }}
+          data-side={side.at}
+          role="menu"
+          aria-label={family.name}
+          data-testid={testId && `${testId}-versions`}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowLeft') return
+            e.preventDefault()
+            rows.current.get(family.key)?.focus()
+          }}
+        >
+          <span className={styles.popoverTitle} data-testid={testId && `${testId}-versions-title`}>
+            {family.name}
+          </span>
+          {family.versions.map((v) => (
+            <PickerRow key={v.value} checked={v.value === current} label={v.label} onClick={() => onPick(v.value)} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -658,7 +806,7 @@ function AgentModels({ agent, models, current, onAgent }: { agent: AgentKind; mo
   )
   let body: ReactNode
   if (!hovered) body = null
-  else if (listed.length > 0) body = listed.map((v) => <PickerRow key={v.value} checked={v.value === chosen} label={v.label} onClick={() => pick(hovered, v.value)} />)
+  else if (listed.length > 0) body = null
   else if (answer === 'loading') body = <span className={styles.popoverTitle} data-testid="gui-agent-models-loading">{m.loading}</span>
   else if (answer && !answer.ok && 'reason' in answer)
     body = (
@@ -698,7 +846,19 @@ function AgentModels({ agent, models, current, onAgent }: { agent: AgentKind; mo
           </>
         )}
       </div>
-      {hovered && (
+      {hovered && listed.length > 0 && (
+        // 103C: the hovered agent's models as families, a family's versions in a third column.
+        <FamilyColumns
+          key={hovered}
+          values={listed}
+          current={chosen}
+          label={m.modelsOf(agentName(hovered))}
+          testId="gui-agent-models"
+          header={adapterName ? <span className={styles.popoverTitle}>{m.afterAdapter(adapterName)}</span> : undefined}
+          onPick={(value) => pick(hovered, value)}
+        />
+      )}
+      {hovered && listed.length === 0 && (
         <div className={`${styles.popover} ${styles.pickerColumn}`} role="menu" aria-label={m.modelsOf(agentName(hovered))} data-testid="gui-agent-models">
           {/* Amp without amp-acp: its models, and a pick opens 设置 · 智能体 where the adapter's install command is. */}
           {adapterName && <span className={styles.popoverTitle}>{m.afterAdapter(adapterName)}</span>}

@@ -4,6 +4,24 @@
 import SwiftUI
 
 struct NewSessionView: View {
+  /// 看板 · GitHub's 交给 agent (PRD F22 v1.229 ④): the project is fixed and the Mac's hand-off fills in the branch, its base
+  /// and the first message, which the form calls 任务 and which is sent with the session's `task`.
+  struct Handoff: Identifiable {
+    let project: String
+    let start: GitHubStart
+    var id: String { "\(start.link.kind)-\(start.link.number)" }
+    /// `start.title` is `#142 …`: the form shows the number apart, in mono.
+    var itemTitle: String {
+      let prefix = "#\(start.link.number)"
+      guard start.title.hasPrefix(prefix) else { return start.title }
+      return start.title.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+    }
+  }
+
+  var handoff: Handoff?
+  /// What WaviTests/BoardShots hands the form instead of a Mac's answers (the repo has no stand-in Mac).
+  var fixture: BoardFixture?
+
   @Environment(AppModel.self) private var model
   @Environment(\.dismiss) private var dismiss
   @State private var project: String?
@@ -17,8 +35,18 @@ struct NewSessionView: View {
   @State private var models: AgentModels?
   @State private var pickedModel: String?
   @State private var prompt = ""
+  /// 交给 agent's editable task (the Mac's `taskPrompt`), sent as the first message.
+  @State private var task = ""
   @State private var busy = false
   @State private var error: String?
+
+  init(handoff: Handoff? = nil, fixture: BoardFixture? = nil) {
+    self.handoff = handoff
+    self.fixture = fixture
+    _project = State(initialValue: handoff?.project)
+    _branch = State(initialValue: handoff?.start.branch ?? "")
+    _task = State(initialValue: handoff?.start.prompt ?? "")
+  }
 
   struct Info: Codable {
     let info: NewSessionInfo
@@ -38,19 +66,42 @@ struct NewSessionView: View {
   var body: some View {
     NavigationStack {
       Form {
-        Picker("项目", selection: $project) {
-          ForEach(model.sessions.projects) { Text($0.name).tag(Optional($0.id)) }
+        if let handoff {
+          Section {
+            // The item being handed over (Figma 103G): its glyph, `#142` in mono, then its title, standing alone above 项目.
+            HStack(spacing: 8) {
+              Icon(handoff.start.link.kind == "pr" ? "git-pull-request" : "circle-dot", size: 16).foregroundStyle(Color.textSecondary)
+              Text("#\(handoff.start.link.number)").font(.mono(.footnote)).foregroundStyle(Color.textSecondary)
+              Text(handoff.itemTitle).font(.ui(.subheadline)).foregroundStyle(Color.textPrimary).lineLimit(1)
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityElement(children: .combine)
+          }
+          .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+          Section {
+            LabeledContent("项目", value: model.sessions.projects.first { $0.id == handoff.project }?.name ?? handoff.project)
+          }
+          .listRowBackground(Color.bgGrouped)
+        } else {
+          Picker("项目", selection: $project) {
+            ForEach(model.sessions.projects) { Text($0.name).tag(Optional($0.id)) }
+          }
+          .listRowBackground(Color.bgGrouped)
         }
         if let error { Notice(tone: .danger, message: String(localized: "没有建成：\(error)")).listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
-        if let loadError { Text(loadError).foregroundStyle(Color.noticeDanger) }
+        if let loadError { Text(loadError).foregroundStyle(Color.noticeDanger).listRowBackground(Color.bgGrouped) }
         if let data {
           Section {
-            Picker("工作目录", selection: $workdir) {
-              Text("新 worktree").tag("worktree")
-              Text("当前目录").tag("current")
+            // 交给 agent always starts a new worktree (PRD F22 v1.229 ④): no 当前目录 to pick.
+            if handoff == nil {
+              Picker("工作目录", selection: $workdir) {
+                Text("新 worktree").tag("worktree")
+                Text("当前目录").tag("current")
+              }
+              .pickerStyle(.segmented)
+              .disabled(!data.info.repo)
             }
-            .pickerStyle(.segmented)
-            .disabled(!data.info.repo)
             if !data.info.repo { LabeledContent("工作目录", value: String(localized: "不是 git 仓库，只能在当前目录")) }
             if workdir == "worktree" {
               Picker("基于", selection: $base) {
@@ -65,6 +116,7 @@ struct NewSessionView: View {
               if let problem = branchProblem(data) { Text(problem).font(.ui(.footnote)).foregroundStyle(Color.noticeDanger) }
             }
           }
+          .listRowBackground(Color.bgGrouped)
           Section {
             if data.agents.isEmpty {
               LabeledContent("智能体") { Text("Mac 上没有安装").foregroundStyle(Color.noticeDanger) }
@@ -89,8 +141,17 @@ struct NewSessionView: View {
               modelRow
             }
           }
-          Section("首条消息") {
-            TextField("", text: $prompt, axis: .vertical).lineLimit(4...8)
+          .listRowBackground(Color.bgGrouped)
+          if handoff == nil {
+            Section("首条消息") {
+              TextField("", text: $prompt, axis: .vertical).lineLimit(4...8)
+            }
+            .listRowBackground(Color.bgGrouped)
+          } else {
+            Section("任务") {
+              TextField("", text: $task, axis: .vertical).lineLimit(6...16)
+            }
+            .listRowBackground(Color.bgGrouped)
           }
         } else if loadError == nil {
           Spinner(color: .textSecondary).frame(maxWidth: .infinity).accessibilityLabel("正在读取项目")
@@ -98,13 +159,21 @@ struct NewSessionView: View {
       }
       .scrollContentBackground(.hidden)
       .background(Color.bgApp)
-      .navigationTitle("新建会话")
+      .navigationTitle(handoff == nil ? "新建会话" : "交给 agent")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+        ToolbarItem(placement: .cancellationAction) {
+          if handoff == nil {
+            Button("取消") { dismiss() }
+          } else {
+            CircleIconButton(name: "arrow-left", label: String(localized: "返回")) { dismiss() }
+          }
+        }
         ToolbarItem(placement: .confirmationAction) {
-          Button { Task { await create() } } label: { if busy { Spinner(color: .textPrimary) } else { Text("创建") } }
-            .disabled(!ready || busy)
+          Button { Task { await create() } } label: {
+            if busy { Spinner(color: .textPrimary) } else { Text(handoff == nil ? "创建" : "创建并发送") }
+          }
+          .disabled(!ready || busy)
         }
       }
     }
@@ -155,15 +224,22 @@ struct NewSessionView: View {
     guard let project else { return }
     data = nil
     loadError = nil
-    let result = await model.call(.newSessionInfo(project: project))
-    guard let next = result.decode(Info.self) else {
-      loadError = result.error ?? String(localized: "没有读到这个项目")
-      return
+    let next: Info
+    if let info = fixture?.info {
+      next = info
+    } else {
+      let result = await model.call(.newSessionInfo(project: project))
+      guard let loaded = result.decode(Info.self) else {
+        loadError = result.error ?? String(localized: "没有读到这个项目")
+        return
+      }
+      next = loaded
     }
     data = next
     workdir = next.info.repo ? "worktree" : "current"
-    base = next.info.defaultBranch ?? next.info.currentBranch ?? next.info.branches.first { !$0.remote }?.name
-    branch = generateBranchName(prefix: next.info.prefix, taken: Set(next.info.branches.map(\.name)))
+    // 交给 agent starts a worktree where the Mac said (a PR's head, or the default branch), on the branch it named.
+    base = handoff?.start.base ?? next.info.defaultBranch ?? next.info.currentBranch ?? next.info.branches.first { !$0.remote }?.name
+    branch = handoff?.start.branch ?? generateBranchName(prefix: next.info.prefix, taken: Set(next.info.branches.map(\.name)))
     if !next.agents.contains(agent) { agent = next.agents.first ?? "claude" }
   }
 
@@ -172,10 +248,15 @@ struct NewSessionView: View {
     let asked = agent
     models = nil
     pickedModel = nil
-    let result = await model.call(.agentModels(agent: asked))
-    guard asked == agent else { return }
-    // Not read: the agent starts with its default, so the row says so.
-    let next = result.decode(AgentModels.self) ?? AgentModels(gui: true, models: [], current: nil)
+    let next: AgentModels
+    if let models = fixture?.models {
+      next = models
+    } else {
+      let result = await model.call(.agentModels(agent: asked))
+      guard asked == agent else { return }
+      // Not read: the agent starts with its default, so the row says so.
+      next = result.decode(AgentModels.self) ?? AgentModels(gui: true, models: [], current: nil)
+    }
     models = next
     pickedModel = next.current
   }
@@ -185,7 +266,18 @@ struct NewSessionView: View {
     busy = true
     error = nil
     let worktree = workdir == "worktree"
-    let result = await model.call(.newSession(project: project, workdir: workdir, agent: agent, base: worktree ? base : nil, branch: worktree ? branch.trimmingCharacters(in: .whitespaces) : nil, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : prompt, model: pickedModel))
+    let text = handoff == nil ? prompt : task
+    let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+    let result: RemoteResult
+    if let start = handoff?.start {
+      // The Mac waits up to 60 s for the window to make the session: the task request gets longer than an ordinary one.
+      result = await model.call(.newSession(project: project, workdir: workdir, agent: agent, base: worktree ? base : nil,
+        branch: worktree ? branch.trimmingCharacters(in: .whitespaces) : nil, prompt: prompt, model: pickedModel,
+        task: GitHubTask(link: start.link, title: start.title, startAt: start.startAt)), timeout: 75)
+    } else {
+      result = await model.call(.newSession(project: project, workdir: workdir, agent: agent, base: worktree ? base : nil,
+        branch: worktree ? branch.trimmingCharacters(in: .whitespaces) : nil, prompt: prompt, model: pickedModel))
+    }
     busy = false
     if let failure = result.error {
       error = failure

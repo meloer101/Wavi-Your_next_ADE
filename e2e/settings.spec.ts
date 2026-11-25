@@ -475,7 +475,7 @@ test('设置 · 对话 and 外观 · 窗口; 实色 makes every card solid (PRD 
   await settings.getByRole('combobox', { name: '对话字号' }).click()
   await settings.getByRole('option', { name: '16', exact: true }).click()
   await expect.poll(async () => (await look()).chat).toMatchObject({ fontWeight: 500, fontSize: 16 })
-  await expect(settings.getByTestId('preview-caption')).toHaveText('跟随系统 16 · PingFang SC · 中等')
+  await expect(settings.getByTestId('preview-caption')).toHaveText('跟随界面 16 · PingFang SC · 中等')
   // The preview is drawn with what GUI sessions get.
   expect(await settings.getByTestId('chat-preview').evaluate((el) => [getComputedStyle(el).fontSize, getComputedStyle(el).fontWeight])).toEqual(['16px', '500'])
   const opacity = settings.getByRole('slider', { name: '对话不透明度' })

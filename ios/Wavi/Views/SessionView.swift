@@ -24,6 +24,8 @@ struct SessionView: View {
     }
     .background(Color.bgApp)
     .navigationBarTitleDisplayMode(.inline)
+    // The conversation has its own composer at the bottom: the 会话 / 看板 bar stays on the lists.
+    .toolbarVisibility(.hidden, for: .tabBar)
     .toolbar {
       ToolbarItem(placement: .principal) { title(session) }
       if let changed {
@@ -73,8 +75,10 @@ struct SessionView: View {
           turnOpen: session.status == .running || session.status == .needsYou)
         ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
           VStack(alignment: .leading, spacing: 8) {
-            if startsTurn(blocks, at: index) { AgentAvatar(agent: session.agent) }
-            BlockRow(block: block, session: id)
+            // A fold carries the mark on its own row (104B1); the other blocks have it above them.
+            let starts = startsTurn(blocks, at: index)
+            if starts, !isFold(block) { AgentAvatar(agent: session.agent) }
+            BlockRow(block: block, session: id, agent: starts ? session.agent : nil)
           }
           .onAppear { if index == 0 { Task { await model.loadOlder() } } }
         }
@@ -120,8 +124,15 @@ struct SessionView: View {
     .safeAreaBar(edge: .bottom) {
       VStack(spacing: 8) {
         PromptBar(prompts: prompts)
-        if let settings = session.settings, !settings.items.isEmpty {
-          SettingsPill(session: session, settings: settings).padding(.horizontal, Metric.margin)
+        // 104C1: the session's settings, and at the right end of the same row its context ring.
+        let settings = session.settings.flatMap { $0.items.isEmpty ? nil : $0 }
+        if settings != nil || session.context != nil {
+          HStack(spacing: 8) {
+            if let settings { SettingsPill(session: session, settings: settings) }
+            Spacer(minLength: 0)
+            if let context = session.context { ContextRing(session: id, context: context) }
+          }
+          .padding(.horizontal, Metric.margin)
         }
         Composer(session: id, running: session.status == .running)
       }
@@ -211,6 +222,8 @@ private struct UserRow: View {
   let session: String
   var bubble: Double = 1
   var picture: Double = 1
+  /// The time and copy under the bubble (104B1): on the conversation's own rows, not on a message still sending.
+  var meta = false
   var onWords: ((CGRect) -> Void)?
 
   var body: some View {
@@ -220,6 +233,7 @@ private struct UserRow: View {
         Spacer(minLength: 48)
         UserBubble(item: item, session: session, onWords: onWords).opacity(bubble)
       }
+      if meta { MessageMeta(item: item) }
     }
     .frame(maxWidth: .infinity, alignment: .trailing)
   }
@@ -287,6 +301,8 @@ private struct RunLine: View {
 /// The agent's first block after a message of the user's (or the first on screen) carries its mark above it.
 private func isUser(_ block: TranscriptBlock) -> Bool { if case .item(let item) = block { item.kind == "user" } else { false } }
 
+private func isFold(_ block: TranscriptBlock) -> Bool { if case .fold = block { true } else { false } }
+
 private func startsTurn(_ blocks: [TranscriptBlock], at index: Int) -> Bool {
   if case .receipt = blocks[index] { return false }
   guard !isUser(blocks[index]) else { return false }
@@ -294,7 +310,7 @@ private func startsTurn(_ blocks: [TranscriptBlock], at index: Int) -> Bool {
 }
 
 /// The agent's mark in a 24 solid circle, alone on its row (Figma 64A).
-private struct AgentAvatar: View {
+struct AgentAvatar: View {
   let agent: String
   @ScaledMetric(relativeTo: .body) private var side: CGFloat = 24
 
@@ -318,25 +334,123 @@ private struct MyAvatarView: View {
 }
 
 /// One block of the conversation (Figma 62E): an item, a folded run of tool calls, a turn's totals or an answer.
-private struct BlockRow: View {
+struct BlockRow: View {
   let block: TranscriptBlock
   let session: String
+  /// The agent whose mark goes beside a fold that starts its turn.
+  var agent: String?
+  /// A fold drawn open (the screenshots of 104B2).
+  var foldOpen = false
 
   var body: some View {
     switch block {
     case .item(let item): FeedRow(item: item, session: session)
+    case .fold(let fold): FoldRow(fold: fold, session: session, agent: agent, open: foldOpen)
+    case .reply(let item, let meta):
+      VStack(alignment: .leading, spacing: 8) {
+        MarkdownText(text: item.text ?? "")
+        if meta { MessageMeta(item: item) }
+      }
     case .tools(let run): ToolGroupRow(run: run, session: session)
     case .turn(let turn):
-      NavigationLink(value: Route.turn(session: session, tools: turn.tools)) { TurnRow(turn: turn) }.buttonStyle(.plain)
-    case .receipt(let receipt):
-      HStack(spacing: 8) {
-        Icon(receipt.onPhone ? "smartphone" : "square-terminal", size: 14)
-        Text(receipt.text).font(.ui(.footnote)).lineLimit(1)
+      VStack(alignment: .leading, spacing: 8) {
+        NavigationLink(value: Route.turn(session: session, tools: turn.tools)) { TurnRow(turn: turn) }.buttonStyle(.plain)
+        if let reply = turn.reply { MessageMeta(item: reply) }
       }
-      .foregroundStyle(Color.textSecondary)
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, 4)
-      .accessibilityElement(children: .combine)
+    case .receipt(let receipt): ReceiptRow(receipt: receipt)
+    }
+  }
+}
+
+private struct ReceiptRow: View {
+  let receipt: Receipt
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Icon(receipt.onPhone ? "smartphone" : "square-terminal", size: 14)
+      Text(receipt.text).font(.ui(.footnote)).lineLimit(1)
+    }
+    .foregroundStyle(Color.textSecondary)
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 4)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+/// Under a message of yours and under a finished turn's reply (Figma 104B): when it was written, and a button that copies
+/// its text (a reply's Markdown source). Right-aligned under your bubble, left-aligned under a reply.
+private struct MessageMeta: View {
+  let item: ChatItem
+  @State private var copies = 0
+  @AppStorage("haptics.enabled") private var haptics = true
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Text(messageTime(item.at, now: Date().timeIntervalSince1970 * 1000)).font(.ui(.caption)).monospacedDigit()
+      Button {
+        UIPasteboard.general.string = item.text ?? ""
+        copies += 1
+      } label: {
+        Icon("copy", size: 16).frame(minWidth: 24, minHeight: 24).contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(String(localized: "复制"))
+      .sensoryFeedback(trigger: copies) { _, _ in haptics ? .impact(weight: .light) : nil }
+    }
+    .foregroundStyle(Color.textSecondary)
+    .frame(maxWidth: .infinity, alignment: item.kind == "user" ? .trailing : .leading)
+  }
+}
+
+/// Figma 104B1 / 104B2: a finished turn's process as one line, 「工作了 1 分 15 秒 ›」, with the agent's mark on the same row
+/// when it starts the turn; opened, the process in an inset box, in order.
+struct FoldRow: View {
+  let fold: TurnFold
+  let session: String
+  let agent: String?
+  @State private var open: Bool
+
+  init(fold: TurnFold, session: String, agent: String?, open: Bool = false) {
+    self.fold = fold
+    self.session = session
+    self.agent = agent
+    _open = State(initialValue: open)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Button { open.toggle() } label: {
+        HStack(spacing: 8) {
+          if let agent { AgentAvatar(agent: agent) }
+          Text(workedFor(fold.ms)).font(.ui(.subheadline))
+          Icon("chevron-right", size: 14).rotationEffect(.degrees(open ? 90 : 0))
+        }
+        .foregroundStyle(Color.textSecondary)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(workedFor(fold.ms))
+      .accessibilityValue(open ? String(localized: "已展开") : String(localized: "已收起"))
+      if open {
+        VStack(alignment: .leading, spacing: 4) {
+          ForEach(fold.entries) { entry in
+            switch entry {
+            case .item(let item) where item.kind == "text":
+              Text(item.text ?? "").font(.ui(.subheadline)).lineSpacing(4).foregroundStyle(Color.textSecondary).padding(.vertical, 4)
+            case .item(let item) where item.kind == "tool":
+              NavigationLink(value: Route.tool(session: session, item: item.id)) { ToolLine(item: item, compact: true) }.buttonStyle(.plain)
+            case .item(let item): FeedRow(item: item, session: session)
+            case .receipt(let receipt): ReceiptRow(receipt: receipt)
+            default: EmptyView()
+            }
+          }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.bgGrouped, in: RoundedRectangle(cornerRadius: Metric.radiusControl))
+      }
     }
   }
 }
@@ -402,7 +516,7 @@ private struct TurnRow: View {
 }
 
 /// One item of the conversation: the user's bubble, the agent's Markdown, thinking (folded), one row per tool call
-/// (tap for 45D), system lines, and 未识别的条目 so an unknown line never breaks the rest.
+/// (tap for 45D) and system lines. Other kinds are filtered out in `transcriptBlocks`.
 struct FeedRow: View {
   let item: ChatItem
   let session: String
@@ -411,7 +525,7 @@ struct FeedRow: View {
   var body: some View {
     switch item.kind {
     case "user":
-      UserRow(item: item, session: session)
+      UserRow(item: item, session: session, meta: true)
     case "text":
       MarkdownText(text: item.text ?? "")
     case "thinking":
@@ -433,7 +547,7 @@ struct FeedRow: View {
     case "system":
       Text(item.text ?? "").font(.ui(.footnote)).foregroundStyle(Color.textSecondary).frame(maxWidth: .infinity)
     default:
-      Text("未识别的条目").font(.ui(.footnote)).foregroundStyle(Color.textSecondary)
+      EmptyView()
     }
   }
 }

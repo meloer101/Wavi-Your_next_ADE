@@ -42,6 +42,12 @@ struct Composer: View {
     .padding(.horizontal, Metric.margin)
     .padding(.bottom, 4)
     .photosPicker(isPresented: $picking, selection: $picked, maxSelectionCount: max(1, limits.photos - photos.count), matching: .images)
+    // 「放进 /compact」 in the context sheet: into the field, not sent.
+    .onChange(of: model.pendingInsert[session]) { _, command in
+      guard let command else { return }
+      text = inserting(command, into: text)
+      model.insertTaken(session)
+    }
     .onChange(of: picked) { _, items in
       guard !items.isEmpty else { return }
       picked = []

@@ -1064,6 +1064,51 @@ export function pickerSectionTitle(option: GuiConfigOption): string {
   }
 }
 
+/** One model of a family (`version` is its number, [] when the label has none). */
+export interface ModelVersion {
+  value: string
+  label: string
+  version: readonly number[]
+}
+
+/** The models that share a name apart from their version: `versions` newest first, so `versions[0]` is what the family's row shows. */
+export interface ModelFamily {
+  key: string
+  name: string
+  versions: readonly ModelVersion[]
+}
+
+// The first version number in a label: "4.7" in "Opus 4.7", "5.5" in "GPT-5.5-Codex", "4" in "DeepSeek V4 Pro" (with its V),
+// but not the 3 of "o3-mini" (a digit that follows a letter belongs to the name).
+const VERSION_TOKEN = /(?<![A-Za-z0-9.])v?(\d{1,3}(?:\.\d+)*)(?![A-Za-z0-9])/i
+
+function compareVersions(a: readonly number[], b: readonly number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] ?? -1) - (b[i] ?? -1)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+/**
+ * Figma 103C: a model list grouped into families for the picker's menu. The family is the label with its version number
+ * removed ("Opus 4.7" → "Opus", "GPT-5.5-Codex" → "GPT-Codex"; case-insensitive); a label with no number is its own family.
+ * Families keep the order of their first model in the agent's list; a family's versions go newest first (5.5 over 5 over 4.8).
+ */
+export function modelFamilies(values: readonly { value: string; label: string }[]): ModelFamily[] {
+  const families = new Map<string, { name: string; versions: ModelVersion[] }>()
+  for (const { value, label } of values) {
+    const token = VERSION_TOKEN.exec(label)
+    const name = (token ? label.replace(VERSION_TOKEN, ' ') : label).replace(/([-_ ])[-_ ]+/g, '$1').replace(/^[-_ ]+|[-_ ]+$/g, '')
+    const key = name.toLowerCase()
+    const version = token?.[1] ? token[1].split('.').map(Number) : []
+    const family = families.get(key) ?? { name, versions: [] }
+    family.versions.push({ value, label, version })
+    families.set(key, family)
+  }
+  return [...families].map(([key, family]) => ({ key, name: family.name, versions: family.versions.map((v, order) => ({ v, order })).sort((a, b) => compareVersions(b.v.version, a.v.version) || a.order - b.order).map(({ v }) => v) }))
+}
+
 /** Steps through a list of `length` items from `index` (wrapping); -1 = none highlighted yet. */
 export function stepIndex(index: number, delta: number, length: number): number {
   if (length === 0) return -1

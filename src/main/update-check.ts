@@ -1,6 +1,6 @@
 // Pure logic for the GitHub release update check: repository parsing, semver, response handling.
 // No Electron imports and no ambient network access (fetch is injected), so it is unit-testable.
-import type { UpdateInfo } from '@shared/ipc'
+import type { UpdateCheck, UpdateInfo } from '@shared/ipc'
 
 export interface Repo {
   owner: string
@@ -93,14 +93,18 @@ export type FetchLike = (
 
 export const REQUEST_TIMEOUT_MS = 5000
 
-/** Asks GitHub for the latest release; resolves null on any failure (offline, rate limit, 404, bad JSON). */
+/**
+ * Asks GitHub for the latest release (PRD v1.228). `failed` when no repository is configured, the request
+ * throws or times out, GitHub answers a non-2xx status, or the body is not JSON; otherwise `available` for a
+ * newer release and `latest` when the release is a draft, a pre-release, malformed or not newer.
+ */
 export async function checkLatestRelease(
   repo: Repo | null,
   currentVersion: string,
   fetchImpl: FetchLike,
   timeoutMs = REQUEST_TIMEOUT_MS
-): Promise<UpdateInfo | null> {
-  if (!repo) return null
+): Promise<UpdateCheck> {
+  if (!repo) return { status: 'failed' }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -108,10 +112,11 @@ export async function checkLatestRelease(
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'wavi-update-check' },
       signal: controller.signal
     })
-    if (!response.ok) return null
-    return updateFromRelease(await response.json(), currentVersion)
+    if (!response.ok) return { status: 'failed' }
+    const info = updateFromRelease(await response.json(), currentVersion)
+    return info === null ? { status: 'latest' } : { status: 'available', info }
   } catch {
-    return null
+    return { status: 'failed' }
   } finally {
     clearTimeout(timer)
   }

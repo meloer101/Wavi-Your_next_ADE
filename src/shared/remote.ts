@@ -1,12 +1,15 @@
 // 手机远程 (PRD F22): what the phone and Wavi say to each other, what the window hands main about its sessions, and the
 // validation main applies to everything the phone sends. Pure. The transport and its encryption are main's
 // (src/main/remote); the phone app speaks the same messages inside them.
-import { isCliAgent, type CliAgent } from './agents'
+import { isCliAgent, usageVendor, type CliAgent, type UsageVendor } from './agents'
 import type { PendingPrompt } from './agent-events'
+import { parseGitHubLink, type BoardScope, type GitHubItemKind } from './github-board'
 import { GUI_MODEL_ID } from './gui-chat'
+import { isStartAt } from './new-session'
 import { isSettingKind, parseSessionSettings, settingValue, type SessionSettings, type SettingKind } from './session-settings'
 import type { ChatItem } from './transcript-chat'
-import type { AgentKind, SessionStatus } from './types'
+import type { CheckKind, KindStatus } from './turn-checks'
+import type { AgentKind, GitHubLink, SessionStatus } from './types'
 
 export const REMOTE_IPC = {
   /** main → renderer: RemoteStatus whenever it changes. */
@@ -222,11 +225,67 @@ export interface RemoteSession {
   shipNotice?: string
   /** Model, effort and permission for this session (Figma 64B–64F). */
   settings?: SessionSettings
+  /** What the agent ran this turn (the desktop card's checks line, F9); absent when there is nothing to say. */
+  checks?: RemoteChecks
+  /** `+N −M` of its worktree against the base; absent when both are 0 or unknown. */
+  stat?: RemoteStat
+  /** The issue or PR the session works on (F9 · 交给 agent). */
+  github?: GitHubLink
+  /** The context window as the desktop's ring shows it (PRD F22 v1.230 ④); absent when the session has no reading. */
+  context?: RemoteContext
+  /**
+   * The vendor whose plan windows (`RemoteSessionList.usage`) apply to this session, as the desktop picks it: the agent
+   * actually running, else the session's own. Absent when none applies (no plan windows, or a third-party endpoint).
+   */
+  usageVendor?: UsageVendor
+}
+
+/** One session's context window. `high` is worked out on the Mac (`contextHigh`); the phone never re-derives it. */
+export interface RemoteContext {
+  /** 0–100. */
+  percent: number
+  usedTokens?: number
+  windowTokens?: number
+  /** The agent's compaction point on the 0–100 scale; absent when it is not known. */
+  markPercent?: number
+  high: boolean
+}
+
+/** One plan window of a vendor (`UsageWindow` without the pace rate). */
+export interface RemoteUsageWindow {
+  minutes: number
+  scope?: string
+  /** 0–100. */
+  percent: number
+  /** Epoch ms. */
+  resetsAt?: number
+}
+
+/** A vendor that has live plan windows (PRD F22 v1.230 ④); the phone matches a session to it by its agent. */
+export interface RemoteVendorUsage {
+  vendor: UsageVendor
+  /** `planLabel` of the account's plan. */
+  plan?: string
+  windows: RemoteUsageWindow[]
+}
+
+/** 这一轮跑过的检查 as the phone's 看板 · 进度 row shows it: the view's kinds, without their runs. */
+export interface RemoteChecks {
+  turn: 'current' | 'previous'
+  edited: boolean
+  kinds: { kind: CheckKind; status: KindStatus }[]
+}
+
+export interface RemoteStat {
+  added: number
+  removed: number
 }
 
 export interface RemoteSessionList {
   projects: RemoteProject[]
   sessions: RemoteSession[]
+  /** The plan windows of each vendor that has any (additive, PRD F22 v1.230 ④). */
+  usage?: RemoteVendorUsage[]
 }
 
 /** Where a session runs, for main only (git and the transcript read it; the phone never sees local paths). */
@@ -253,6 +312,15 @@ export interface RemotePhoto {
   data: string
 }
 
+/** 看板 · GitHub's 交给 agent (PRD F22 v1.229 ⑤): the item a new session works on. */
+export interface RemoteTask {
+  link: GitHubLink
+  /** `#139 结算页在 Safari 17 上白屏`: the session's title. */
+  title: string
+  /** A PR's head, where the worktree starts (WorktreeCreateRequest.startAt). */
+  startAt?: string
+}
+
 export type PhoneCommand =
   | { type: 'snapshot' }
   /** The phone opened a session (null: left it): answers with the newest page; what is appended is pushed after it. */
@@ -277,8 +345,19 @@ export type PhoneCommand =
   /** The agent's models for 新建会话's 模型 row (RemoteAgentModels; none for an agent that runs only in a terminal). */
   | { type: 'agent-models'; agent: CliAgent }
   /** `model`: picked under the agent (PRD F22 v1.161); the agent's own id, used when the session runs as GUI. */
-  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string }
+  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask }
+  /**
+   * 看板 · GitHub (PRD F22 v1.229 ⑤, F9): every project's open issues and PRs from gh, one entry per project in the
+   * list's order. Answers `{ gh }` when gh cannot answer at all (not installed, signed out), else the projects.
+   */
+  | { type: 'github-board'; scope: BoardScope; force?: boolean }
+  /** One item's body, comments and (for a PR) branches, size and checks (BoardDetailResult). */
+  | { type: 'github-detail'; project: string; kind: GitHubItemKind; number: number }
+  /** What 交给 agent's form needs for the item (BoardStart); a PR's head is fetched first, as on the desktop. */
+  | { type: 'github-start'; project: string; kind: GitHubItemKind; number: number }
   | { type: 'changes'; session: string }
+  /** The file a reply's chip names (PRD v1.230): `path` as written, relative to the session folder or absolute inside it; the Mac checks. */
+  | { type: 'file'; session: string; path: string }
   /** One file of `changes`: its unified diff (Git · 变更's own groups, PRD F5). */
   | { type: 'diff'; session: string; path: string; scope: 'uncommitted' | 'committed'; oldPath?: string; untracked?: boolean }
   /** Git · 变更's exits for the session's worktree (RemoteExits). */
@@ -294,6 +373,8 @@ export type PhoneRequest = PhoneCommand & { id: number }
 const record = (raw: unknown): Record<string, unknown> | null => (typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null)
 const ID = /^[A-Za-z0-9_-]{1,128}$/
 const isId = (v: unknown): v is string => typeof v === 'string' && ID.test(v)
+/** An issue or PR number, as gh accepts it. */
+const isItemNumber = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0 && v < 1e9
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 const cleanText = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length <= max && !v.includes('\0') ? v : null)
 const BRANCH = /^[A-Za-z0-9._/-]{1,200}$/
@@ -367,6 +448,19 @@ function answers(raw: unknown): Record<string, string> | null {
   return out
 }
 
+/** `null`: present but invalid; `undefined`: not sent. */
+function task(raw: unknown): RemoteTask | null | undefined {
+  if (raw === undefined) return undefined
+  const t = record(raw)
+  const link = parseGitHubLink(t?.link)
+  const title = cleanText(t?.title, 300)
+  const startAt = t?.startAt === undefined ? undefined : cleanText(t.startAt, 500)
+  // Where a PR's worktree starts is main's own finding (prStart): a fetched remote-tracking branch, or a fork's PR
+  // head under refs/wavi/pull/. Anything else from the phone is refused, as worktree creation would refuse it.
+  if (!t || !link || !title || startAt === null || (startAt !== undefined && !isStartAt(startAt))) return null
+  return { link, title, ...(startAt ? { startAt } : {}) }
+}
+
 /** A decrypted message from the phone → a request, or null when anything about it is off. */
 export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
   const v = record(raw)
@@ -421,6 +515,8 @@ export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
       if (v.branch !== undefined && (typeof v.branch !== 'string' || !BRANCH.test(v.branch))) return null
       const prompt = v.prompt === undefined ? undefined : cleanText(v.prompt, REMOTE_LIMITS.textChars)
       if (prompt === null) return null
+      const handed = task(v.task)
+      if (handed === null) return null
       return {
         id,
         type: 'new-session',
@@ -430,8 +526,19 @@ export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
         ...(typeof v.base === 'string' ? { base: v.base } : {}),
         ...(typeof v.branch === 'string' ? { branch: v.branch } : {}),
         ...(prompt && prompt.trim() ? { prompt } : {}),
-        ...(typeof v.model === 'string' ? { model: v.model } : {})
+        ...(typeof v.model === 'string' ? { model: v.model } : {}),
+        ...(handed ? { task: handed } : {})
       }
+    }
+    case 'github-board': {
+      if (v.scope !== 'all' && v.scope !== 'assigned' && v.scope !== 'mine' && v.scope !== 'review') return null
+      if (v.force !== undefined && typeof v.force !== 'boolean') return null
+      return { id, type: 'github-board', scope: v.scope, ...(v.force === true ? { force: true } : {}) }
+    }
+    case 'github-detail':
+    case 'github-start': {
+      if (!isId(v.project) || (v.kind !== 'issue' && v.kind !== 'pr') || !isItemNumber(v.number)) return null
+      return { id, type: v.type, project: v.project, kind: v.kind, number: v.number }
     }
     case 'changes':
       return isId(v.session) ? { id, type: 'changes', session: v.session } : null
@@ -441,6 +548,10 @@ export function parsePhoneRequest(raw: unknown): PhoneRequest | null {
       if (!isId(v.session) || !path || oldPath === null || (v.scope !== 'uncommitted' && v.scope !== 'committed')) return null
       if (v.untracked !== undefined && typeof v.untracked !== 'boolean') return null
       return { id, type: 'diff', session: v.session, path, scope: v.scope, ...(oldPath ? { oldPath } : {}), ...(v.untracked === true ? { untracked: true } : {}) }
+    }
+    case 'file': {
+      const path = cleanText(v.path, 1000)
+      return isId(v.session) && path ? { id, type: 'file', session: v.session, path } : null
     }
     case 'exits':
       return isId(v.session) ? { id, type: 'exits', session: v.session } : null
@@ -515,7 +626,7 @@ export type RemoteWindowCommand =
   /** Photos are files main already wrote (HEIC turned into JPEG). */
   | { type: 'send'; session: string; text: string; paths: string[] }
   | { type: 'interrupt'; session: string }
-  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string }
+  | { type: 'new-session'; project: string; workdir: 'worktree' | 'current'; agent: CliAgent; base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask }
   | { type: 'agent-models'; agent: CliAgent }
   | { type: 'exits'; session: string }
   | { type: 'ship'; session: string; action: RemoteShipAction }
@@ -535,6 +646,29 @@ const optTime = (v: unknown): number | undefined | null => (v === undefined ? un
 
 const STEP_STATES: ReadonlySet<unknown> = new Set<RemoteStepState>(['pending', 'working', 'done', 'failed'])
 const SHIP_FIELDS: ReadonlySet<unknown> = new Set<RemoteShipField>(['commit', 'title', 'body', 'draft'])
+const CHECK_KINDS: ReadonlySet<unknown> = new Set<CheckKind>(['test', 'lint', 'typecheck', 'build'])
+const KIND_STATUSES: ReadonlySet<unknown> = new Set<KindStatus>(['pass', 'fail', 'unknown', 'not-run'])
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v < 1e9
+
+/** The turn's checks as the phone may show them; null when it does not validate (the session still shows). */
+function windowChecks(raw: unknown): RemoteChecks | null {
+  const c = record(raw)
+  if (!c || (c.turn !== 'current' && c.turn !== 'previous') || typeof c.edited !== 'boolean') return null
+  if (!Array.isArray(c.kinds) || c.kinds.length > CHECK_KINDS.size) return null
+  const kinds: RemoteChecks['kinds'] = []
+  for (const item of c.kinds) {
+    const k = record(item)
+    if (!k || !CHECK_KINDS.has(k.kind) || !KIND_STATUSES.has(k.status)) return null
+    kinds.push({ kind: k.kind as CheckKind, status: k.status as KindStatus })
+  }
+  return { turn: c.turn, edited: c.edited, kinds }
+}
+
+function windowStat(raw: unknown): RemoteStat | null {
+  const s = record(raw)
+  if (!s || !isCount(s.added) || !isCount(s.removed) || s.added + s.removed === 0) return null
+  return { added: s.added, removed: s.removed }
+}
 
 /** The window's exit in progress; null when it does not validate. */
 function windowShip(raw: unknown): RemoteShip | null {
@@ -570,6 +704,49 @@ function windowShip(raw: unknown): RemoteShip | null {
   return { kind: v.kind, title, agent, stage: v.stage, steps, texts: { commit, title: shipTitle, body, draft: t.draft }, fields: v.fields as RemoteShipField[], submitLabel, submitBlocker, error }
 }
 
+const clampPercent = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : null)
+const tokenCount = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1e12 ? Math.round(v) : undefined)
+
+/** The context ring's figures; null when the percent or `high` do not validate (the session still shows). */
+function windowContext(raw: unknown): RemoteContext | null {
+  const c = record(raw)
+  const percent = clampPercent(c?.percent)
+  if (!c || percent === null || typeof c.high !== 'boolean') return null
+  const usedTokens = tokenCount(c.usedTokens)
+  const windowTokens = tokenCount(c.windowTokens)
+  const markPercent = clampPercent(c.markPercent)
+  return {
+    percent,
+    ...(usedTokens !== undefined ? { usedTokens } : {}),
+    ...(windowTokens !== undefined ? { windowTokens } : {}),
+    ...(markPercent !== null ? { markPercent } : {}),
+    high: c.high
+  }
+}
+
+/** The vendors' plan windows; a vendor or window that does not validate is left out, at most 4 vendors of 8 windows. */
+function windowUsage(raw: unknown): RemoteVendorUsage[] {
+  if (!Array.isArray(raw)) return []
+  const out: RemoteVendorUsage[] = []
+  for (const item of raw.slice(0, 4)) {
+    const v = record(item)
+    const vendor = usageVendor(v?.vendor)
+    if (!v || !vendor || !Array.isArray(v.windows)) continue
+    const plan = v.plan === undefined ? undefined : cleanText(v.plan, 40)
+    const windows: RemoteUsageWindow[] = []
+    for (const raw of v.windows.slice(0, 8)) {
+      const w = record(raw)
+      const percent = clampPercent(w?.percent)
+      const scope = w?.scope === undefined ? undefined : cleanText(w.scope, 40)
+      const resetsAt = optTime(w?.resetsAt)
+      if (!w || percent === null || scope === null || resetsAt === null || typeof w.minutes !== 'number' || !Number.isSafeInteger(w.minutes) || w.minutes <= 0 || w.minutes > 525_600) continue
+      windows.push({ minutes: w.minutes, ...(scope ? { scope } : {}), percent, ...(resetsAt !== undefined ? { resetsAt } : {}) })
+    }
+    if (windows.length > 0) out.push({ vendor, ...(plan ? { plan } : {}), windows })
+  }
+  return out
+}
+
 function windowSession(raw: unknown): RemoteSession | null {
   const s = record(raw)
   if (!s || !isId(s.id) || !isId(s.projectId) || !STATUSES.has(s.status) || (s.agent !== 'shell' && !isCliAgent(s.agent))) return null
@@ -590,6 +767,25 @@ function windowSession(raw: unknown): RemoteSession | null {
   // Settings that do not validate are left off; the session still shows.
   const settings = s.settings === undefined ? null : parseSessionSettings(s.settings)
   if (settings) out.settings = settings
+  // The same for the turn's checks, the worktree's size and the item it works on.
+  if (s.checks !== undefined) {
+    const checks = windowChecks(s.checks)
+    if (checks) out.checks = checks
+  }
+  if (s.stat !== undefined) {
+    const stat = windowStat(s.stat)
+    if (stat) out.stat = stat
+  }
+  if (s.github !== undefined) {
+    const link = parseGitHubLink(s.github)
+    if (link) out.github = link
+  }
+  const vendor = usageVendor(s.usageVendor)
+  if (vendor) out.usageVendor = vendor
+  if (s.context !== undefined) {
+    const context = windowContext(s.context)
+    if (context) out.context = context
+  }
   return out
 }
 
@@ -625,7 +821,8 @@ export function parseWindowSessions(raw: unknown): RemoteWindowSessions | null {
     const path = absolute(root)
     if (isId(id) && path) roots[id] = path
   }
-  return { projects, sessions, folders: out, roots }
+  const usage = windowUsage(v.usage)
+  return { projects, sessions, folders: out, roots, ...(usage.length > 0 ? { usage } : {}) }
 }
 
 function absolute(v: unknown): string | null {

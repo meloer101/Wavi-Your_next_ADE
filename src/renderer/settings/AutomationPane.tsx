@@ -2,7 +2,7 @@
 // own Claude / Codex quota. Copy and layout follow Figma 16C (457:21367): section titles, then label · control rows, no explanatory lines.
 import { useState } from 'react'
 import { DEFAULT_REVIEW_RULES } from '@shared/background-review'
-import type { DispatchSettings, PrSettings, ReviewSettings, ScheduleSettings } from '@shared/settings'
+import type { DispatchSettings, PowerSettings, PrSettings, ReviewSettings, ScheduleSettings } from '@shared/settings'
 import { SHORTCUTS } from '@shared/shortcuts'
 import { defineMessages } from '@shared/i18n'
 import { useMessages } from '../ui/i18n'
@@ -52,6 +52,8 @@ const M = defineMessages({
     openAtLogin: '登录时在后台打开 Wavi',
     agentSchedules: '让 agent 建定时任务',
     allSchedules: '所有定时任务',
+    power: '电源',
+    keepAwake: '运行时阻止 Mac 睡眠',
     customRulesField: '自定义审阅规则',
     followCli: '跟随 CLI',
     none: '无'
@@ -94,6 +96,8 @@ const M = defineMessages({
     openAtLogin: 'Open Wavi in the background at login',
     agentSchedules: 'Let agents create scheduled tasks',
     allSchedules: 'All scheduled tasks',
+    power: 'Power',
+    keepAwake: 'Keep Mac awake while Wavi runs',
     customRulesField: 'Custom review rules',
     followCli: 'CLI default',
     none: 'None'
@@ -110,7 +114,9 @@ export function AutomationPane({
   dispatch,
   updateDispatch,
   schedules,
-  updateSchedules
+  updateSchedules,
+  power,
+  updatePower
 }: {
   review: ReviewSettings
   update: (patch: Partial<ReviewSettings>) => void
@@ -120,6 +126,8 @@ export function AutomationPane({
   updateDispatch: (patch: Partial<DispatchSettings>) => void
   schedules: ScheduleSettings
   updateSchedules: (patch: Partial<ScheduleSettings>) => void
+  power: PowerSettings
+  updatePower: (patch: Partial<PowerSettings>) => void
 }) {
   const builtin = review.mode === 'builtin'
   const m = useMessages(M)
@@ -261,6 +269,11 @@ export function AutomationPane({
         </Section>
         {/* 自动领取 GitHub issue (PRD F26): its own section after 定时任务. */}
         <IssueSettings />
+        <Section title={m.power}>
+          <Row label={m.keepAwake}>
+            <Toggle label={m.keepAwake} checked={power.keepAwake} onChange={(keepAwake) => updatePower({ keepAwake })} />
+          </Row>
+        </Section>
       </div>
     </div>
   )

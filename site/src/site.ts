@@ -1,5 +1,5 @@
 /* Site-wide constants. The GitHub repository is named only here. */
-export const REPO = 'meloer101/Wavi-Ultraterminal'
+export const REPO = 'meloer101/Wavi-Your_next_ADE'
 export const gh = (path = ''): string => `https://github.com/${REPO}${path}`
 
 /** The newest release's dmg for one chip; the release workflow uploads these version-free copies. */

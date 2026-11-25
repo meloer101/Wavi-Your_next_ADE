@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Project, Session, Worktree } from '@shared/types'
 import { EMPTY_TEXTS, fail, startState, toGlance } from '../pull-requests/ship-flow'
-import { agentModels, remoteSessions, remoteShip } from './model'
+import { agentModels, remoteContext, remoteSessions, remoteShip, remoteUsage, sessionUsageVendor } from './model'
 
 const project: Project = { id: 'p1', name: 'acme-web', rootPath: '/code/acme' }
 const main: Worktree = { id: 'w0', projectId: 'p1', branch: 'main', path: '/code/acme', isMain: true }
@@ -28,6 +28,29 @@ describe('remoteSessions', () => {
     ])
     expect(list.folders).toEqual({ s1: { cwd: '/wt/refresh', base: 'main', agentSession: 'abc-1' }, s4: { cwd: '/code/acme' } })
     expect(list.roots).toEqual({ p1: '/code/acme' })
+  })
+
+  it('carries the turn\'s checks, the worktree\'s size and the item it works on (PRD F22 v1.229 ⑤)', () => {
+    const sized = { ...tree, added: 12, removed: 3 }
+    const checks = { since: 1, edited: true, runs: [{ kind: 'test' as const, command: 'pnpm test', outcome: 'pass' as const, basis: 'exit' as const, full: true, at: 2 }], known: ['lint' as const] }
+    const link = { repo: 'github.com/acme/web', kind: 'issue' as const, number: 139 }
+    const list = remoteSessions(
+      { projects: [project], worktrees: [sized], sessions: [session({ id: 's1', github: link })] },
+      undefined,
+      undefined,
+      (s) => (s.id === 's1' ? checks : undefined)
+    )
+    expect(list.sessions[0]).toMatchObject({
+      checks: { turn: 'current', edited: true, kinds: [{ kind: 'test', status: 'pass' }, { kind: 'lint', status: 'not-run' }] },
+      stat: { added: 12, removed: 3 },
+      github: link
+    })
+    // Nothing to say: no checks, no edits, no size and no item → the fields stay off.
+    const quiet = remoteSessions({ projects: [project], worktrees: [tree], sessions: [session({ id: 's1' })] }, undefined, undefined, () => ({ since: 0, edited: false, runs: [], known: [] }))
+    expect(quiet.sessions[0]).toMatchObject({ id: 's1' })
+    expect(quiet.sessions[0]!.checks).toBeUndefined()
+    expect(quiet.sessions[0]!.stat).toBeUndefined()
+    expect(quiet.sessions[0]!.github).toBeUndefined()
   })
 })
 
@@ -85,5 +108,51 @@ describe('agentModels (新建会话 · 模型, Figma 67A)', () => {
   it('has no row for a session that will run in a terminal, and only 默认 for an agent that lists none', () => {
     expect(agentModels(false, { models: [opus], model: 'opus' }, undefined)).toEqual({ gui: false, models: [] })
     expect(agentModels(true, undefined, undefined)).toEqual({ gui: true, models: [] })
+  })
+})
+
+describe('context and usage for the phone (PRD F22 v1.230 ④)', () => {
+  it('fills a session\'s context with the desktop\'s own high rule and mark', () => {
+    const data = { projects: [project], worktrees: [tree], sessions: [session({ id: 's1' }), session({ id: 's2' })] }
+    const list = remoteSessions(data, undefined, undefined, undefined, (s) => (s.id === 's1' ? { percent: 91, usedTokens: 182_000, windowTokens: 200_000, compactAt: 190_000, compactPercent: 95 } : undefined))
+    expect(list.sessions[0]!.context).toEqual({ percent: 91, usedTokens: 182_000, windowTokens: 200_000, markPercent: 95, high: true })
+    expect(list.sessions[1]!.context).toBeUndefined()
+  })
+
+  it('tells the phone which vendor\'s windows apply to a session', () => {
+    const data = { projects: [project], worktrees: [tree], sessions: [session({ id: 's1' }), session({ id: 's2' })] }
+    const list = remoteSessions(data, undefined, undefined, undefined, undefined, (s) => (s.id === 's1' ? 'codex' : undefined))
+    expect(list.sessions[0]!.usageVendor).toBe('codex')
+    expect(list.sessions[1]!.usageVendor).toBeUndefined()
+  })
+
+  it('picks the vendor as the desktop does: the running agent, else the kind, none off the plan', () => {
+    expect(sessionUsageVendor({ kind: 'claude' })).toBe('claude')
+    expect(sessionUsageVendor({ kind: 'shell' }, { agent: 'codex' })).toBe('codex')
+    expect(sessionUsageVendor({ kind: 'claude' }, { agent: 'codex' })).toBe('codex')
+    expect(sessionUsageVendor({ kind: 'shell' })).toBeUndefined()
+    expect(sessionUsageVendor({ kind: 'claude' }, { plan: false })).toBeUndefined()
+    expect(sessionUsageVendor({ kind: 'claude' }, { agent: 'claude', plan: false })).toBeUndefined()
+  })
+
+  it('works high and the mark out the way contextHigh and contextMark do', () => {
+    // 20k before the compaction point; the mark only when the point is known; 80 % when it is not.
+    expect(remoteContext({ percent: 50, usedTokens: 100_000, windowTokens: 200_000, compactAt: 150_000, compactPercent: 75 })).toEqual({ percent: 50, usedTokens: 100_000, windowTokens: 200_000, markPercent: 75, high: false })
+    expect(remoteContext({ percent: 80 })).toEqual({ percent: 80, markPercent: 80, high: true })
+    expect(remoteContext({ percent: 79 }).markPercent).toBe(80)
+    expect(remoteContext({ percent: 140 }).percent).toBe(100)
+  })
+
+  it('lists a vendor only when it has live windows, with the plan label', () => {
+    const now = 1_000_000
+    const usage = { claude: { vendor: 'claude' as const, at: now, windows: [{ minutes: 300, percent: 62, resetsAt: now + 3_600_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] } }
+    const accounts = { claude: { vendor: 'claude' as const, state: 'ok' as const, plan: 'max', at: now }, codex: { vendor: 'codex' as const, state: 'ok' as const, plan: 'chatgpt_plus', at: now } }
+    expect(remoteUsage(usage, accounts, now)).toEqual([
+      { vendor: 'claude', plan: 'Max', windows: [{ minutes: 300, percent: 62, resetsAt: now + 3_600_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] }
+    ])
+    expect(remoteUsage({}, {}, now)).toEqual([])
+    // One window per identity, the first.
+    const twice = { claude: { vendor: 'claude' as const, at: now, windows: [{ minutes: 300, percent: 62 }, { minutes: 300, percent: 10 }, { minutes: 300, scope: 'Sonnet', percent: 5 }] } }
+    expect(remoteUsage(twice, {}, now)).toEqual([{ vendor: 'claude', windows: [{ minutes: 300, percent: 62 }, { minutes: 300, scope: 'Sonnet', percent: 5 }] }])
   })
 })

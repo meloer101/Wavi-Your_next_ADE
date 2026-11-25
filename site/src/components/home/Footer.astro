@@ -36,7 +36,11 @@ const href = (target: LinkTarget): string => {
             <h3>{column.title}</h3>
             <ul>
               {column.links.map(([label, target]) => (
-                <li><a href={href(target)}>{label}</a></li>
+                <li>
+                  <a href={href(target)} hreflang={target === 'lang' ? (lang === 'en' ? 'zh-CN' : 'en') : undefined}
+                    >{label}</a
+                  >
+                </li>
               ))}
             </ul>
           </div>

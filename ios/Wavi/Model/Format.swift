@@ -207,6 +207,25 @@ func connectionWords(_ link: LinkState, mac: String, dropped: Bool) -> Connectio
   }
 }
 
+/// 设置's hero (Figma 110D) under the Mac's name: `Tailscale · 已连接` while the link is open, the words of `connectionWords`
+/// (what is wrong, or that it is connecting) otherwise.
+func connectionStatusText(_ link: LinkState, words: ConnectionWords) -> String {
+  if case .open(let url) = link { return String(localized: "\(viaOf(url)) · 已连接") }
+  return words.text
+}
+
+/// The dot before it: done while the link is open, error when the Mac does not know this phone, warning otherwise
+/// (connecting, or the Mac cannot be reached: the amber of the connection line under the screen titles). The words carry the state too: the dot is never the only signal.
+enum LinkDot: Equatable { case done, warning, error }
+
+func linkDot(_ link: LinkState) -> LinkDot {
+  switch link {
+  case .open: .done
+  case .refused: .error
+  case .connecting, .offline: .warning
+  }
+}
+
 /// 45E's title: what the agent wants to do.
 func permissionTitle(_ tool: String) -> String {
   switch tool {

@@ -10,6 +10,7 @@ import { hostname, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import type { PendingPrompt } from '@shared/agent-events'
 import { isCliAgent } from '@shared/agents'
+import type { BoardPrStart } from '@shared/github-board'
 import {
   pairingLink,
   parseRemoteResult,
@@ -19,6 +20,7 @@ import {
   remoteFail,
   type PhoneRequest,
   type RemoteAddress,
+  type RemoteTask,
   type RemotePrompt,
   type RemoteResult,
   type RemoteStatus,
@@ -32,11 +34,14 @@ import { changes, fileDiff } from '../git-graph'
 import { answerGuiPrompt, isGuiSession, setGuiPrompts } from '../gui'
 import { answerFromRemote, promptHeld, respondFromRemote, setRemoteHooks, transcriptSource } from '../hooks'
 import { claudeTranscriptPath, defaultAgentDataDirs } from '../hooks/agent-title'
+import { boardDetail, listBoard, prStart } from '../github-board'
 import { getSettings, onSettingsChange } from '../settings'
 import { newSessionInfo } from '../worktree-create'
+import { readSessionFile } from '../worktree-files'
 import { identityFromPem, identityToPem, newIdentity, type Identity } from './crypto'
 import { DeviceStore, type StoredDevice } from './devices'
 import { FeedHub, type FeedSource } from './feed'
+import { startItem } from './github-start'
 import { GuiPrompts, optionFor, planAnswer, questionAnswer } from './gui-prompts'
 import { PhotoError, savePhotos } from './photos'
 import { PromptPusher } from './prompt-push'
@@ -212,7 +217,17 @@ const calls = new Map<string, { owner: WebContents; resolve: (result: RemoteResu
  * 归档 runs the repository's archive script and records the worktree; an exit's preflight may ask GitHub; a send to a
  * session that has not started waits for its agent to come up.
  */
-const SLOW_WINDOW_MS: Partial<Record<RemoteWindowCommand['type'], number>> = { 'agent-models': 30_000, archive: 120_000, exits: 30_000, ship: 30_000, send: 30_000, 'set-setting': 30_000 }
+const SLOW_WINDOW_MS: Partial<Record<RemoteWindowCommand['type'], number>> = {
+  'agent-models': 30_000,
+  archive: 120_000,
+  exits: 30_000,
+  ship: 30_000,
+  send: 30_000,
+  'set-setting': 30_000,
+  // A worktree start (a PR's head fetched, `git worktree add`, the setup script) can outlast the default, and the phone
+  // must not be told it failed while the window goes on to create the session.
+  'new-session': 60_000
+}
 
 function askWindow(owner: WebContents | null, command: RemoteWindowCommand): Promise<RemoteResult> {
   if (!owner || owner.isDestroyed()) return Promise.resolve(remoteFail(pickLang(M).noWindow))
@@ -266,7 +281,7 @@ async function visiblePrompts(): Promise<RemotePrompt[]> {
   return [...hook, ...guiPrompts.list(knownSession)].sort((a, b) => a.createdAt - b.createdAt)
 }
 
-const phoneList = () => ({ projects: windowSessions.projects, sessions: windowSessions.sessions })
+const phoneList = () => ({ projects: windowSessions.projects, sessions: windowSessions.sessions, ...(windowSessions.usage ? { usage: windowSessions.usage } : {}) })
 
 async function handle(connection: RemoteConnection, request: PhoneRequest): Promise<RemoteResult> {
   switch (request.type) {
@@ -353,6 +368,45 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
     case 'new-session':
       if (!windowSessions.roots[request.project]) return remoteFail(pickLang(M).noProject)
       return askWindow(mainWindow(), { type: 'new-session', project: request.project, workdir: request.workdir, agent: request.agent, ...pick(request) })
+    // 看板 · GitHub (PRD F22 v1.229 ⑤, F9): gh's whole answer is read here, as the Mac's own tab reads it — the phone
+    // never runs gh, and the project's root comes from the session list's roots.
+    case 'github-board': {
+      // All projects ask at once, as the Mac's own tab does (src/renderer/overview/github-store.ts): one gh call each,
+      // and ten of them one after another would outlast the phone's 20 s.
+      const answered = await Promise.all(
+        windowSessions.projects.flatMap((project) => {
+          const root = windowSessions.roots[project.id]
+          return root ? [listBoard({ root, scope: request.scope, force: request.force === true }).then((list) => ({ project: project.id, list }))] : []
+        })
+      )
+      // gh cannot answer at all (not installed, signed out): one answer, not an error per project.
+      const unavailable = answered.find((a) => a.list.gh !== 'ready')
+      if (unavailable && unavailable.list.gh !== 'ready') return { ok: true, data: { gh: unavailable.list.gh } }
+      const projects = answered.flatMap((a) => (a.list.gh === 'ready' ? [{ project: a.project, board: a.list.project }] : []))
+      return { ok: true, data: { gh: 'ready', projects } }
+    }
+    case 'github-detail': {
+      const root = windowSessions.roots[request.project]
+      if (!root) return remoteFail(pickLang(M).noProject)
+      // The answer is the BoardDetailResult itself: a failed read says why in its `message`, as on the Mac.
+      return { ok: true, data: await boardDetail({ root, kind: request.kind, number: request.number }) }
+    }
+    case 'github-start': {
+      const root = windowSessions.roots[request.project]
+      if (!root) return remoteFail(pickLang(M).noProject)
+      const detail = await boardDetail({ root, kind: request.kind, number: request.number })
+      if (!detail.ok) return remoteFail(detail.message)
+      // A PR's head is fetched first (as the Mac's 交给 agent does): the new worktree starts there.
+      let pr: Extract<BoardPrStart, { ok: true }> | null = null
+      if (request.kind === 'pr') {
+        const start = await prStart({ root, kind: 'pr', number: request.number })
+        if (!start.ok) return remoteFail(start.message)
+        pr = start
+      }
+      const info = await newSessionInfo(root)
+      const taken = new Set(info.branches.filter((b) => !b.remote).map((b) => b.name))
+      return { ok: true, data: startItem(detail.detail, pr, info.prefix, taken) }
+    }
     case 'changes': {
       const folder = windowSessions.folders[request.session]
       if (!folder) return notFound()
@@ -370,6 +424,11 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
       const text = await fileDiff({ root: folder.cwd, path: request.path, oldPath: request.oldPath, scope: request.scope, baseRef, untracked: request.untracked })
       return { ok: true, data: { text } }
     }
+    case 'file': {
+      const folder = windowSessions.folders[request.session]
+      if (!folder) return notFound()
+      return { ok: true, data: await readSessionFile(folder.cwd, request.path) }
+    }
     // Exits and 归档 run in the main window, through Git · 变更's own code (PRD F16 / F15): it is the window whose session
     // list (with the runs' progress) the phone gets, and none of them needs the session's terminal to be open.
     case 'exits':
@@ -381,12 +440,13 @@ async function handle(connection: RemoteConnection, request: PhoneRequest): Prom
   }
 }
 
-function pick(request: Extract<PhoneRequest, { type: 'new-session' }>): { base?: string; branch?: string; prompt?: string; model?: string } {
+function pick(request: Extract<PhoneRequest, { type: 'new-session' }>): { base?: string; branch?: string; prompt?: string; model?: string; task?: RemoteTask } {
   return {
     ...(request.base ? { base: request.base } : {}),
     ...(request.branch ? { branch: request.branch } : {}),
     ...(request.prompt ? { prompt: request.prompt } : {}),
-    ...(request.model ? { model: request.model } : {})
+    ...(request.model ? { model: request.model } : {}),
+    ...(request.task ? { task: request.task } : {})
   }
 }
 

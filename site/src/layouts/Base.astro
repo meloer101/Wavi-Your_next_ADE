@@ -61,5 +61,18 @@ const app = JSON.stringify({
   <body>
     <a class="skip" href="#main">{t.skip}</a>
     <slot />
+    <script>
+      // A language link remembers the choice in the `lang` cookie: vercel.json sends "/" to "/zh/" for a Chinese-first
+      // browser only while the cookie is missing, and always when it says zh.
+      // auxclick: a middle click opens the link in a new tab without a click event.
+      const remember = (event: MouseEvent): void => {
+        const link = event.target instanceof Element ? event.target.closest('a[hreflang]') : null
+        if (!link) return
+        const lang = link.getAttribute('hreflang')?.startsWith('zh') ? 'zh' : 'en'
+        document.cookie = `lang=${lang}; path=/; max-age=31536000; samesite=lax`
+      }
+      document.addEventListener('click', remember)
+      document.addEventListener('auxclick', remember)
+    </script>
   </body>
 </html>

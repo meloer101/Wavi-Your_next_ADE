@@ -169,14 +169,27 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
   case "new-session-info": return .newSessionInfo(project: try text(v, "project"))
   case "agent-models": return .agentModels(agent: try text(v, "agent"))
   case "new-session":
-    return .newSession(project: try text(v, "project"), workdir: try text(v, "workdir"), agent: try text(v, "agent"), base: try text(v, "base"), branch: try text(v, "branch"), prompt: try text(v, "prompt"), model: try text(v, "model"))
+    return .newSession(
+      project: try text(v, "project"),
+      workdir: try text(v, "workdir"),
+      agent: try text(v, "agent"),
+      base: try text(v, "base"),
+      branch: try text(v, "branch"),
+      prompt: try text(v, "prompt"),
+      model: try text(v, "model"),
+      task: try decoded(v["task"], GitHubTask.self, "task")
+    )
   case "changes": return .changes(session: try text(v, "session"))
   case "diff":
     return .diff(session: try text(v, "session"), path: try text(v, "path"), scope: try text(v, "scope"), oldPath: try text(v, "oldPath"), untracked: v["untracked"] == .bool(true))
+  case "file": return .file(session: try text(v, "session"), path: try text(v, "path"))
   case "exits": return .exits(session: try text(v, "session"))
   case "ship": return .ship(session: try text(v, "session"), action: try shipAction(v["action"]))
   case "archive": return .archive(session: try text(v, "session"))
   case "set-setting": return .setSetting(session: try text(v, "session"), kind: try text(v, "kind"), value: try text(v, "value"))
+  case "github-board": return .githubBoard(scope: try text(v, "scope"), force: v["force"] == .bool(true))
+  case "github-detail": return .githubDetail(project: try text(v, "project"), kind: try text(v, "kind"), number: Int(try number(v, "number")))
+  case "github-start": return .githubStart(project: try text(v, "project"), kind: try text(v, "kind"), number: Int(try number(v, "number")))
   default: throw Missing(what: "a PhoneCommand for \(type)")
   }
 }
@@ -222,6 +235,24 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
     }
   }
 
+  /// PRD F22 v1.230 ④: the context ring's figures and the vendors' plan windows, read by value (the round trip above
+  /// only says no field is lost).
+  @Test func contextAndUsageDecodeWithTheMacsValues() throws {
+    let list = try decoded(try Samples.load().events["sessions"]?["data"], RemoteSessionList.self, "event sessions")
+    let context = try #require(list.sessions.first?.context)
+    #expect(context == RemoteContext(percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true))
+    #expect(list.sessions.last?.context == nil)
+    #expect(list.sessions.first?.usageVendor == "claude" && list.sessions.last?.usageVendor == nil)
+    let claude = try #require(list.usage?.first { $0.vendor == "claude" })
+    #expect(claude.plan == "Max")
+    #expect(claude.windows.map(\.id) == ["300", "10080:Sonnet"])
+    #expect(claude.windows.first?.resetsAt == 1_730_000_900_000)
+    // Every new field is optional: an older Mac's list still decodes.
+    let old = Data(#"{"projects":[],"sessions":[{"id":"s","projectId":"p","title":"t","agent":"claude","status":"idle","activity":1}]}"#.utf8)
+    let decodedOld = try JSONDecoder().decode(RemoteSessionList.self, from: old)
+    #expect(decodedOld.usage == nil && decodedOld.sessions.first?.context == nil)
+  }
+
   /// As the screens that ask decode each answer's `data`.
   @Test func answersDecodeAsTheAppReadsThem() throws {
     let samples = try Samples.load().results
@@ -236,7 +267,11 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
       case "new-session": try expectRoundTrip(NewSessionView.Created.self, data, label)
       case "changes": try expectRoundTrip(GitChanges.self, data, ignoring: gitChangesUnread, label)
       case "diff": try expectRoundTrip(FileDiffView.Text_.self, data, label)
+      case "file": try expectRoundTrip(RemoteFilePreview.self, data, label)
       case "exits": try expectRoundTrip(RemoteExits.self, data, label)
+      case "github-board": try expectRoundTrip(GitHubBoard.self, data, label)
+      case "github-detail": try expectRoundTrip(BoardDetailResult.self, data, label)
+      case "github-start": try expectRoundTrip(GitHubStart.self, data, label)
       default: Issue.record("\(label): no screen decodes it")
       }
     }

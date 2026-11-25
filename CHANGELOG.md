@@ -4,6 +4,27 @@ All notable changes to Wavi (named Terminal Reborn until v0.1.1). Format: [Keep 
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-24
+
+A near-black dark palette for 实色 and 实心玻璃, a GUI model menu grouped by family, and the phone's board, Markdown, context ring and 设置 groundwork.
+实色和实心玻璃的深色换成近黑配色，GUI 模型菜单按系列分组；手机端的看板、Markdown、context 圆环也随这一版发出。
+
+### Appearance / 外观
+- The dark 实色 and 实心玻璃 palette is near-black with higher contrast, and the sidebar selection is flat on it.
+  实色和实心玻璃的深色换成近黑高对比配色，侧栏选中项在其上画成平的。
+
+### GUI sessions / GUI 会话
+- The model menu lists model families first (with each family's latest model); hovering a family opens a column with its earlier versions, which follows list changes and keyboard focus.
+  模型菜单先列模型系列（带各系列最新的模型），悬停系列后在新的一列里选更早的版本；这一列随列表变化和键盘焦点更新。
+
+### Phone / 手机
+- The phone has a 会话 | 看板 board with 进度 and GitHub, rendered Markdown with file chips, a finished turn folded into 「工作了 …」, and a context ring with its sheet.
+  手机端有「会话 | 看板」，看板含进度和 GitHub；富文本 Markdown 和文件 chip；一轮完成后折成「工作了 …」；context 圆环和它的 sheet。
+
+### Website and updates / 官网与更新
+- The website loops its six agent diagrams and the board while in view; the sidebar says when the update check fails.
+  官网的六个 agent 图和看板在可视时循环播放；更新检查失败时侧栏会说明。
+
 ## [0.21.0] - 2026-11-19
 
 A full access level for every agent, deletable worktrees and a quieter interface: dispatched sessions follow their dispatcher's permission, the Worktree view deletes several worktrees at once, shortcut hints show on hover, and your messages fly from the composer into the chat.
@@ -765,28 +786,29 @@ First public release. Unsigned (ad-hoc signature): see the README for the one-ti
 - The app tells you when a newer GitHub release exists (one notification per version; nothing is downloaded or installed automatically). No telemetry.
   有新版本时提示一次（不会自动下载或安装）；无任何遥测。
 
-[Unreleased]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.21.0...HEAD
-[0.21.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.20.0...v0.21.0
-[0.20.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.19.0...v0.20.0
-[0.19.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.18.0...v0.19.0
-[0.18.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.17.0...v0.18.0
-[0.17.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.16.0...v0.17.0
-[0.16.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.15.1...v0.16.0
-[0.15.1]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.15.0...v0.15.1
-[0.15.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.14.0...v0.15.0
-[0.14.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.13.0...v0.14.0
-[0.13.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.12.3...v0.13.0
-[0.12.3]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.12.0...v0.12.3
-[0.12.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.11.0...v0.12.0
-[0.11.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.8.1...v0.9.0
-[0.8.1]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/meloer101/Wavi-Ultraterminal/compare/v0.1.1...v0.3.0
-[0.1.1]: https://github.com/meloer101/Wavi-Ultraterminal/releases/tag/v0.1.1
-[0.1.0]: https://github.com/meloer101/Wavi-Ultraterminal/releases/tag/v0.1.0
+[Unreleased]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.21.0...v0.22.0
+[0.21.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.18.0...v0.19.0
+[0.18.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.15.1...v0.16.0
+[0.15.1]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.15.0...v0.15.1
+[0.15.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.12.3...v0.13.0
+[0.12.3]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.12.0...v0.12.3
+[0.12.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.1.1...v0.3.0
+[0.1.1]: https://github.com/meloer101/Wavi-Your_next_ADE/releases/tag/v0.1.1
+[0.1.0]: https://github.com/meloer101/Wavi-Your_next_ADE/releases/tag/v0.1.0

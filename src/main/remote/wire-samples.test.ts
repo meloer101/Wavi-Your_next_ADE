@@ -8,8 +8,11 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { CliAgent } from '@shared/agents'
+import { formatTokens, windowLabel } from '@shared/session-meta'
+import type { BoardDetailResult, BoardProject, BoardStart } from '@shared/github-board'
 import { parsePhoneRequest, type PhoneCommand, type PhoneEvent, type RemoteAgentModels, type RemoteExits, type RemotePrompt, type RemoteSession, type RemoteSessionList, type RemoteShipAction } from '@shared/remote'
 import type { ChatItem } from '@shared/transcript-chat'
+import type { FilePreview } from '@shared/worktree-files'
 import type { changes, fileDiff } from '../git-graph'
 import type { newSessionInfo } from '../worktree-create'
 import type { FeedHub } from './feed'
@@ -33,7 +36,12 @@ interface Results {
   'new-session': { session: string }
   changes: NonNullable<Awaited<ReturnType<typeof changes>>>
   diff: { text: Awaited<ReturnType<typeof fileDiff>> }
+  /** readSessionFile: the same FilePreview the desktop's file view reads. */
+  file: FilePreview
   exits: RemoteExits
+  'github-board': { gh: 'ready'; projects: { project: string; board: BoardProject }[] }
+  'github-detail': BoardDetailResult
+  'github-start': BoardStart
 }
 
 const PHOTO = Buffer.from('not really a jpeg').toString('base64')
@@ -59,13 +67,27 @@ const commands: Commands = {
   answer: { type: 'answer', prompt: 'p2', answers: { 用哪个数据库: 'Postgres' } },
   'new-session-info': { type: 'new-session-info', project: 'proj1' },
   'agent-models': { type: 'agent-models', agent: 'codex' },
-  'new-session': { type: 'new-session', project: 'proj1', workdir: 'worktree', agent: 'claude', base: 'main', branch: 'jacoy/fix-login', prompt: '修好登录', model: 'claude-opus-5-5' },
+  'new-session': {
+    type: 'new-session',
+    project: 'proj1',
+    workdir: 'worktree',
+    agent: 'claude',
+    base: 'main',
+    branch: 'jacoy/fix-login',
+    prompt: '修好登录',
+    model: 'claude-opus-5-5',
+    task: { link: { repo: 'github.com/acme/web', kind: 'issue', number: 139 }, title: '#139 Safari 17 上结算页白屏' }
+  },
   changes: { type: 'changes', session: 's1' },
   diff: { type: 'diff', session: 's1', path: 'src/new.ts', scope: 'uncommitted', oldPath: 'src/old.ts', untracked: true },
+  file: { type: 'file', session: 's1', path: 'src/a.ts' },
   exits: { type: 'exits', session: 's1' },
   ship: { type: 'ship', session: 's1', action: shipActions.edit },
   archive: { type: 'archive', session: 's1' },
-  'set-setting': { type: 'set-setting', session: 's1', kind: 'effort', value: 'high' }
+  'set-setting': { type: 'set-setting', session: 's1', kind: 'effort', value: 'high' },
+  'github-board': { type: 'github-board', scope: 'assigned', force: true },
+  'github-detail': { type: 'github-detail', project: 'proj1', kind: 'pr', number: 140 },
+  'github-start': { type: 'github-start', project: 'proj1', kind: 'issue', number: 139 }
 }
 
 const session: RemoteSession = {
@@ -96,6 +118,19 @@ const session: RemoteSession = {
     error: { step: 'push', message: '推送被拒绝', output: 'rejected', conflicts: false, pushRefused: true }
   },
   shipNotice: '已合并到 main 并推送 · a41c9e2',
+  checks: {
+    turn: 'previous',
+    edited: true,
+    kinds: [
+      { kind: 'test', status: 'pass' },
+      { kind: 'lint', status: 'fail' },
+      { kind: 'typecheck', status: 'not-run' }
+    ]
+  },
+  stat: { added: 12, removed: 3 },
+  context: { percent: 86, usedTokens: 172_000, windowTokens: 200_000, markPercent: 92, high: true },
+  usageVendor: 'claude',
+  github: { repo: 'github.com/acme/web', kind: 'issue', number: 139 },
   settings: {
     items: [
       { kind: 'model', current: 'opus', values: [{ value: 'opus', label: 'Opus 5.5' }, { value: 'sonnet', label: 'Sonnet 5' }] },
@@ -111,7 +146,11 @@ const session: RemoteSession = {
 
 const sessions: RemoteSessionList = {
   projects: [{ id: 'proj1', name: 'wavi' }],
-  sessions: [session, { id: 's2', projectId: 'proj1', title: '终端', agent: 'shell', status: 'idle', activity: 1_730_000_200_000 }]
+  sessions: [session, { id: 's2', projectId: 'proj1', title: '终端', agent: 'shell', status: 'idle', activity: 1_730_000_200_000 }],
+  usage: [
+    { vendor: 'claude', plan: 'Max', windows: [{ minutes: 300, percent: 62, resetsAt: 1_730_000_900_000 }, { minutes: 10080, scope: 'Sonnet', percent: 40 }] },
+    { vendor: 'codex', plan: 'Plus', windows: [{ minutes: 10080, percent: 12 }] }
+  ]
 }
 
 const prompts: RemotePrompt[] = [
@@ -230,6 +269,7 @@ const results: Results = {
     committed: [{ path: 'src/auth.ts', status: 'M', added: 10, removed: 2 }]
   },
   diff: { text: 'diff --git a/src/new.ts b/src/new.ts\n@@ -1 +1 @@\n-a\n+b\n' },
+  file: { kind: 'text', text: 'export const a = 1\n', size: 19 },
   exits: {
     primary: { kind: 'push-pr', label: '推送并创建 PR', blocker: '有未提交的改动' },
     secondary: { kind: 'open-pr', label: '打开 PR #12', blocker: '正在读取 PR…', url: 'https://github.com/o/r/pull/12' },
@@ -237,7 +277,103 @@ const results: Results = {
     base: 'main',
     baseProtected: true,
     archive: { blocker: '还有未推送的提交' }
-  } satisfies Required<RemoteExits>
+  } satisfies Required<RemoteExits>,
+  // 看板 · GitHub (PRD F22 v1.229 ⑤): two projects, one on GitHub and one with no remote there.
+  'github-board': {
+    gh: 'ready',
+    projects: [
+      {
+        project: 'proj1',
+        board: {
+          state: 'ok',
+          repo: { host: 'github.com', owner: 'acme', name: 'web' },
+          issues: [
+            {
+              kind: 'issue',
+              number: 139,
+              title: 'Safari 17 上结算页白屏',
+              url: 'https://github.com/acme/web/issues/139',
+              author: 'lin-wei',
+              labels: ['bug'],
+              comments: 2,
+              updatedAt: 1_730_000_000_000
+            }
+          ],
+          prs: [
+            {
+              kind: 'pr',
+              number: 140,
+              title: 'chore: 升级 Vite 到 7',
+              url: 'https://github.com/acme/web/pull/140',
+              author: 'jacob',
+              labels: [],
+              comments: 1,
+              updatedAt: 1_730_000_100_000,
+              draft: false,
+              review: 'changes-requested',
+              reviewRequestedFromMe: true,
+              checks: { state: 'failing', total: 2, passed: 1, pending: 0, failing: [{ name: 'e2e (playwright)', runId: 500, jobId: 1 }] }
+            }
+          ],
+          fetchedAt: 1_730_000_200_000
+        }
+      },
+      { project: 'proj2', board: { state: 'not-github' } }
+    ]
+  },
+  'github-detail': {
+    ok: true,
+    detail: {
+      kind: 'pr',
+      repo: { host: 'github.com', owner: 'acme', name: 'web' },
+      number: 140,
+      title: 'chore: 升级 Vite 到 7',
+      url: 'https://github.com/acme/web/pull/140',
+      state: 'open',
+      author: 'jacob',
+      createdAt: 1_730_000_000_000,
+      labels: [],
+      assignees: ['jacob'],
+      body: '- vite 6.3 → 7.1\n- Node 最低版本改成 20.19',
+      comments: [{ author: 'github-actions', createdAt: 1_730_000_050_000, body: 'e2e 失败：checkout.spec.ts › 付款按钮可见' }],
+      commentCount: 3,
+      pr: {
+        draft: false,
+        headRef: 'jacoy/vite-7',
+        baseRef: 'main',
+        crossRepo: false,
+        additions: 86,
+        deletions: 41,
+        changedFiles: 7,
+        review: 'approved',
+        checks: [
+          { name: 'e2e (playwright)', verdict: 'failed', startedAt: 1_730_000_000_000, completedAt: 1_730_000_050_000 },
+          { name: 'lint', verdict: 'passed', startedAt: 1_730_000_000_000, completedAt: 1_730_000_028_000 }
+        ]
+      }
+    }
+  },
+  'github-start': {
+    link: { repo: 'github.com/acme/web', kind: 'pr', number: 140 },
+    title: '#140 chore: 升级 Vite 到 7',
+    prompt: '处理 GitHub PR acme/web#140\nhttps://github.com/acme/web/pull/140',
+    branch: 'jacoy/vite-7',
+    base: 'main',
+    startAt: 'refs/remotes/origin/jacoy/vite-7'
+  }
+}
+
+/** What the phone's Swift text rules (ios/Wavi/Views/ContextSheet.swift `tokenText`, `windowLabel`) must produce: the desktop's own, in Chinese. */
+const vectors = {
+  tokens: [0, 999, 1000, 1499, 1500, 9949, 172_000, 999_499, 1_000_000, 1_250_000, 9_960_000, 12_000_000].map((n) => ({ count: n, text: formatTokens(n) })),
+  windowLabels: [
+    { vendor: 'claude', minutes: 300 },
+    { vendor: 'claude', minutes: 10_080 },
+    { vendor: 'codex', minutes: 10_080 },
+    { vendor: 'claude', minutes: 1440 },
+    { vendor: 'claude', minutes: 90 },
+    { vendor: 'claude', minutes: 10_080, scope: 'Sonnet' }
+  ].map((w) => ({ ...w, label: windowLabel(w.vendor as 'claude' | 'codex', w.minutes, w.scope) }))
 }
 
 function compute() {
@@ -246,7 +382,8 @@ function compute() {
     commands,
     shipActions,
     events,
-    results
+    results,
+    vectors
   }
 }
 

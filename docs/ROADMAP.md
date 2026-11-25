@@ -1,6 +1,6 @@
 # Wavi 路线图与进度
 
-> 最后更新：2026-11-20
+> 最后更新：2026-11-25
 > 本文只记**做到哪了**：已完成什么、正在做什么、还没做什么。产品最终长什么样写在 [PRD](PRD.md)。
 > 维护规则：完成、新增、取消一项时直接改这里（勾选、移动或划掉），更新顶部日期；不要另建任务单、验收记录或计划文档。验收结论写进对应里程碑下面，几行即可。
 
@@ -8,7 +8,25 @@
 
 ## 当前位置
 
-- 2026-11-20：F26 自动领取 GitHub issue 做完（PRD v1.226，Figma 102）：共享逻辑、main（轮询、写权限缓存、指派 + 👀、验收命令）、界面（设置 · 自动化「GitHub issue」、Git · 变更 的报告块和「批准」、看板 · GitHub 的「排队」、会话头「自动领取 #号」）和 e2e（假 gh、本地 bare 远程）都有了。只剩在 `meloer101/wavi-pr-loop-test` 上真实走一遍（要作者的 gh 账号）。见下面「F26」。
+- 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
+- 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
+- 2026-11-24：手机设置页的「主题」和「启动时打开」改成全宽玻璃 sheet（PRD v1.239，Figma 109，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：不再用系统 `Menu`，点一行改值并关闭，高度贴合内容。已验证：`xcodebuild test` 通过，109A / 109B 深浅色四张截图对过；未验证：系统 sheet 的真实玻璃和拖动条位置（窗口截图画不出系统的 sheet）。
+- 2026-11-24：手机 context sheet 重画（PRD v1.232，Figma 108，`ios/Wavi/Views/ContextSheet.swift`）已做完：去掉不透明底和 Spacer，用系统玻璃，高度贴合内容；横条换成 40 根刻度（`tickMarks`），压缩点是替换掉的那一根；上下文头一行的百分比不再包胶囊；只显示 5 小时和 7 天窗口（`shownWindows` 去掉带 `scope` 的）；「放进 /compact」用主按钮样式。已验证：`xcodebuild test` 通过，Figma 108A / 108B / 108C 深浅色六张截图对过；未验证：系统 sheet 在真机上的玻璃和高度（窗口截图画不出系统的 sheet）。
+- 2026-11-23：手机 App 设置页（PRD v1.231，Figma 105，`ios/Wavi/Views/AppSettingsView.swift`）已做完：会话列表左上角头像按钮推入设置页，标题菜单只剩「设置」和「取消配对」；主题（`WaviApp.swift` 的 `.preferredColorScheme`）、启动时打开、灵动岛和锁屏卡片（`LiveActivities.enabled` / `endAll`）、触感反馈、清除本机缓存（`PhoneCache.wipe()` / `size()`，不动配对和头像）、版本和协议号；新增手机图标 user-round（桌面 `glyphs.ts` 加 `UserRound`）。已验证：`xcodebuild test` 156 个通过（基线 149 + 新增 7），深浅色截图对过 Figma 105A / 105C / 105C′；未验证：真机上的主题切换、系统菜单（105B 的对话框、105D 的主题菜单）在模拟器里的样子。
+- 2026-11-24：Wavi 运行时阻止 Mac 空闲睡眠（PRD v1.238，设置 · 自动化 · 电源，`power.keepAwake` 默认开；`src/main/keep-awake.ts`）已做完，合盖睡眠的情况未实测。
+- 2026-11-24：GUI 对话表格的列宽和行高（PRD v1.237，`gui/table-cells.ts` 标短单元格，`gui/Chat.module.css` 的表格规则；e2e `gui-session.spec.ts` 加断言）已做完。
+- 2026-11-24：界面字号整体大一号（PRD v1.236，`src/renderer/styles/tokens.css` 的 `--text-*`）已做完。
+- 2026-11-24：侧栏原来的等宽字（时间、模型、快捷键、计数、版本号）改用 Google Sans 加 `tabular-nums`（PRD v1.235，`src/renderer/sidebar/*.module.css`）已做完。
+- 2026-11-24：界面字体换成 Google Sans（PRD v1.234，`@fontsource-variable/google-sans`，`--font-ui` 在 `src/renderer/styles/tokens.css`；对话区默认跟随，`appearance/map.ts`）已做完。
+- 2026-11-24：发布 v0.22.0（近黑深色配色、GUI 模型菜单按系列分组，以及手机看板、富文本、context 圆环）。
+- 2026-11-24：实色和实心玻璃的深色换成近黑高对比配色（PRD v1.233 ①，`src/renderer/styles/tokens.css`，新 token `--composer-finish`，`gui/Chat.module.css` 的输入框用它）；GUI 模型菜单按系列分组（②，`modelFamilies` 在 `src/renderer/gui/model.ts`，菜单 `FamilyColumns` 在 `Composer.tsx`；e2e `gui-session.spec.ts` 加一例）已做完。
+- 2026-11-23：手机会话页的表格不再错位、嵌套列表分层缩进（PRD v1.230 ①，`ios/Wavi/Views/Components.swift`）；富文本（②，`ios/Wavi/Views/Markdown.swift`，swift-markdown 解析；行内代码、文件路径 chip 点开只读文件页、任务列表、链接、代码块复制、表格单元格行内 Markdown 和右缘渐隐，新命令 `file`）已做完；手机对话页不再显示底部标签栏、不再画「未识别的条目」（`ios/Wavi/Views/SessionView.swift`、`ios/Wavi/Model/TranscriptGroups.swift`）；一轮折成「工作了」（③，`ios/Wavi/Model/TranscriptGroups.swift` 的 `.fold` / `.reply`、`SessionView.swift` 的 `FoldRow`；消息下面写时间和复制，复制图标换成桌面的 Copy）已做完；context 圆环（④，`ios/Wavi/Views/ContextSheet.swift`、`SessionView.swift` 会话设置那一行的右端；协议加 `RemoteSession.context` 和 `RemoteSessionList.usage`，Figma 104C）已做完：圆环平时画占用、离自动压缩点 20k 以内（不知道压缩点时 ≥ 80%）用 text/primary 并写百分比，点开 sheet 看 `172k / 200k`、压缩点刻度、这家 agent 的额度窗口，接近压缩时有「放进 /compact」（只放进输入框、不发送）。
+- 2026-11-22：修复发给 Pi 的长消息一直停在输入框、不按回车（PRD §6.9）：Pi 把超过 10 行或 1000 字符的粘贴折叠成 `[paste #N +K lines]`，Wavi 只认正文开头，等到超时。`src/shared/send-protocol.ts` 新增 `OTHER_AGENT_PROFILES`（目前只有 Pi），Claude / Codex / 其余 agent 不变；`send-protocol.test.ts` 加 Pi 的阈值和占位符用例。
+- 2026-11-23：手机新建会话 / 交给 agent 的卡片改用 `bgGrouped`（`ios/Wavi/Views/NewSessionView.swift`，Figma 103G：浅色 #ededed、深色 #222222）；原来是系统 Form 的默认行底色，浅色下白卡贴在白底上看不出来。
+- 2026-11-22：手机看板的界面（PRD v1.229 ①②③④⑥，Figma 103 / 103′）：iOS 26 标签栏「会话 | 看板」，两个标签各有自己的导航栈（`ios/Wavi/App/WaviApp.swift`），看板顶部「进度 | GitHub」最后看的哪一页记在本机（`@AppStorage`）；只有看板 · 进度能横屏（`ios/Wavi/App/Orientation.swift`：AppDelegate 的 mask 加 `requestGeometryUpdate`，会话页、详情、配对、设置和 sheet 仍锁竖屏）。进度是桌面的状态分组（`ios/Wavi/Model/Board.swift`：`GROUP_ORDER` 的顺序、状态→`card-<tone>`、`checksText` 同桌面），竖屏一段一张卡、空闲默认收起，横屏五列等宽、整排可纵向滚动、每张卡带状态图标和固定三行（检查优先于摘要）；卡片颜色走 `Shared.json` 的 `card-*`。GitHub 是桌面的 F9 页（`BoardView.swift`：范围文字页签、按项目分 Issue / PR、`#n` / 标签 / 评审状态 / 检查 / 评论 / 处理中 · 会话、下拉刷新传 `force`），点行进详情（`GitHubItemView.swift`：正文 Markdown、PR 的分支 / `+N −M` / 检查、最新评论、在 GitHub 打开、交给 agent），交给 agent 用 `github-start` 的答案打开带任务模式的 `NewSessionView`（项目固定、新 worktree、分支和基于预填、任务可改、创建并发送带 `task`）；gh 没装 / 没登录（103H）和连不上 Mac 的 GitHub（103I，不缓存）各一张状态页，旧 Mac 的 `ok:false` 写「Mac 上的 Wavi 要更新」。超时：`github-board` 45 s、`github-detail` / `github-start` 60 s、带 `task` 的 `new-session` 75 s。`phone-assets.test.ts` 加 15 个 `card-*` 颜色和 7 个图标（重生成 `Shared.json`、`Assets.xcassets/Icons`）。单测 `WaviTests/BoardTests.swift`，截图 `WaviTests/BoardShots.swift` → `test-results/board/board-*.png`。还没在连着 Mac 的真机上走过。
+- 2026-11-22：手机看板的 Mac 端和线格式（PRD v1.229 ⑤，F9 / F22；手机界面还没做）：`RemoteSession` 多三个可选字段 `checks`（这一轮的检查，`turnCheckView`，无话可说时不发）、`stat`（worktree 的 `+N −M`，两者都是 0 或未知时不发）、`github`（会话处理的 issue / PR）；新命令 `github-board`（每个项目一条，按会话列表顺序，用主进程 `listBoard` 的 1 分钟缓存，`force` 绕过；gh 答不了时只回 gh 的状态）、`github-detail`（`boardDetail`）、`github-start`（`boardDetail` → PR 再 `prStart` → `taskPrompt` / `itemTitle`，分支名按同仓库 PR 的 head（没被本地分支占用时）否则 `itemBranch`）；`new-session` 加可选 `task`，有它时 worktree 从 `startAt` 开始、建好后会话拿标题 / `titleSource` / `github` 和首条消息（桌面 `handTask` 抽到 `src/renderer/new-session/hand-task.ts`，两边共用；`startBranch` 进 `src/shared/github-board.ts`，`新建会话` 和主进程同一套起名规则）。Swift 只加线格式（`ios/Wavi/Model/Wire.swift`、`WireTests`），`REMOTE_PROTOCOL` 不变。单测 `remote.test.ts`、`model.test.ts`、`github-start.test.ts`、`wire-samples.test.ts`（样张重生成），e2e `remote-github.spec.ts`（假手机 + 假 gh：列表、详情、交给 agent、新会话的标题 / `github` / 首条消息；CLI agent 的任务在命令行上）。
+- 2026-11-22：侧栏「更新」检查失败时写「无法检查更新」，不再误报「已是最新版本」（PRD v1.228）。
+- 2026-11-20：F26 自动领取 GitHub issue 做完（PRD v1.242，Figma 102）：共享逻辑、main（轮询、写权限缓存、指派 + 👀、验收命令）、界面（设置 · 自动化「GitHub issue」、Git · 变更 的报告块和「批准」、看板 · GitHub 的「排队」、会话头「自动领取 #号」）和 e2e（假 gh、本地 bare 远程）都有了。只剩在 `meloer101/wavi-pr-loop-test` 上真实走一遍（要作者的 gh 账号）。见下面「F26」。
 - 2026-11-20：官网分享封面换成新首屏的样子（Figma「官网·新风格探究‘」`OG · 分享封面 C · 英文` `1811:18007`：朱红底、`Run ALL coding agents on your Mac.`、协作句、GitHub「Open source · Totally free」、点阵翻花绳），导出成 `site/public/og-2.png`（2400×1260），删掉杂志封面 `og.png`；换文件名是为了让 X 等按图片地址缓存的卡片重新抓图，中英文两页仍是同一张。
 - 2026-11-19：官网从翻页杂志换成滚动落地页（PRD v1.224，Figma「官网·新风格探究‘」frame O `1794:15463`）：一页一语言（英文 `/`、中文 `/zh/`），静态 HTML + CSS，页头 → 朱红首屏（`Run ALL coding agents on your Mac.`）→ 19 家 agent 条 → 01 Agents → 02 Board → 03 GitHub → 04 Windows + Appearance → FAQ → 下载与页脚合成一块；`site/src/components/Home.astro` 加 `home/` 下每段一个组件，文案在 `i18n.ts`，字体换成 DM Sans / Source Serif 4 Italic / JetBrains Mono / Noto Sans SC 的自托管子集，翻页脚本、杂志组件和图片删掉。
 - 2026-11-19：手机的离线缓存和重连（PRD v1.220 ④，Figma 62B / 62F / 63B3，只做手机端）：`ios/Wavi/Store/Cache.swift` —— 会话列表带 Mac 发来的时刻、每个会话最近 200 条对话，写成 `Application Support/Wavi/Remote/<配对密钥摘要>/` 下的 JSON，首解锁后可读（后台唤醒还能连）、不进备份、1 s 防抖、写文件不在主线程；取消配对后整个目录删掉（Mac 说不认识这台手机时配对和缓存都留着，v1.223），Mac 的完整列表里没有的会话删掉它的对话。`AppModel` 冷启动先读它再连，连上后照旧用快照和 feed 替换，`watch` 打开会话时没连上就用缓存里的对话（62F），没有缓存时列表是 63B3。重连：`RemoteClient` 里新的 `Reconnect`（前台 1 秒、之后每 2 秒一次，连上并站住后从 1 开始；Mac 不认识这台手机、协议对不上或连开连断三次时 30 秒），网络变化和回到前台仍立即重连。测试 `WaviTests/CacheTests.swift`；截图 `test-results/offline/offline-{list,session}-{dark,light}.png`（`WaviTests/OfflineShots.swift`）
@@ -137,6 +155,7 @@
 - [x] 官网 `site/` 部署到 GitHub Pages（2026-10-21 推送 main 后自动部署，https://meloer101.github.io/terminal-reborn/ ；英文版不在这一轮里）；2026-10-21 起 `site/` 是 Astro 项目，Pages 工作流先构建再发布，同一份站点也部署到 Vercel（项目根目录 `site/`，见 `site/vercel.json`）
 - [x] 官网域名 https://wavi.autos （2026-11-18，在 Vercel 注册，项目 `wavi`）：`www.wavi.autos` 和 `wavi-pi.vercel.app` 301 到它；页头加 canonical、绝对地址的 hreflang 和 `x-default`、`SoftwareApplication` JSON-LD，`/robots.txt` 和 `/sitemap.xml` 由 `site/src/pages/` 按构建的 `site` 生成；README 链接已换。GitHub Pages 同日停用（作者定）：删掉 `.github/workflows/pages.yml`，仓库设置里关掉 Pages，原地址 `meloer101.github.io/Wavi-Ultraterminal/` 不再有副本
 - [x] 官网接入 Vercel Web Analytics（2026-11-20）：`site/` 加 `@vercel/analytics`，`Base.astro` 的 `<head>` 放 `<Analytics />`，中英文两页都计数（访客、页面浏览、来源）；Vercel 项目 `wavi` 的 Analytics 已开启，部署后数据出现在项目的 Analytics 页
+- [x] 官网按浏览器语言选中英文（2026-11-21，PRD v1.226）：`site/vercel.json` 两条 307 跳转，`/` 在 cookie `lang=zh`、或没有 cookie 且 `Accept-Language` 以 `zh` 开头时跳到 `/zh/`；页头和页脚的语言链接点击时写 cookie `lang`（`Base.astro` 的脚本，页脚语言链接补了 `hreflang`）。同日官网的仓库链接换成 `meloer101/Wavi-Your_next_ADE`（`site/src/site.ts`）
 - [x] 官网「Download for macOS」直接下载最新版（2026-11-18）：链接是 `releases/latest/download/Wavi-<arch>.dmg`，`release.yml` 每次发版多传一份不带版本号的 `Wavi-arm64.dmg` / `Wavi-x64.dmg`（v0.20.0 已手动补传）；默认 Apple 芯片的包，Chrome / Edge 报出 Intel 时换成 x64，Safari / Firefox 报不出芯片，Intel 用户要去 GitHub 页面下 x64
 - [x] README 按 v0.3.0 重写，中文在前，加“Wavi 不会做的事”四条（2026-10-20）
 - [x] README 改为英文在前（`README.md`），中文另成 `README.zh-CN.md`（2026-10-24，跟随 PRD v1.62 主要市场改为海外）：横幅、徽章、深浅两套真实应用截图（`<picture>`）、官网的比较图和流程图，`docs/assets/readme/`；截图用 `npm run readme:shots` 重拍（演示仓库 + e2e 夹具 + 一个真实 Claude Code 会话，`scripts/readme-shots/`）。同日在 GitHub 上补了 20 个 topic、改了简介、上传了 social preview 图
@@ -470,11 +489,15 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
   - [ ] 手机端：通知权限、device token 和 Live Activity push token 交给 Mac；Notification Service Extension 解密；权限通知的「允许 / 拒绝」；Live Activity 后台 start / update / end
   - [ ] Figma：通知的文字和按钮、设置 · 手机 的「推送」开关
 - [ ] 阶段 2 · TestFlight 外部测试（验收 ⑬；作者在 App Store Connect 建 App）
+- [ ] 手机看板（2026-11-22 定，PRD v1.229，Figma 103 `1853:9213`）
+  - [x] Figma：103A–103I 深浅各一，进度以 103′ `1860:10582` 为准（卡片按状态上色，横屏卡片固定三行），作者 2026-11-22 确认
+  - [x] Mac 端和线格式（2026-11-22）：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式。`src/shared/remote.ts`、`src/shared/github-board.ts`（新增 `startBranch` / `BoardStart`）、`src/main/remote/index.ts`、`src/main/remote/github-start.ts`、`src/renderer/remote/*`、`src/renderer/new-session/hand-task.ts`、`src/shared/remote-wire-samples.json`、`ios/Wavi/Model/Wire.swift`、`ios/WaviTests/WireTests.swift`；e2e `remote-github.spec.ts`。手机界面还没做
+  - [x] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线（2026-11-22）：`ios/Wavi/App/WaviApp.swift`（标签栏、两个栈、记住的页签）、`App/Orientation.swift`（只有进度能横屏）、`Model/Board.swift`（分组和卡片色、检查行、横屏第三行、GitHub 列表和详情、旧 Mac）、`Views/BoardView.swift`、`Views/GitHubItemView.swift`、`Views/NewSessionView.swift`（任务模式）、`Views/Theme.swift`（`card-*`、卡片圆角）、`Model/AppModel.swift`（每次请求的超时）、`project.yml`（横屏）；`src/main/remote/phone-assets.test.ts` 加 15 个 `card-*` 颜色和 7 个图标，重生成 `ios/Wavi/Resources/Shared.json` 和 `ios/Wavi/Assets.xcassets/Icons`。单测 `WaviTests/BoardTests.swift`（分组顺序、颜色、横屏第三行、旧 Mac、GitHub 列表和详情），截图 `WaviTests/BoardShots.swift` → `test-results/board/`（进度竖排 / 横排、GitHub 列表、issue / PR 详情、交给 agent、gh 没登录、离线，深浅各一）。真机上还没看过
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
 
 ## 进行中：F26 自动领取 GitHub issue（2026-11-20 定）
 
-PRD F26 / v1.226。
+PRD F26 / v1.242。
 
 - [x] Figma（102，Section `1824:80380`，102A–D、102A′ / 102B1′ 浅色，作者 2026-11-20 确认）：设置 · 自动化「GitHub issue」一段（项目开关、领取范围、label、智能体 / 模型 / 权限、验收命令、间隔和上限）、Git · 变更 的报告块和「批准」、看板 · GitHub 行状态、会话头「自动领取 #号」、通知；两种主题
 - [x] `src/shared/issue-watch.ts`：领取资格（两档、label 由谁打）、状态机、排队和每天上限、报告文字、`Closes #号`
@@ -633,6 +656,9 @@ PRD F25 / §6.20，Figma 74（`1177:54922`）。
 - [ ] PRD §4 “P2 储备”中的各项
 
 ### D · 发布质量（穿插在各批次里）
+- [x] 官网的下载和 GitHub 按钮换成各自的图标、放在字左边（2026-11-22，PRD v1.227 ①）：`site/src/components/home/BtnIcon.astro`（Hugeicons `download-01` / `github`），首屏、页脚和页头的下载按钮都换了
+- [x] 官网图解和看板循环动画（2026-11-22，PRD v1.227 ②）：六张图解改成内联 SVG（`site/src/components/home/AgentDiagram.astro`），各自循环演一遍自己的架构；看板按 `site/src/components/home/board-cycle.ts` 的四步剧本搬卡片（FLIP），列计数、状态图形和那一条通知跟着变；两处进入视口才动、滑出暂停，减少动态效果时不循环；⌘J 每次点击重新查 `.card-needs`；看板卡片改成三行（图形 + 标题 + 右端 agent 标记 / 路径 / 状态），去掉改动量和时长，状态一律一行省略，1440×900 和 1440×800 都正好一屏
+- [ ] 官网 Appearance 窗口示范（PRD v1.227 ③）：Figma 稿待作者看
 - [x] 官网 `site/`：2026-11-19 换成滚动落地页（PRD v1.224，Figma「官网·新风格探究‘」frame O `1794:15463`）：页头、朱红首屏、19 家 agent 条、Agents / Board / GitHub / Windows + Appearance 四段、FAQ、下载与页脚合成一块；静态 HTML + CSS，没有动画库，脚本只留 Intel / Apple 芯片切换，FAQ 用 `<details>`；英文 `/`、中文 `/zh/`，文案在 `site/src/i18n.ts`，字体是 DM Sans / Source Serif 4 Italic / JetBrains Mono / Noto Sans SC（中文另加 Noto Serif SC 的 `所有`）的自托管子集；翻页脚本、杂志组件和杂志图片删掉，`cd site && npm test` 检查字体子集和从 `src/shared/agent-icon-svg.ts` 复制的 agent 标志。2026-11-19：页面分成十屏、每屏正好一个视口（导航加首屏等于 100svh，翻花绳随剩余高度缩放；宽屏滚动就近吸附，窄屏和矮屏按内容高度排），加入七处只播一次的动效（CSS 加一个小脚本；关掉 JavaScript 全部可见，减少动态效果只留淡入）和一处交互（看板正文的 ⌘J 键帽点按跳到下一张等你处理的卡片），PRD v1.225。还没做：中文页的派活和 GitHub 窗口画面（现在是英文界面）、文档页（Starlight）
 - [x] D1 性能基线：10 / 20 个会话的内存、输入延迟、冷启动，8 小时长跑（2026-10-20，PRD §6.12）。外部背景：三家竞品都有内存 / CPU 随时间涨的 issue——o#10928（正常使用中越用越重）、o#19768（主进程每秒漏 26 MB 直到被系统杀掉）、s#3049（渲染进程 60 分钟涨到 3.2 GB 后 GC 卡死）、c#5209（2 GB 涨到 12 GB），Electron 和 xterm.js 被点名；在多 agent 这个定位上，稳定跑 10–20 个会话是前提
   - [x] 8 个会话的第一份数据（2026-10-20，假 agent，M4 Retina，修复图集之后的构建）：每个会话约 4900 行中文回滚、空闲时 Wavi 加守护进程约 1080 MB，输入延迟 p50 / p95 为 13 / 20 ms；7 个会话在后台各输出 40 行/秒时，内存峰值 1123 MB，渲染进程 CPU 6–10%；在正在输出的会话里打字为 29 / 40 ms

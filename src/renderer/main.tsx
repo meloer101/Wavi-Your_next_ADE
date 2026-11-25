@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/jetbrains-mono'
+import '@fontsource-variable/google-sans/opsz.css'
 import './styles/tokens.css'
 import './styles/base.css'
 import { initTheme } from './theme'

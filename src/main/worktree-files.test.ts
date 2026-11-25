@@ -12,7 +12,8 @@ vi.mock('electron', () => ({
 vi.mock('./workspace-store', () => ({ isWorkspaceDir: (path: string) => workspaceDirs.has(path) }))
 
 const { IPC } = await import('@shared/ipc')
-const { classifyChange, inGeneratedFolder, isInside, normalizeRelative, openAction, openWorktreeEntry, registerWorktreeFileHandlers, resolveFileLinks, walkFiles, watchesRecursively } =
+const { MAX_PREVIEW_BYTES } = await import('@shared/worktree-files')
+const { readSessionFile, classifyChange, inGeneratedFolder, isInside, normalizeRelative, openAction, openWorktreeEntry, registerWorktreeFileHandlers, resolveFileLinks, walkFiles, watchesRecursively } =
   await import('./worktree-files')
 
 describe('normalizeRelative', () => {
@@ -222,5 +223,56 @@ describe('用默认编辑器打开 never runs what it opens', () => {
     const openers = { openPath: async (p: string) => (calls.push(`open ${p}`), ''), openText: async (p: string) => (calls.push(`text ${p}`), ''), reveal: (p: string) => void calls.push(`reveal ${p}`) }
     for (const path of [script, bundle, plain]) await openWorktreeEntry(path, openers)
     expect(calls).toEqual([`text ${script}`, `reveal ${bundle}`, `open ${plain}`])
+  })
+})
+
+describe('readSessionFile (a phone chip’s path)', () => {
+  const outside = mkdtempSync(join(tmpdir(), 'tr-file-out-'))
+  writeFileSync(join(outside, 'secret.txt'), 'x')
+  const root = mkdtempSync(join(tmpdir(), 'tr-file-'))
+  mkdirSync(join(root, 'src'))
+  writeFileSync(join(root, 'src', 'a.ts'), 'hello\n')
+  symlinkSync(join(outside, 'secret.txt'), join(root, 'escape.txt'))
+
+  it('reads relative and absolute paths inside the folder', async () => {
+    expect(await readSessionFile(root, 'src/a.ts')).toMatchObject({ kind: 'text', text: 'hello\n' })
+    expect(await readSessionFile(root, './src/a.ts')).toMatchObject({ kind: 'text' })
+    expect(await readSessionFile(root, join(root, 'src', 'a.ts'))).toMatchObject({ kind: 'text' })
+    expect(await readSessionFile(root, join(realpathSync(root), 'src', 'a.ts'))).toMatchObject({ kind: 'text' })
+  })
+
+  it('says missing for a missing file, ../, paths outside the folder', async () => {
+    for (const path of ['nope.ts', '../x.ts', 'src/../../x.ts', join(outside, 'secret.txt'), '/etc/hosts', root, '']) {
+      expect(await readSessionFile(root, path)).toEqual({ kind: 'missing' })
+    }
+  })
+
+  it('says missing for a symlink leading out, one through a symlinked folder, a folder and a path through a file', async () => {
+    symlinkSync(outside, join(root, 'link'))
+    for (const path of ['escape.txt', 'link/secret.txt', 'src', 'src/a.ts/b']) expect(await readSessionFile(root, path)).toEqual({ kind: 'missing' })
+  })
+
+  it('says missing inside a protected folder of a home-directory session, and reads elsewhere', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'tr-file-home-'))
+    mkdirSync(join(home, 'Documents'))
+    writeFileSync(join(home, 'Documents', 'note.txt'), 'private')
+    writeFileSync(join(home, 'notes.txt'), 'ok')
+    const folders = [join(realpathSync(home), 'Documents')]
+    expect(await readSessionFile(home, 'Documents/note.txt', folders)).toEqual({ kind: 'missing' })
+    expect(await readSessionFile(home, join(home, 'Documents', 'note.txt'), folders)).toEqual({ kind: 'missing' })
+    expect(await readSessionFile(home, 'notes.txt', folders)).toMatchObject({ kind: 'text', text: 'ok' })
+    // A project that is itself in Documents is the user's choice.
+    expect(await readSessionFile(join(home, 'Documents'), 'note.txt', folders)).toMatchObject({ kind: 'text' })
+  })
+
+  it('answers binary and too-large files with their kind', async () => {
+    writeFileSync(join(root, 'bin.dat'), Buffer.from([0, 1, 2, 3, 0, 0]))
+    writeFileSync(join(root, 'big.txt'), Buffer.alloc(MAX_PREVIEW_BYTES + 1, 'a'))
+    expect(await readSessionFile(root, 'bin.dat')).toMatchObject({ kind: 'binary' })
+    expect(await readSessionFile(root, 'big.txt')).toMatchObject({ kind: 'too-large' })
+  })
+
+  it('throws what is not "unreadable" (a root that is gone)', async () => {
+    await expect(readSessionFile(join(root, 'gone'), 'a.ts')).rejects.toThrow()
   })
 })
