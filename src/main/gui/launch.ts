@@ -121,7 +121,12 @@ export function guiEnv(agent: CliAgent): Record<string, string> {
   const driver = AGENT_GUI[agent]
   const acpEnv = driver?.protocol === 'acp' && 'env' in driver ? driver.env : undefined
   // Figma 90G: Claude keeps a file checkpoint per message, so 回退 can put the code back (`rewind_files`).
-  const claudeEnv = driver?.protocol === 'claude-stream' ? { CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING: 'true' } : undefined
+  // Figma 59J: the task list. Claude Code 2.1.233+ offers no todo tools on current models unless asked (PRD §6.17);
+  // TASKS=0 picks TodoWrite (the whole list each call) over TaskCreate / TaskUpdate, which the chat reads.
+  const claudeEnv =
+    driver?.protocol === 'claude-stream'
+      ? { CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING: 'true', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', CLAUDE_CODE_ENABLE_TASKS: '0' }
+      : undefined
   return { ...AGENT_SPECS[agent].env, ...acpEnv, ...claudeEnv }
 }
 
