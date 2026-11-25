@@ -134,16 +134,15 @@ export type ActionLine =
   /** A parent whose descendants wait on the user: drawn in the attention colour. */
   | { kind: 'waiting'; count: number }
   | { kind: 'text'; text: string }
-  | { kind: 'key'; key: 'waitLeader' | 'noLeader' | 'unassigned' | 'done' | 'doneReview' | 'canceled' | 'working' | 'idle' }
+  | { kind: 'key'; key: 'unassigned' | 'done' | 'doneReview' | 'canceled' | 'working' | 'idle' }
 
 /**
  * The one line under a card's title: what its agent is doing (the session's current action, else its last sentence,
- * else the note the agent left on the card), or why nothing is. A card nobody took says who should: a root waits for
- * the project's leader (or says there is none), a child waits to be dispatched.
+ * else the note the agent left on the card), or why nothing is: a card nobody took waits to be dispatched.
  */
 export function actionLine(
   card: Card<Pick<Session, 'id' | 'status' | 'currentAction' | 'lastReply'>>,
-  ctx: { waitingBelow: number; isRoot: boolean; hasLeader: boolean }
+  ctx: { waitingBelow: number }
 ): ActionLine {
   if (ctx.waitingBelow > 0) return { kind: 'waiting', count: ctx.waitingBelow }
   const { state, session, task } = card
@@ -152,6 +151,5 @@ export function actionLine(
   const said = session?.currentAction?.trim() || session?.lastReply?.trim() || task.note?.trim()
   if (said) return { kind: 'text', text: said }
   if (session) return { kind: 'key', key: state === 'working' ? 'working' : 'idle' }
-  if (!ctx.isRoot) return { kind: 'key', key: 'unassigned' }
-  return { kind: 'key', key: ctx.hasLeader ? 'waitLeader' : 'noLeader' }
+  return { kind: 'key', key: 'unassigned' }
 }

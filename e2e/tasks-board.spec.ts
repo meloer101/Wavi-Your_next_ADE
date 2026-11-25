@@ -134,7 +134,7 @@ test('⌘-scroll zooms around the pointer, and the zoom label follows', async ()
   expect(parseInt((await zoom().textContent()) ?? '0', 10)).toBeGreaterThan(parseInt(before ?? '0', 10))
 })
 
-test('a seeded board: notes, links, leader label, both themes at 100 % and 50 %', async () => {
+test('a seeded board: notes, links, no project labels, both themes at 100 % and 50 %', async () => {
   const root = await make('p-acme', 'Cookie 会话迁移', { sessionId: 's-cookie' })
   const login = await make('p-acme', '登录接口测试', { parent: root, sessionId: 's-nav' })
   const refresh = await make('p-acme', '会话过期自动刷新', { parent: root, sessionId: 's-perf' })
@@ -149,7 +149,7 @@ test('a seeded board: notes, links, leader label, both themes at 100 % and 50 %'
   const setUp = async () => {
     await page.evaluate(() => {
       const ws = (globalThis as unknown as { __trWorkspace: { setState(p: unknown): void; getState(): { sessions: Array<{ id: string; status: string }> } } }).__trWorkspace
-      ws.setState({ leaderSessions: { 'p-acme': 's-cookie' }, sessions: ws.getState().sessions.map((x) => (x.id === 's-graph' ? { ...x, status: 'needs_you' } : x)) })
+      ws.setState({ sessions: ws.getState().sessions.map((x) => (x.id === 's-graph' ? { ...x, status: 'needs_you' } : x)) })
     })
   }
 
@@ -159,7 +159,7 @@ test('a seeded board: notes, links, leader label, both themes at 100 % and 50 %'
   await expect(note(remove)).toHaveAttribute('data-state', 'attention')
   await expect(note(root)).toContainText('1 个子任务等你处理')
   await expect(note(login)).toHaveAttribute('data-state', 'done')
-  await expect(board().getByTestId('task-project-label')).toHaveCount(2)
+  await expect(board().getByTestId('task-project-label')).toHaveCount(0)
   await expect(page.getByTestId('task-activity')).toBeVisible()
   await page.mouse.move(520, 470)
   await page.waitForTimeout(500)

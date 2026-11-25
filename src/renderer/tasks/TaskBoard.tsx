@@ -14,7 +14,6 @@ import { drawingFor, fitView, groupByProject, layoutBoard, panBy, scaleFor, zoom
 import { diffActivity, matchesFilter, snapshotOf, type Snapshot } from './model'
 import { Note, type NoteInfo } from './Note'
 import { ActivityPanel, Toolbar, ZoomControl } from './Panes'
-import { ProjectLabel } from './ProjectLabel'
 import { activityShown, defaultProject, startTaskSync, useTaskBoard } from './store'
 import { useCards } from './use-cards'
 import styles from './TaskBoard.module.css'
@@ -26,7 +25,7 @@ const TICK_MS = 15_000
 /** The last look at the cards, kept across tab switches so what happened while the tab was away still shows up. */
 let lastSnapshot: Snapshot | null = null
 
-const EMPTY_INFO: NoteInfo = { segments: [], progress: { done: 0, total: 0 }, waiting: 0, isRoot: true, hasLeader: false }
+const EMPTY_INFO: NoteInfo = { segments: [], progress: { done: 0, total: 0 }, waiting: 0 }
 
 export function TaskBoard() {
   const host = useRef<HTMLDivElement>(null)
@@ -42,8 +41,8 @@ export function TaskBoard() {
   const tasks = useTaskBoard((s) => s.tasks)
   const filter = useOverviewStore((s) => s.filter)
   const cards = useCards()
-  const { projects, worktrees, sessions, leaderSessions, activeSessionId } = useWorkspace(
-    useShallow((s) => ({ projects: s.projects, worktrees: s.worktrees, sessions: s.sessions, leaderSessions: s.leaderSessions, activeSessionId: s.activeSessionId }))
+  const { projects, worktrees, sessions, activeSessionId } = useWorkspace(
+    useShallow((s) => ({ projects: s.projects, worktrees: s.worktrees, sessions: s.sessions, activeSessionId: s.activeSessionId }))
   )
 
   useEffect(() => startTaskSync(), [])
@@ -92,20 +91,18 @@ export function TaskBoard() {
 
   const infos = useMemo(() => {
     const out = new Map<TaskId, NoteInfo>()
-    const walk = (node: TaskNode, hasLeader: boolean): void => {
+    const walk = (node: TaskNode): void => {
       const stateFn = (t: { id: TaskId }): TaskState => stateOf(t.id)
       out.set(node.task.id, {
         segments: childSegments(node, stateFn),
         progress: taskProgress(node, stateFn),
-        waiting: waitingBelow(node, stateFn),
-        isRoot: node.depth === 0,
-        hasLeader
+        waiting: waitingBelow(node, stateFn)
       })
-      for (const child of node.children) walk(child, hasLeader)
+      for (const child of node.children) walk(child)
     }
-    for (const t of trees) for (const root of t.roots) walk(root, leaderSessions?.[t.projectId] !== undefined)
+    for (const t of trees) for (const root of t.roots) walk(root)
     return out
-  }, [trees, stateOf, leaderSessions])
+  }, [trees, stateOf])
 
   const cardById = useMemo(() => new Map(cards.map((c) => [c.task.id, c])), [cards])
   const projectName = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects])
@@ -269,7 +266,6 @@ export function TaskBoard() {
   const activityOpen = activityShown(activityPref, size.w)
   const detail = detailId !== null ? cardById.get(detailId) : undefined
   const compose = composing ? defaultProject(projectIds, lastProjectId, activeProject) : undefined
-  const projectsOnBoard = useMemo(() => projects.filter((p) => layout.clusters.some((c) => c.projectId === p.id)), [projects, layout])
 
   // The world's content depends on the layout and the cards, not on the viewport: memoized, so panning and zooming
   // re-render the transform and nothing under it (the links, labels and notes keep their elements).
@@ -289,11 +285,6 @@ export function TaskBoard() {
             )
           })}
         </svg>
-        {drawing !== 'dot' &&
-          projectsOnBoard.map((p) => {
-            const cluster = layout.clusters.find((c) => c.projectId === p.id)!
-            return <ProjectLabel key={p.id} project={p} at={cluster.label} leader={leaderSessions?.[p.id] !== undefined ? sessions.find((x) => x.id === leaderSessions[p.id]) : undefined} />
-          })}
         {layout.cards.map((placed) => {
           const card = cardById.get(placed.id)
           if (!card) return null
@@ -314,7 +305,7 @@ export function TaskBoard() {
         })}
       </>
     ),
-    [layout, drawing, projectsOnBoard, leaderSessions, sessions, cardById, infos, selectedId, filter, projectName, now, onSelect, onOpen]
+    [layout, drawing, cardById, infos, selectedId, filter, projectName, now, onSelect, onOpen]
   )
 
   return (
@@ -347,7 +338,6 @@ export function TaskBoard() {
           parentTitle={detail.task.parentId !== undefined ? cardById.get(detail.task.parentId)?.task.title : undefined}
           worktree={worktrees.find((w) => w.id === sessions.find((s) => s.id === detail.session?.id)?.worktreeId)}
           dispatcher={detail.task.createdBy !== 'user' ? sessions.find((s) => s.id === detail.task.createdBy) : undefined}
-          hasLeader={infos.get(detail.task.id)?.hasLeader ?? false}
           now={now}
           onClose={() => {
             openDetail(null)

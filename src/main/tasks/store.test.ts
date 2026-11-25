@@ -74,6 +74,16 @@ describe('TaskBoard', () => {
     expect(t.board.update('missing', { title: 'x' })).toBeNull()
   })
 
+  it('stores a position, clears it with null and refuses a bad one', () => {
+    const t = setup()
+    const a = t.board.create({ projectId: 'p1', title: 'a' })!
+    expect(t.board.update(a.id, { pos: { x: 10, y: -20 } })!.pos).toEqual({ x: 10, y: -20 })
+    expect(t.board.update(a.id, { pos: { x: 2e6, y: 0 } })).toBeNull()
+    expect(t.board.update(a.id, { pos: { x: Number.NaN, y: 0 } })).toBeNull()
+    expect(t.board.list()[0]!.pos).toEqual({ x: 10, y: -20 })
+    expect(t.board.update(a.id, { pos: null })!.pos).toBeUndefined()
+  })
+
   it('validates parent changes: project, cycle, depth with the moved subtree', () => {
     const t = setup()
     const a = t.board.create({ projectId: 'p1', title: 'a' })!
@@ -182,7 +192,9 @@ describe('parseTaskDraft / parseTaskPatch', () => {
     for (const bad of [null, 'x', [], {}, { projectId: 'p' }, { projectId: 'p', title: 3 }, { projectId: '', title: 't' }, { projectId: 'p', title: 't', parentId: 4 }]) {
       expect(parseTaskDraft(bad)).toBeNull()
     }
-    for (const bad of [null, 'x', { title: 3 }, { manual: 'finished' }, { sessionId: 3 }, { parentId: '' }, { note: 5 }]) {
+    expect(parseTaskPatch({ pos: { x: 1, y: 2, z: 3 } })).toEqual({ pos: { x: 1, y: 2 } })
+    expect(parseTaskPatch({ pos: null })).toEqual({ pos: null })
+    for (const bad of [null, 'x', { pos: { x: 1 } }, { pos: { x: 1e7, y: 0 } }, { pos: 'a' }, { title: 3 }, { manual: 'finished' }, { sessionId: 3 }, { parentId: '' }, { note: 5 }]) {
       expect(parseTaskPatch(bad)).toBeNull()
     }
   })

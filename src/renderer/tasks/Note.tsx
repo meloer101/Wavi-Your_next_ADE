@@ -15,8 +15,6 @@ import styles from './Note.module.css'
 
 export const NOTE_M = defineMessages({
   zh: {
-    waitLeader: '等主理人',
-    noLeader: '没有主理人，不会派发',
     unassigned: '待派发',
     done: '已完成',
     doneReview: '已完成 · 等你审阅',
@@ -27,8 +25,6 @@ export const NOTE_M = defineMessages({
     states: { idle: '待派发', working: '运行中', attention: '等你处理', done: '已完成', error: '出错', canceled: '已取消' } satisfies Record<TaskState, string>
   },
   en: {
-    waitLeader: 'Waiting for the leader',
-    noLeader: 'No leader, will not be dispatched',
     unassigned: 'To dispatch',
     done: 'Done',
     doneReview: 'Done · awaiting review',
@@ -49,8 +45,6 @@ export interface NoteInfo {
   progress: { done: number; total: number }
   /** Descendants waiting on the user. */
   waiting: number
-  isRoot: boolean
-  hasLeader: boolean
 }
 
 export interface NoteProps {
@@ -80,7 +74,7 @@ function timeOf(card: Card<Session>, now: number): string {
 function NoteView({ card, placed, drawing, info, selected, dimmed, now, onSelect, onOpen }: NoteProps) {
   const m = useMessages(NOTE_M)
   const { task, state, session } = card
-  const line = actionLine(card, { waitingBelow: info.waiting, isRoot: info.isRoot, hasLeader: info.hasLeader })
+  const line = actionLine(card, { waitingBelow: info.waiting })
   const action = useActionText(line)
   const style: CSSProperties = { left: placed.x, top: placed.y, width: placed.w, height: placed.h }
   const common = {
@@ -158,8 +152,6 @@ const same = (a: NoteProps, b: NoteProps): boolean =>
   a.dimmed === b.dimmed &&
   a.now === b.now &&
   a.info.waiting === b.info.waiting &&
-  a.info.isRoot === b.info.isRoot &&
-  a.info.hasLeader === b.info.hasLeader &&
   a.info.progress.done === b.info.progress.done &&
   a.info.progress.total === b.info.progress.total &&
   a.info.segments.join() === b.info.segments.join() &&

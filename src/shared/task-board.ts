@@ -10,6 +10,23 @@ export type TaskId = string
 /** What a card says when it has no session to say it: waiting to be dispatched, finished, or dropped. */
 export type TaskManual = 'todo' | 'done' | 'canceled'
 
+/** A card's place the user gave it (PRD F9 v1.250), in `note` (100 %) coordinates. */
+export interface TaskPos {
+  x: number
+  y: number
+}
+
+/** The largest coordinate a position may hold; anything further out is a damaged file or a bad payload. */
+export const TASK_POS_LIMIT = 1e6
+
+/** The position `raw` says, or null unless both numbers are finite and within ±`TASK_POS_LIMIT`. */
+export function parseTaskPos(raw: unknown): TaskPos | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const { x, y } = raw as { x?: unknown; y?: unknown }
+  const ok = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= TASK_POS_LIMIT
+  return ok(x) && ok(y) ? { x, y } : null
+}
+
 export interface Task {
   id: TaskId
   /** Shown as `#seq` and used by `wavi task`; unique across all projects, counted up by the store, never reused. */
@@ -26,6 +43,11 @@ export interface Task {
   manual: TaskManual
   /** The last sentence an agent left on the card (`wavi task update --note`). */
   note?: string
+  /**
+   * Where the user dragged it (v1.250): a root's canvas position, a child's offset from its parent's top-left. Without
+   * it the card keeps the tree's automatic place, following its parent.
+   */
+  pos?: TaskPos
   createdAt: number
   updatedAt: number
 }
@@ -46,6 +68,8 @@ export interface TaskPatch {
   manual?: TaskManual
   sessionId?: SessionId | null
   parentId?: TaskId | null
+  /** `null` puts the card back where the tree would place it. */
+  pos?: TaskPos | null
 }
 
 export const TASK_LIMITS = {
@@ -175,6 +199,8 @@ function parseTask(raw: unknown): Task | null {
   if (str(r.parentId) && r.parentId !== '') task.parentId = r.parentId
   if (str(r.sessionId) && r.sessionId !== '') task.sessionId = r.sessionId
   if (str(r.note) && r.note !== '') task.note = r.note.slice(0, TASK_LIMITS.note)
+  const pos = parseTaskPos(r.pos)
+  if (pos) task.pos = pos
   return task
 }
 

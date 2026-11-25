@@ -1,5 +1,5 @@
 // Validation of what the renderer sends over `TASK_IPC` (main never trusts it). Pure.
-import type { TaskDraft, TaskId, TaskManual, TaskPatch } from '@shared/task-board'
+import { parseTaskPos, type TaskDraft, type TaskId, type TaskManual, type TaskPatch } from '@shared/task-board'
 
 const record = (v: unknown): Record<string, unknown> | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null)
 const idText = (v: unknown): v is string => typeof v === 'string' && v !== '' && v.length <= 128 && !v.includes('\0')
@@ -53,6 +53,14 @@ export function parseTaskPatch(raw: unknown): TaskPatch | null {
   if (v.parentId !== undefined) {
     if (v.parentId !== null && !idText(v.parentId)) return null
     patch.parentId = v.parentId
+  }
+  if (v.pos !== undefined) {
+    if (v.pos === null) patch.pos = null
+    else {
+      const pos = parseTaskPos(v.pos)
+      if (!pos) return null
+      patch.pos = pos
+    }
   }
   return patch
 }

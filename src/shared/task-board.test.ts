@@ -140,6 +140,12 @@ describe('parseTasksFile', () => {
     expect(taskDepth(out.tasks, '2')).toBeLessThanOrEqual(TASK_LIMITS.maxDepth)
     expect(taskDepth(out.tasks, '3')).toBeLessThanOrEqual(TASK_LIMITS.maxDepth)
   })
+  it('keeps a position only when both numbers are finite and within 1e6', () => {
+    const pos = (v: unknown) => parseTasksFile({ tasks: [task('1', { pos: v as never })] }).tasks[0]?.pos
+    expect(pos({ x: -120.5, y: 30 })).toEqual({ x: -120.5, y: 30 })
+    expect(pos({ x: 1e6, y: -1e6 })).toEqual({ x: 1e6, y: -1e6 })
+    for (const bad of [{ x: 1 }, { x: 1, y: 'a' }, { x: Infinity, y: 0 }, { x: 0, y: NaN }, { x: 1e6 + 1, y: 0 }, null, 5]) expect(pos(bad)).toBeUndefined()
+  })
   it('clips long text', () => {
     const out = must(parseTasksFile({ tasks: [task('1', { title: 'x'.repeat(500), body: 'y'.repeat(20_000), note: 'z'.repeat(2_000) })] }).tasks[0])
     expect(out.title).toHaveLength(TASK_LIMITS.title)

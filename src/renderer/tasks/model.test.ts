@@ -124,7 +124,7 @@ describe('appendEvents', () => {
 describe('actionLine', () => {
   type S = { id: string; status: CardSession['status']; currentAction?: string; lastReply?: string }
   const cardOf = (t: Task, s?: S) => joinCards([t], s ? [s] : [])[0]!
-  const root = { waitingBelow: 0, isRoot: true, hasLeader: true }
+  const root = { waitingBelow: 0 }
 
   it('puts a parent’s waiting descendants first', () => {
     expect(actionLine(cardOf(task()), { ...root, waitingBelow: 2 })).toEqual({ kind: 'waiting', count: 2 })
@@ -141,10 +141,8 @@ describe('actionLine', () => {
     expect(actionLine(cardOf(task({ note: '等 #3' })), root)).toEqual({ kind: 'text', text: '等 #3' })
   })
 
-  it('says who a card without a session waits for', () => {
-    expect(actionLine(cardOf(task()), root)).toEqual({ kind: 'key', key: 'waitLeader' })
-    expect(actionLine(cardOf(task()), { ...root, hasLeader: false })).toEqual({ kind: 'key', key: 'noLeader' })
-    expect(actionLine(cardOf(task()), { ...root, isRoot: false })).toEqual({ kind: 'key', key: 'unassigned' })
+  it('says a card without a session waits to be dispatched', () => {
+    expect(actionLine(cardOf(task()), root)).toEqual({ kind: 'key', key: 'unassigned' })
   })
 
   it('names done, done and unread, and canceled', () => {
