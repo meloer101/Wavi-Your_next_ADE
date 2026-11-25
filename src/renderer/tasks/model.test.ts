@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Task } from '@shared/task-board'
-import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, splitCard, type CardSession } from './model'
+import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, splitCard, usableLeader, type CardSession } from './model'
 
 let n = 0
 function task(over: Partial<Task> = {}): Task {
@@ -174,5 +174,38 @@ describe('splitCard', () => {
   it('is null without text', () => {
     expect(splitCard('')).toBeNull()
     expect(splitCard(' \n \n')).toBeNull()
+  })
+})
+
+describe('splitCard · code points', () => {
+  it('never cuts a surrogate pair at the 120-unit boundary: the emoji starts the body', () => {
+    const out = splitCard(`${'a'.repeat(119)}😀tail\nnext`)!
+    expect(out.title).toBe('a'.repeat(119))
+    expect(out.body).toBe('😀tail\nnext')
+    expect(out.title).toHaveLength(119)
+  })
+  it('keeps a pair that fits, and the title never goes over 120 UTF-16 units (main counts them so)', () => {
+    const out = splitCard(`${'a'.repeat(118)}😀z`)!
+    expect(out.title).toBe(`${'a'.repeat(118)}😀`)
+    expect(out.title.length).toBe(120)
+    expect(out.body).toBe('z')
+    expect(Array.from(splitCard('😀'.repeat(70))!.title)).toHaveLength(60)
+  })
+})
+
+describe('usableLeader', () => {
+  const check = { codexSandboxMode: false }
+  it('keeps 暂不派发 and an agent that is installed and may lead', () => {
+    expect(usableLeader('none', {}, check)).toBe('none')
+    expect(usableLeader('claude', { claude: true }, check)).toBe('claude')
+  })
+  it('falls back to 暂不派发 for an agent that is not installed or may not lead here', () => {
+    expect(usableLeader('codex', { claude: true, codex: false }, check)).toBe('none')
+    expect(usableLeader('codex', { claude: true }, check)).toBe('none')
+    expect(usableLeader('codex', { codex: true }, { codexSandboxMode: true })).toBe('none')
+  })
+  it('keeps the choice while detection is not back', () => {
+    expect(usableLeader('claude', null, check)).toBe('claude')
+    expect(usableLeader('claude', { claude: true }, null)).toBe('claude')
   })
 })

@@ -90,29 +90,29 @@ describe('layoutBoard · note mode', () => {
     expect(card(l, 'r2').y).toBeGreaterThanOrEqual(card(l, 'r1').y + card(l, 'r1').h + DIMS.note.rootGap)
   })
 
-  it('never overlaps two cards, and never overlaps two clusters', () => {
+  it('never overlaps two cards, also across projects', () => {
     const tasks = [...tree(), ...['q1', 'q2', 'q3'].map((id) => task(id, 'q')), task('z', 'z'), task('z1', 'z', 'z'), task('z2', 'z', 'z')]
     const l = board(tasks, 'note', ['p', 'q', 'z'])
     for (let i = 0; i < l.cards.length; i++) for (let j = i + 1; j < l.cards.length; j++) expect(overlaps(l.cards[i]!, l.cards[j]!)).toBe(false)
-    for (let i = 0; i < l.clusters.length; i++) for (let j = i + 1; j < l.clusters.length; j++) expect(overlaps(l.clusters[i]!, l.clusters[j]!)).toBe(false)
   })
 
-  it('wraps clusters into a new row once the row is full', () => {
+  it('wraps projects into a new row once the row is full', () => {
     const wide = (p: string): Task[] => [task(`${p}0`, p), task(`${p}1`, p, `${p}0`), task(`${p}2`, p, `${p}1`), task(`${p}3`, p, `${p}2`)]
     const l = layoutBoard(groupByProject(['a', 'b', 'c'].flatMap(wide), ['a', 'b', 'c'], buildTaskTree), 'note')
-    const rows = new Set(l.clusters.map((c) => c.y))
+    const rows = new Set(['a0', 'b0', 'c0'].map((id) => card(l, id).y))
     expect(rows.size).toBeGreaterThan(1)
   })
 
   it('gives a project without cards no room', () => {
-    const l = board([], 'note', ['empty'])
-    expect(l.clusters).toHaveLength(0)
-    expect(l.cards).toHaveLength(0)
+    const l = board([task('x', 'later')], 'note', ['empty', 'later'])
+    expect(l.cards).toHaveLength(1)
+    expect(card(l, 'x')).toMatchObject({ x: 0, y: 0 })
+    expect(board([], 'note', ['empty']).cards).toHaveLength(0)
   })
 
   it('orders projects as given and appends projects it was not told about', () => {
     const l = board([task('x', 'later'), task('y', 'first')], 'note', ['first'])
-    expect(l.clusters.map((c) => c.projectId)).toEqual(['first', 'later'])
+    expect(l.cards.map((c) => c.projectId)).toEqual(['first', 'later'])
   })
 })
 

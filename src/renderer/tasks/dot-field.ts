@@ -148,7 +148,7 @@ export function lightBucket(light: number, levels: number, peak: number = GLOW.p
 export const RIPPLE = { radius: 160, ms: 600, width: 24, peak: 0.45 } as const
 
 export interface Ripple {
-  /** Centre in world units (the layout the card was placed in): it follows the board when it is panned. */
+  /** Centre in note (100 %) coordinates, whichever mode is drawn: it follows the board when it is panned or zoomed. */
   x: number
   y: number
   /** Neutral: the text colour (a card pasted). Attention: a card now waits on the user. */

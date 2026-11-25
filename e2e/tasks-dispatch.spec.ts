@@ -181,7 +181,7 @@ test.describe('任务看板 · wavi task', () => {
         drafts: {}
       })
     )
-    app = await launchApp({ ...fake.env, HOME: home, CLAUDE_CONFIG_DIR: join(fake.root, 'claude-config') }, { userDataDir: profile })
+    app = await launchApp({ ...fake.env, HOME: home, CODEX_HOME: join(home, '.codex'), CLAUDE_CONFIG_DIR: join(fake.root, 'claude-config') }, { userDataDir: profile })
     page = await app.firstWindow()
     await setWindowSize(app, page, 1440, 900)
     await expect(page.locator('[data-region="terminal"] .xterm').first()).toBeVisible(WITHIN)
@@ -252,6 +252,23 @@ test.describe('任务看板 · wavi task', () => {
     expect(await sessionIds()).toHaveLength(before.length + 1)
   })
 
+  test('two quick submits (a key repeat, a double click) make one card and start one session', async () => {
+    await board().click({ position: { x: 300, y: 300 } })
+    const before = await sessionIds()
+    await page.keyboard.press('n')
+    const input = page.getByTestId('task-compose-input')
+    await expect(page.getByTestId('task-compose-leader')).toContainText('Claude Code')
+    await input.fill('Pasted once')
+    await input.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.getByTestId('task-compose-submit').click({ clickCount: 2, force: true, timeout: 1000 }).catch(() => {})
+    await expect(page.getByTestId('task-compose')).toHaveCount(0, WITHIN)
+    await expect.poll(async () => (await cards()).find((c) => c.title === 'Pasted once')?.sessionId, WITHIN).toBeTruthy()
+    await page.waitForTimeout(3000)
+    expect((await cards()).filter((c) => c.title === 'Pasted once')).toHaveLength(1)
+    expect(await sessionIds()).toHaveLength(before.length + 1)
+  })
+
   test('「暂不派发」 only makes the card: no session starts', async () => {
     const before = await sessionIds()
     await board().click({ position: { x: 300, y: 300 } })
@@ -267,6 +284,28 @@ test.describe('任务看板 · wavi task', () => {
     expect(await sessionIds()).toHaveLength(before.length)
     expect(inbox(other)).toEqual([])
     expect(read(other, '.fake-typed')).toBe('')
+  })
+
+  test('a remembered agent that cannot lead here shows 暂不派发 and starts nothing', async () => {
+    // A `sandbox_mode` in Codex's config keeps it from leading (`leaderBlock`); whether Codex is installed on the machine
+    // running this test does not matter. The choice is remembered per device; a reload starts the box from it.
+    mkdirSync(join(home, '.codex'), { recursive: true })
+    writeFileSync(join(home, '.codex', 'config.toml'), 'sandbox_mode = "workspace-write"\n')
+    await page.addInitScript(() => globalThis.localStorage?.setItem('tr.tasks.leader.v1', 'codex'))
+    await page.reload()
+    await expect(page.locator('[data-region="terminal"] .xterm').first()).toBeVisible(WITHIN)
+    await openBoard()
+    const before = await sessionIds()
+    await page.keyboard.press('n')
+    await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发', WITHIN)
+    await page.getByTestId('task-compose-input').fill('Remembered but missing')
+    await page.getByTestId('task-compose-input').press('Enter')
+    await expect.poll(async () => (await cards()).find((c) => c.title === 'Remembered but missing'), WITHIN).toMatchObject({ manual: 'todo' })
+    await page.waitForTimeout(3000)
+    expect((await cards()).find((c) => c.title === 'Remembered but missing')?.sessionId).toBeUndefined()
+    expect(await sessionIds()).toHaveLength(before.length)
+    // The stored choice is untouched: it is what the user chose, not what was available.
+    expect(await page.evaluate(() => globalThis.localStorage?.getItem('tr.tasks.leader.v1'))).toBe('codex')
   })
 
   test('the leader adds a child card under the root; others without a card of their own are refused', async () => {

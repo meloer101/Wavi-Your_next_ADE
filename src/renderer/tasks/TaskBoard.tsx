@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { subscribeClock } from '../sidebar/clock'
 import { useOverviewStore } from '../overview/store'
 import { useWorkspace } from '../state/workspace'
-import { startCardLeader } from '../dispatch/task-deliver'
+import { startCardLeader, type LeaderFailure } from '../dispatch/task-deliver'
 import { Compose, type ComposeResult } from './Compose'
 import { Detail } from './Detail'
 import { DotField, type RippleEvent } from './DotField'
@@ -131,10 +131,15 @@ export function TaskBoard() {
   const heldX = held?.pos.x
   const heldY = held?.pos.y
   const overrides = useMemo<PosOverrides | undefined>(() => (heldId !== undefined && heldX !== undefined && heldY !== undefined ? new Map([[heldId, { x: heldX, y: heldY }]]) : undefined), [heldId, heldX, heldY])
-  const layouts = useMemo(() => ({ note: layoutBoard(trees, 'note', overrides), chip: layoutBoard(trees, 'chip', overrides) }), [trees, overrides])
+  // The saved places, both modes: they change with the cards, not with a drag.
+  const layouts = useMemo(() => ({ note: layoutBoard(trees, 'note'), chip: layoutBoard(trees, 'chip') }), [trees])
   const bounds = useMemo<Record<LayoutMode, Rect>>(() => ({ note: layouts.note.bounds, chip: layouts.chip.bounds }), [layouts])
   const drawing = drawingFor(view.zoom)
-  const layout = drawing === 'note' ? layouts.note : layouts.chip
+  const drawnMode = modeFor(view.zoom)
+  // While a card is held, only the mode on screen is laid out again (every frame); the other one is not drawn, and
+  // both are recomputed from the saved place when it is let go.
+  const heldLayout = useMemo(() => (overrides ? layoutBoard(trees, drawnMode, overrides) : null), [trees, drawnMode, overrides])
+  const layout = heldLayout ?? (drawnMode === 'note' ? layouts.note : layouts.chip)
   const scale = scaleFor(view.zoom)
 
   const infos = useMemo(() => {
@@ -235,9 +240,10 @@ export function TaskBoard() {
     // ① ⑤ A ripple from the card's middle: neutral where one was pasted, magenta where one began to wait on the user.
     const rippled: RippleEvent[] = []
     const at = (id: TaskId): PlacedCard | undefined => layout.cards.find((c) => c.id === id)
+    // Centres in note (100 %) coordinates whatever the zoom: the dot field converts them for the mode it draws.
     for (const [ids, tone] of [[events.land, 'neutral'], [events.attention, 'attention']] as const) {
       for (const id of ids) {
-        const placed = at(id)
+        const placed = layouts.note.cards.find((c) => c.id === id)
         if (placed) rippled.push({ id: ++nextRipple.current, x: placed.x + placed.w / 2, y: placed.y + placed.h / 2, tone })
       }
     }
@@ -260,10 +266,15 @@ export function TaskBoard() {
   )
 
   // ── Viewport ──
+  // The wheel and key listeners bind once and read the newest bounds from here.
+  const boundsRef = useRef(bounds)
+  useEffect(() => {
+    boundsRef.current = bounds
+  })
   const fit = useCallback(() => {
     const s = host.current?.getBoundingClientRect()
-    if (s) useTaskBoard.getState().setView(fitView(bounds, { w: s.width, h: s.height }))
-  }, [bounds])
+    if (s) useTaskBoard.getState().setView(fitView(boundsRef.current, { w: s.width, h: s.height }))
+  }, [])
   // The first time there is something to show and no saved view, show all of it.
   const fitted = useRef(false)
   useEffect(() => {
@@ -276,9 +287,9 @@ export function TaskBoard() {
     (factor: number, anchor?: { x: number; y: number }) => {
       const state = useTaskBoard.getState()
       const at = anchor ?? { x: size.w / 2, y: size.h / 2 }
-      state.setView(zoomAround(state.view, state.view.zoom * factor, at, bounds))
+      state.setView(zoomAround(state.view, state.view.zoom * factor, at, boundsRef.current))
     },
-    [bounds, size]
+    [size]
   )
 
   // Wheel: ⌘ / pinch zooms around the pointer, anything else pans. Non-passive so the page does not scroll or zoom.
@@ -292,7 +303,7 @@ export function TaskBoard() {
       const state = useTaskBoard.getState()
       if (e.metaKey || e.ctrlKey) {
         const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025))
-        state.setView(zoomAround(state.view, state.view.zoom * factor, { x: e.clientX - rect.left, y: e.clientY - rect.top }, bounds))
+        state.setView(zoomAround(state.view, state.view.zoom * factor, { x: e.clientX - rect.left, y: e.clientY - rect.top }, boundsRef.current))
       } else {
         const dx = e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX
         const dy = e.shiftKey && e.deltaX === 0 ? 0 : e.deltaY
@@ -301,7 +312,7 @@ export function TaskBoard() {
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [bounds])
+  }, [])
 
   // ── Opening a card, pasting one ──
   const openDetail = useTaskBoard.getState().openDetail
@@ -312,6 +323,8 @@ export function TaskBoard() {
     if (projectIds.length > 0) setComposing(true)
   }, [projectIds])
   const paste = async ({ projectId, title, body, leader }: ComposeResult): Promise<boolean> => {
+    // The box stays up for its 200 ms exit: a second Enter or click in that time is not a second card.
+    if (composeLeaving) return false
     const made = await window.tr.tasks.create({ projectId, title, ...(body !== '' ? { body } : {}) })
     if (!made) return false
     const state = useTaskBoard.getState()
@@ -325,7 +338,18 @@ export function TaskBoard() {
       setComposeLeaving(false)
     }, reduced ? 120 : 200)
     // The card's own leader (PRD v1.250); 暂不派发 leaves the card waiting.
-    if (leader !== 'none') void startCardLeader(made, leader).catch((error: unknown) => console.error('[tasks] the leader did not start:', error))
+    // A leader that could not start is said in 「动态」, and the card stays 待派发.
+    if (leader !== 'none') {
+      const notDispatched = (reason: LeaderFailure): void => state.pushEvents([{ at: Date.now(), kind: 'notDispatched', seq: made.seq, title: made.title, reason }])
+      void startCardLeader(made, leader)
+        .then((result) => {
+          if (!result.ok) notDispatched(result.reason)
+        })
+        .catch((error: unknown) => {
+          console.error('[tasks] the leader did not start:', error)
+          notDispatched('failed')
+        })
+    }
     return true
   }
 

@@ -9,14 +9,13 @@ import { canLead, type DispatchAgent } from '@shared/dispatch'
 import type { Task, TaskId } from '@shared/task-board'
 import type { ProjectId } from '@shared/types'
 import { DEFAULT_VIEW, parseView, type View } from './layout'
-import { appendEvents, type ActivityEvent } from './model'
+import { appendEvents, type ActivityEvent, type LeaderChoice } from './model'
 
 export const VIEW_KEY = 'tr.tasks.view.v1'
 export const ACTIVITY_KEY = 'tr.tasks.activity.v1'
 export const LEADER_KEY = 'tr.tasks.leader.v1'
 
-/** Who leads a pasted root card (PRD F9 v1.250): an agent, or `none` (暂不派发). */
-export type LeaderChoice = DispatchAgent | 'none'
+export type { LeaderChoice } from './model'
 
 /** The last choice, kept on this device; the first time it is Claude Code. A stored agent that no longer exists reads as that. */
 export function parseLeaderChoice(raw: string | null, known: readonly DispatchAgent[]): LeaderChoice {

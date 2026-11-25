@@ -84,6 +84,24 @@ describe('TaskBoard', () => {
     expect(t.board.update(a.id, { pos: null })!.pos).toBeUndefined()
   })
 
+  it('drops the position when the parent changes (it was relative to the old parent), unless the patch sets one', () => {
+    const t = setup()
+    const a = t.board.create({ projectId: 'p1', title: 'a' })!
+    const b = t.board.create({ projectId: 'p1', title: 'b' })!
+    const c = t.board.create({ projectId: 'p1', title: 'c', parentId: a.id })!
+    t.board.update(c.id, { pos: { x: 40, y: 50 } })
+    expect(t.board.update(c.id, { pos: { x: 41, y: 51 } })!.pos).toEqual({ x: 41, y: 51 })
+    expect(t.board.update(c.id, { parentId: b.id })!.pos).toBeUndefined()
+    t.board.update(c.id, { pos: { x: 1, y: 2 } })
+    expect(t.board.update(c.id, { parentId: a.id, pos: { x: 7, y: 8 } })!.pos).toEqual({ x: 7, y: 8 })
+    // A root's position is absolute: becoming a root also drops it.
+    expect(t.board.update(c.id, { parentId: null })!.pos).toBeUndefined()
+    // A refused move changes nothing.
+    t.board.update(a.id, { pos: { x: 3, y: 4 } })
+    expect(t.board.update(a.id, { parentId: 'missing' })).toBeNull()
+    expect(t.board.list().find((x) => x.id === a.id)!.pos).toEqual({ x: 3, y: 4 })
+  })
+
   it('validates parent changes: project, cycle, depth with the moved subtree', () => {
     const t = setup()
     const a = t.board.create({ projectId: 'p1', title: 'a' })!
@@ -92,7 +110,7 @@ describe('TaskBoard', () => {
     const other = t.board.create({ projectId: 'p2', title: 'o' })!
     const x = t.board.create({ projectId: 'p1', title: 'x' })!
     const y = t.board.create({ projectId: 'p1', title: 'y', parentId: x.id })!
-    expect(t.board.update(a.id, { parentId: c.id })).toBeNull()
+    expect(t.board.update(a.id, { parentId: 'missing' })).toBeNull()
     expect(t.board.update(a.id, { parentId: a.id })).toBeNull()
     expect(t.board.update(c.id, { parentId: other.id })).toBeNull()
     // x has a child: moving it under b would put y at depth 3.

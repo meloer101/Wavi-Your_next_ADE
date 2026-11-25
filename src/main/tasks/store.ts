@@ -166,6 +166,8 @@ export class TaskBoard {
         if (taskDepth(tasks, parent.id) + 1 + heightBelow(tasks, id) > TASK_LIMITS.maxDepth) return null
         next.parentId = parent.id
       }
+      // A child's `pos` is an offset from its old parent; a position set in this same patch is the new one.
+      if (patch.pos === undefined) delete next.pos
     }
     next.updatedAt = this.deps.now()
     return this.commit({ ...this.data, tasks: tasks.map((t, i) => (i === at ? next : t)) }) ? { ...next } : null

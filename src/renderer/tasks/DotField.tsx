@@ -5,7 +5,7 @@
 // so an open board costs no CPU. The glow's maths and its transitions are in dot-field.ts.
 import { useEffect, useRef } from 'react'
 import { GLOW, RIPPLE, dotLight, dotSize, glowBox, gridStep, lightBucket, newGlow, rippleAlive, rippleIntensity, stepGlow, type PointerInput, type Ripple } from './dot-field'
-import { scaleFor, visibleWorld, type Size, type View } from './layout'
+import { DIMS, modeFor, scaleFor, visibleWorld, type Size, type View } from './layout'
 import styles from './DotField.module.css'
 
 const LEVELS = 8
@@ -119,11 +119,13 @@ export function DotField({ view, size, ripples }: { view: View; size: Size; ripp
 
     // Each ring lights the dots near its edge, in its own colour: a ring is ~50 px wide, so a few hundred dots at most.
     const drawRipples = (now: number, s: number, step: number, v: View, ix0: number, ix1: number, iy0: number, iy1: number, d: number): void => {
+      const ratio = modeFor(v.zoom) === 'chip' ? DIMS.chip.pitch / DIMS.note.pitch : 1
       for (const ring of rings) {
         if (!rippleAlive(ring, now)) continue
         const age = now - ring.born
-        const cx = ring.x * s + v.x
-        const cy = ring.y * s + v.y
+        // Centres are note-layout coordinates: a chip layout is the same board at 176 / 290 of the spacing.
+        const cx = ring.x * ratio * s + v.x
+        const cy = ring.y * ratio * s + v.y
         const reach = RIPPLE.radius + RIPPLE.width * 2
         const jx0 = Math.max(ix0, Math.floor((cx - reach - v.x) / (step * s)))
         const jx1 = Math.min(ix1, Math.ceil((cx + reach - v.x) / (step * s)))

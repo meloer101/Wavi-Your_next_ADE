@@ -12,7 +12,7 @@ import { SheetMenu, type SheetMenuSection } from '../new-session/SheetMenu'
 import { AgentIcon } from '../ui/AgentIcon'
 import { useMessages } from '../ui/i18n'
 import { Check, ChevronDown } from '../ui/icons'
-import { splitCard } from './model'
+import { splitCard, usableLeader } from './model'
 import { useTaskBoard, type LeaderChoice } from './store'
 import styles from './Compose.module.css'
 
@@ -49,11 +49,13 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
   const m = useMessages(M)
   const [text, setText] = useState('')
   const [projectId, setProjectId] = useState(initialProject)
-  const [leader, setLeader] = useState(() => useTaskBoard.getState().leaderChoice)
+  const [choice, setChoice] = useState(() => useTaskBoard.getState().leaderChoice)
   const [busy, setBusy] = useState(false)
   const [menu, setMenu] = useState<{ kind: 'project' | 'leader'; anchor: HTMLElement } | null>(null)
   const [found, setFound] = useState<Record<string, boolean> | null>(null)
   const [check, setCheck] = useState<LeaderCheck | null>(null)
+  // What the box really uses (and shows): the remembered agent, unless it is not available here now. Not forgotten.
+  const leader = usableLeader(choice, found, check)
   const input = useRef<HTMLTextAreaElement>(null)
   const mirror = useRef<HTMLDivElement>(null)
   useEffect(() => input.current?.focus(), [])
@@ -82,11 +84,22 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
 
   const submit = async (): Promise<void> => {
     const card = splitCard(text)
-    if (!card || busy) return
+    if (!card || busy || leaving) return
     setBusy(true)
-    const made = await onSubmit({ projectId, ...card, leader })
-    setBusy(false)
-    if (!made) input.current?.focus()
+    // A remembered agent that is not here now is not started: look again if detection is not back yet.
+    let seen = { found, check }
+    if (found === null || check === null) {
+      seen = await Promise.all([window.tr.app.detectAgents(), window.tr.dispatch.leaderCheck()])
+        .then(([f, c]) => ({ found: f as unknown as Record<string, boolean>, check: c }))
+        .catch(() => ({ found: null, check: null }))
+    }
+    const chosen = seen.found === null || seen.check === null ? 'none' : usableLeader(choice, seen.found, seen.check)
+    const made = await onSubmit({ projectId, ...card, leader: chosen })
+    // Pasted: the box is on its way out and stays shut (no second card from a key repeat or a double click).
+    if (!made) {
+      setBusy(false)
+      input.current?.focus()
+    }
   }
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -102,9 +115,9 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
     }
   }
 
-  const choose = (choice: LeaderChoice): void => {
-    setLeader(choice)
-    useTaskBoard.getState().setLeaderChoice(choice)
+  const choose = (next: LeaderChoice): void => {
+    setChoice(next)
+    useTaskBoard.getState().setLeaderChoice(next)
   }
   const closeMenu = (refocus: boolean): void => {
     setMenu(null)
@@ -143,6 +156,7 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
           className={styles.input}
           value={text}
           rows={1}
+          disabled={busy}
           maxLength={TASK_LIMITS.body}
           aria-label={m.placeholder}
           data-testid="task-compose-input"
@@ -165,7 +179,7 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
           <span className={styles.pickerText}>{leaderLabel}</span>
         </Picker>
         <span className={styles.spacer} />
-        <button type="button" className={styles.submit} disabled={busy || splitCard(text) === null} data-testid="task-compose-submit" onClick={() => void submit()}>
+        <button type="button" className={styles.submit} disabled={busy || leaving || splitCard(text) === null} data-testid="task-compose-submit" onClick={() => void submit()}>
           {m.paste}
         </button>
       </div>

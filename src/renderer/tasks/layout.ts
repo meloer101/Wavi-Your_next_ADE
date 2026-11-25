@@ -76,15 +76,9 @@ export interface Link {
   y2: number
 }
 
-/** One project's packed trees: the unit the board wraps into rows. Cards the user dragged away are not in it. */
-export interface Cluster extends Rect {
-  projectId: ProjectId
-}
-
 export interface BoardLayout {
   cards: PlacedCard[]
   links: Link[]
-  clusters: Cluster[]
   bounds: Rect
 }
 
@@ -210,7 +204,6 @@ export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode,
   for (const p of projects) for (const r of p.roots) for (const n of nodesOf(r)) nodes.set(n.task.id, n)
   const posOf = (id: TaskId): TaskPos | undefined => overrides?.get(id) ?? nodes.get(id)?.task.pos
   const cards: PlacedCard[] = []
-  const clusters: Cluster[] = []
   let x = 0
   let y = 0
   let rowH = 0
@@ -227,12 +220,11 @@ export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode,
       c.y += y
     }
     cards.push(...one.cards)
-    clusters.push({ projectId: project.projectId, x, y, w: one.w, h: one.h })
     x += one.w + d.clusterGap
     rowH = Math.max(rowH, one.h)
   }
   applyPositions(cards, posOf, scale)
-  return { cards, links: linksOf(cards), clusters, bounds: boundsOf(cards) }
+  return { cards, links: linksOf(cards), bounds: boundsOf(cards) }
 }
 
 export function boundsOf(rects: readonly Rect[]): Rect {
