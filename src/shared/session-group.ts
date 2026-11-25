@@ -52,7 +52,18 @@ export function buildGroups(sessions: readonly GroupSession[], itemsOf: Readonly
     list.push(s)
     childrenOf.set(s.dispatchedBy, list)
   }
-  const itemsAt = (id: SessionId): readonly GroupItem[] => (dispatchAncestors(sessions, id).length > MEMBERS_UP_TO_DEPTH ? [] : (itemsOf[id] ?? []))
+  // Dispatch depth of each session, worked out once per call (this runs on every sidebar render).
+  const depthOf = new Map<SessionId, number>()
+  const depth = (id: SessionId): number => {
+    const known = depthOf.get(id)
+    if (known !== undefined) return known
+    depthOf.set(id, 0) // cuts a dispatch cycle
+    const up = byId.get(id)?.dispatchedBy
+    const d = up !== undefined && up !== id && byId.has(up) ? depth(up) + 1 : 0
+    depthOf.set(id, d)
+    return d
+  }
+  const itemsAt = (id: SessionId): readonly GroupItem[] => (depth(id) > MEMBERS_UP_TO_DEPTH ? [] : (itemsOf[id] ?? []))
   const out: Record<SessionId, SessionGroup> = {}
   for (const session of sessions) {
     const children = childrenOf.get(session.id) ?? []
