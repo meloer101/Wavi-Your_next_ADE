@@ -1163,7 +1163,7 @@
   gap: var(--space-8);
 }
 
-/* Trays on the composer (Figma 113A / 113D′, PRD v1.244): 12 narrower than the composer each side, on its top edge with
+/* Trays on the composer (Figma 113A / 113D′, PRD v1.245): 12 narrower than the composer each side, on its top edge with
    no gap (the dock's gap is taken back) and no bottom line; the top corners round, bg/section, a hairline on top and
    both sides. The question sits next to the composer, the tasks above it, a hairline between; only the top block is
    round. */

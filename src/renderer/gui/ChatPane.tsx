@@ -374,7 +374,7 @@ export const ChatPane = memo(function ChatPane({ sessionId, agent, cwd, active }
             <span className={styles.failureText}>{state.failure ?? sendError}</span>
           </div>
         )}
-        {/* PRD v1.244: the question and the task list are trays on the composer's top edge — the question next to it,
+        {/* PRD v1.245: the question and the task list are trays on the composer's top edge — the question next to it,
             the tasks above it. */}
         {(todos || (prompt && questionTray && !workflowAsk)) && (
           <div className={styles.trays}>

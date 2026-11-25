@@ -11,10 +11,10 @@ import { toggleOverview } from '../overview/store'
 
 /** The sidebar of window `key` as it is now: a project window lists only its project (F20 · 多窗口). */
 function groupsNow(key: WindowKey) {
-  const { projects, worktrees, sessions, collapsedProjectIds, sidebarGroupBy, collapsedStatusGroups, windows } = useWorkspace.getState()
+  const { projects, worktrees, sessions, collapsedProjectIds, sidebarGroupBy, collapsedStatusGroups, expandedGroups, windows } = useWorkspace.getState()
   const scope = windows.find((w) => w.key === key)?.projectId ?? null
   const listed = scope === null ? projects : projects.filter((p) => p.id === scope)
-  return buildSidebarGroups({ projects: listed, worktrees, sessions, collapsedProjectIds, groupBy: sidebarGroupBy, collapsedStatusGroups })
+  return buildSidebarGroups({ projects: listed, worktrees, sessions, collapsedProjectIds, groupBy: sidebarGroupBy, collapsedStatusGroups, expandedGroups })
 }
 
 /** ⌘J: the next session that needs the user, if any. */

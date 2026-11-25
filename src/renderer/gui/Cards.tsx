@@ -1,6 +1,6 @@
 // What a GUI session's agent waits on (PRD F23, Figma 49″D–F): a card above the composer, its own block (bg/section),
 // magenta only on the status glyph. Permission: 拒绝 ⎋ · 总是允许 · 允许 ↵, a change to a file drawn between the title and
-// the buttons (Figma 59I). Question: a tray on the composer (Figma 113D′, PRD v1.244):
+// the buttons (Figma 59I). Question: a tray on the composer (Figma 113D′, PRD v1.245):
 // numbered options with their descriptions + an inline 其他 input, 跳过 ⎋ · 下一题 / 提交 ↵. Plan: 继续规划 · 批准，编辑时问我 · 批准并自动接受编辑 ↵. Each card answers keys through `bindKeys`
 // (the chat routes them, see ChatPane).
 import { useEffect, useRef, useState, type ReactNode } from 'react'

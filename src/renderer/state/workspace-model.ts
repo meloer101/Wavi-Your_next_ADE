@@ -360,6 +360,8 @@ export interface WorkspaceUi {
   sidebarGroupBy?: SidebarGroupBy
   /** Status groups folded in the sidebar's 按状态 view. */
   collapsedStatusGroups?: readonly SessionStatus[]
+  /** Sessions whose collaboration group is open in the sidebar (PRD v1.243). */
+  expandedGroups?: readonly SessionId[]
   recentProjects: readonly string[]
   /** 工作目录 last used in the new-session sheet, by project. */
   newSessionWorkdir: Readonly<Record<ProjectId, Workdir>>
@@ -428,6 +430,9 @@ export function serializeWorkspace(
     collapsedProjectIds: ui.collapsedProjectIds.filter((id) => data.projects.some((p) => p.id === id)),
     ...(ui.sidebarGroupBy === 'status' ? { sidebarGroupBy: 'status' as const } : {}),
     ...(ui.collapsedStatusGroups && ui.collapsedStatusGroups.length > 0 ? { collapsedStatusGroups: [...ui.collapsedStatusGroups] } : {}),
+    ...(ui.expandedGroups && ui.expandedGroups.some((id) => data.sessions.some((s) => s.id === id))
+      ? { expandedGroups: ui.expandedGroups.filter((id) => data.sessions.some((s) => s.id === id)) }
+      : {}),
     ...(ui.recentProjects.length > 0 ? { recentProjects: [...ui.recentProjects] } : {}),
     ...(Object.keys(ui.newSessionWorkdir).length > 0
       ? { newSessionWorkdir: Object.fromEntries(Object.entries(ui.newSessionWorkdir).filter(([id]) => data.projects.some((p) => p.id === id))) }
@@ -515,6 +520,7 @@ export function persistedStateChanged(next: PersistedView, prev: PersistedView):
     next.collapsedProjectIds !== prev.collapsedProjectIds ||
     next.sidebarGroupBy !== prev.sidebarGroupBy ||
     next.collapsedStatusGroups !== prev.collapsedStatusGroups ||
+    next.expandedGroups !== prev.expandedGroups ||
     next.recentProjects !== prev.recentProjects ||
     next.newSessionWorkdir !== prev.newSessionWorkdir ||
     next.newSessionAgent !== prev.newSessionAgent ||

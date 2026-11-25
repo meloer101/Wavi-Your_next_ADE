@@ -7,7 +7,8 @@ import type { SidebarGroupBy } from '@shared/workspace-file'
 import { defineMessages, pick } from '@shared/i18n'
 import type { PendingRun } from '@shared/dispatch'
 import { memberLine, TEAM_GLYPH, type TeamState } from '@shared/agent-team'
-import { phaseLine } from '../lifecycle/present'
+import { buildGroups, type GroupItem, type SessionGroup, type StatusCount } from '@shared/session-group'
+import { glyphStatus, phaseLine } from '../lifecycle/present'
 import { currentPhase, isLiveRun, phaseViews, runOutcome, type WorkflowPhaseView, type WorkflowRun } from '@shared/workflow-run'
 
 const M = defineMessages({
@@ -73,7 +74,41 @@ export interface SessionRowModel {
   opens?: boolean
   /** Subagent rows drawn right after this row (its own, then its dispatcher's when it is the last child). */
   after?: SubagentRowModel[]
+  /** The fold row drawn right after this row, before its members (PRD v1.243); absent when the session has no members. */
+  fold?: FoldRowModel
 }
+
+/**
+ * The one row that stands for a session's members (PRD v1.243, Figma 111G / 111H): a chevron in the child glyph column,
+ * `N 个成员`, then a glyph and a count per status over every member below, most urgent first. Not a session and no
+ * keyboard target; a click opens or folds this session's group.
+ */
+export interface FoldRowModel {
+  /** The session whose members it folds. */
+  ownerId: SessionId
+  expanded: boolean
+  total: number
+  counts: StatusCount[]
+  /** 1 under a top-level session, 2 under a dispatched one: the glyph column it sits in. */
+  depth: 1 | 2
+  /** The owner's tree line runs down through this row, because rows with a tick follow. */
+  line: boolean
+  /** Depth 2: the dispatcher's line runs on past this row. */
+  pass: boolean
+}
+
+export const sameFold = (a: FoldRowModel | undefined, b: FoldRowModel | undefined): boolean =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.ownerId === b.ownerId &&
+    a.expanded === b.expanded &&
+    a.total === b.total &&
+    a.depth === b.depth &&
+    a.line === b.line &&
+    a.pass === b.pass &&
+    a.counts.length === b.counts.length &&
+    a.counts.every((c, i) => c.status === b.counts[i]!.status && c.count === b.counts[i]!.count))
 
 /**
  * A subagent the session's agent started itself (Claude's Agent tool; PRD F21 v1.109, Figma 44B): one line, under its
@@ -133,6 +168,8 @@ export interface SidebarInput {
   collapsedStatusGroups?: readonly SessionStatus[]
   /** Each project's leader session (PRD F21 v1.198): its branch line reads `leader · <branch>` (Figma 81A). */
   leaderSessions?: Readonly<Record<ProjectId, SessionId | undefined>>
+  /** Sessions whose members are drawn under them (PRD v1.243); every other session's members are folded into one row. */
+  expandedGroups?: readonly SessionId[]
 }
 
 /** What a finished turn left: "已完成 · <reply>" while unread, the reply once seen. */
@@ -148,7 +185,7 @@ export function nestedTitle(title: string, parentTitle: string | undefined): str
   return prefix && title.startsWith(prefix) && title.length > prefix.length ? title.slice(prefix.length) : title
 }
 
-function toRow(session: Session, worktree: Worktree | undefined, { depth, parentTitle, tree, opens, after, pass }: NestedRow, leader = false): SessionRowModel {
+function toRow(session: Session, worktree: Worktree | undefined, { depth, parentTitle, tree, opens, after, pass, fold }: NestedRow, leader = false): SessionRowModel {
   // The project header already says which folder this is; the branch has its own line (Figma 34P).
   const branch = session.dispatchBase === 'snapshot' ? pick(M).snapshot : session.scheduledBy ? pick(M).scheduled(worktree?.branch ?? '') : (worktree?.branch ?? '')
   return {
@@ -163,7 +200,8 @@ function toRow(session: Session, worktree: Worktree | undefined, { depth, parent
     tree,
     ...(pass ? { pass } : {}),
     ...(opens ? { opens } : {}),
-    ...(after ? { after } : {})
+    ...(after ? { after } : {}),
+    ...(fold ? { fold } : {})
   }
 }
 
@@ -194,7 +232,8 @@ export function sameRow(a: SessionRowModel, b: SessionRowModel): boolean {
     a.depth === b.depth &&
     a.tree === b.tree &&
     a.opens === b.opens &&
-    a.pass === b.pass
+    a.pass === b.pass &&
+    sameFold(a.fold, b.fold)
   )
 }
 
@@ -206,10 +245,12 @@ export interface NestedRow {
   tree?: SessionRowModel['tree']
   opens?: boolean
   after?: SubagentRowModel[]
+  fold?: FoldRowModel
 }
 
 type SubagentsOf = (id: SessionId) => readonly SideItem[]
 const NO_SUBAGENTS: SubagentsOf = () => []
+const NO_EXPANDED: ReadonlySet<SessionId> = new Set()
 
 function subagentRows(session: Session, items: readonly SideItem[], depth: 1 | 2, pass: boolean): SubagentRowModel[] {
   return items.map((item, i) => ({
@@ -300,32 +341,101 @@ export function pendingItems(confirms: ReadonlyArray<Pick<PendingRun, 'childId' 
 }
 
 /**
+ * The members of a session that are not sessions (PRD v1.243): a subagent, a teammate, a workflow run. Phases, the team's
+ * heading line and `wavi run` confirms waiting for 开始 are not members: the first two belong to a member, the last
+ * stays visible under the session that asked.
+ */
+export function memberItems(session: Pick<Session, 'askingAgents'>, items: readonly SideItem[]): GroupItem[] {
+  return items.flatMap((item): GroupItem[] => {
+    if (item.kind === 'phase' || item.kind === 'team' || item.kind === 'pending') return []
+    const asking = item.attention ?? (!item.kind && (session.askingAgents?.includes(item.id) ?? false))
+    return [{ id: item.id, status: item.glyph ?? (asking ? 'needs_you' : 'running') }]
+  })
+}
+
+/** What stays drawn under a session whose group is folded: the confirms waiting for 开始. */
+const shownItems = (items: readonly SideItem[], open: boolean): SideItem[] => (open ? [...items] : items.filter((item) => item.kind === 'pending'))
+
+/**
+ * Every session's lines that are not sessions (PRD v1.243 members, plus a team's heading and a run's phases): its team,
+ * then its workflow runs, then its subagents — the order the sidebar draws them. The board and the phone build their
+ * groups from the same lines, so all three count the same members. `folded`: workflow runs whose phases are folded.
+ */
+export function sideItemsOf(input: {
+  sessions: readonly Pick<Session, 'id' | 'status'>[]
+  subagents: Readonly<Record<SessionId, readonly SubagentInfo[]>>
+  runs: Readonly<Record<SessionId, readonly WorkflowRun[]>>
+  teams: Readonly<Record<SessionId, TeamState>>
+  folded?: ReadonlySet<string>
+}): Record<SessionId, SideItem[]> {
+  const { sessions, subagents, runs, teams, folded = new Set<string>() } = input
+  const out: Record<SessionId, SideItem[]> = {}
+  for (const [id, list] of Object.entries(subagents)) out[id] = [...list]
+  for (const [id, list] of Object.entries(runs)) {
+    const unread = sessions.find((s) => s.id === id)?.status === 'done_unread'
+    const lines = workflowItems(list, { unread, folded })
+    if (lines.length > 0) out[id] = [...lines, ...(subagents[id] ?? [])]
+  }
+  for (const [id, team] of Object.entries(teams)) {
+    const lines = teamItems(team)
+    if (lines.length > 0) out[id] = [...lines, ...(out[id] ?? [])]
+  }
+  return out
+}
+
+/** The collaboration group of every session that has members (PRD v1.243), as the sidebar counts it. */
+export function groupsOf(sessions: readonly Session[], items: Readonly<Record<SessionId, readonly SideItem[]>>): Record<SessionId, SessionGroup> {
+  return buildGroups(
+    sessions.map((s) => ({ id: s.id, status: glyphStatus(s), ...(s.dispatchedBy ? { dispatchedBy: s.dispatchedBy } : {}) })),
+    Object.fromEntries(sessions.map((s) => [s.id, memberItems(s, items[s.id] ?? [])]))
+  )
+}
+
+/**
  * Store order, except that a dispatched session follows the session that started it (PRD F21), after that session's
  * earlier children, and a grandchild follows its own dispatcher the same way, one more step in. A child whose
  * dispatcher is not listed here stays where it is, at the top level. Subagents (Figma 44B) hang under their session
  * after the sessions it dispatched: a child's after its grandchildren, a top-level session's after everything below it.
+ * Members are folded into the session's fold row (PRD v1.243) unless its id is in `expanded`; a member's own members
+ * are folded the same way, one level in. Confirms waiting for 开始 are drawn either way.
  */
-export function withChildrenNested(sessions: readonly Session[], allOf: SubagentsOf = NO_SUBAGENTS): NestedRow[] {
+export function withChildrenNested(sessions: readonly Session[], allOf: SubagentsOf = NO_SUBAGENTS, expanded: ReadonlySet<SessionId> = NO_EXPANDED): NestedRow[] {
   // A team's rows (Figma 82′F) hang under their lead without a tree line: they go after its tree, outside of it.
-  const subagentsOf: SubagentsOf = (id) => allOf(id).filter((item) => !isPeer(item))
-  const peersOf: SubagentsOf = (id) => allOf(id).filter(isPeer)
+  const subagentsOf = (items: readonly SideItem[]): SideItem[] => items.filter((item) => !isPeer(item))
+  const peersOf = (items: readonly SideItem[]): SideItem[] => items.filter(isPeer)
   const listed = new Set(sessions.map((s) => s.id))
   const nested = (s: Session): boolean => s.dispatchedBy !== undefined && listed.has(s.dispatchedBy)
   const childrenOf = (id: SessionId): Session[] => sessions.filter((child) => child.dispatchedBy === id && nested(child))
+  const groups = groupsOf(sessions, Object.fromEntries(sessions.map((s) => [s.id, allOf(s.id)])))
+  const foldOf = (id: SessionId, depth: 1 | 2, open: boolean, line: boolean, pass: boolean): FoldRowModel | undefined => {
+    const g = groups[id]
+    return g ? { ownerId: id, expanded: open, total: g.total, counts: g.counts, depth, line, pass } : undefined
+  }
   const out: NestedRow[] = []
   for (const session of sessions) {
     if (nested(session)) continue
-    const children = childrenOf(session.id)
-    const own = subagentsOf(session.id)
-    const top: NestedRow = children.length + own.length > 0 ? { session, depth: 0, tree: 'parent' } : { session, depth: 0 }
+    const open = !groups[session.id] || expanded.has(session.id)
+    const children = open ? childrenOf(session.id) : []
+    const items = shownItems(allOf(session.id), open)
+    const own = subagentsOf(items)
+    const peers = peersOf(items)
+    const below = children.length + own.length > 0
+    const top: NestedRow = { session, depth: 0, ...(below ? { tree: 'parent' as const } : {}) }
+    const fold = foldOf(session.id, 1, open, below, false)
+    if (fold) top.fold = fold
     out.push(top)
     let last = top
     children.forEach((child, i) => {
       // The dispatcher's line runs on below this child while another child or one of its own subagents follows.
       const more = i < children.length - 1 || own.length > 0
-      const grandchildren = childrenOf(child.id)
-      const subs = subagentRows(child, subagentsOf(child.id), 2, more)
-      const host: NestedRow = { session: child, depth: 1, parentTitle: session.title, tree: more ? 'child' : 'last', ...(grandchildren.length + subs.length > 0 ? { opens: true } : {}) }
+      const childOpen = !groups[child.id] || expanded.has(child.id)
+      const grandchildren = childOpen ? childrenOf(child.id) : []
+      const childItems = shownItems(allOf(child.id), childOpen)
+      const subs = subagentRows(child, subagentsOf(childItems), 2, more)
+      const opens = grandchildren.length + subs.length > 0
+      const host: NestedRow = { session: child, depth: 1, parentTitle: session.title, tree: more ? 'child' : 'last', ...(opens ? { opens: true } : {}) }
+      const childFold = foldOf(child.id, 2, childOpen, opens, more)
+      if (childFold) host.fold = childFold
       out.push(host)
       last = host
       grandchildren.forEach((grandchild, j) => {
@@ -333,11 +443,10 @@ export function withChildrenNested(sessions: readonly Session[], allOf: Subagent
         out.push(row)
         last = row
       })
-      const peers = subagentRows(child, peersOf(child.id), 2, more)
-      if (subs.length + peers.length > 0) last.after = [...subs, ...peers]
+      const childPeers = subagentRows(child, peersOf(childItems), 2, more)
+      if (subs.length + childPeers.length > 0) last.after = [...subs, ...childPeers]
     })
     if (own.length > 0) last.after = [...(last.after ?? []), ...subagentRows(session, own, 1, false)]
-    const peers = peersOf(session.id)
     if (peers.length > 0) last.after = [...(last.after ?? []), ...subagentRows(session, peers, 1, false)]
   }
   return out
@@ -361,10 +470,11 @@ function sessionsOf(project: Project, sessions: readonly Session[], worktreeById
  */
 export function buildSidebarGroups(input: SidebarInput): SidebarGroup[] {
   if (input.groupBy === 'status') return buildStatusGroups(input)
-  const { projects, worktrees, sessions, collapsedProjectIds = [], subagents, leaderSessions = {} } = input
+  const { projects, worktrees, sessions, collapsedProjectIds = [], subagents, leaderSessions = {}, expandedGroups = [] } = input
   const worktreeById = new Map(worktrees.map((w) => [w.id, w]))
   const subagentsOf: SubagentsOf = subagents ? (id) => subagents[id] ?? [] : NO_SUBAGENTS
   const collapsed = new Set(collapsedProjectIds)
+  const expanded = new Set(expandedGroups)
   return projects.map((project) => {
     const own = sessionsOf(project, sessions, worktreeById)
     const urgent = own.filter((s) => needsAttention(s.status)).sort(compareByUrgency)[0]
@@ -375,7 +485,7 @@ export function buildSidebarGroups(input: SidebarInput): SidebarGroup[] {
       title: project.name,
       rows: isCollapsed
         ? []
-        : withChildrenNested(own, subagentsOf).map((nested) =>
+        : withChildrenNested(own, subagentsOf, expanded).map((nested) =>
             toRow(nested.session, worktreeById.get(nested.session.worktreeId), nested, leaderSessions[project.id] === nested.session.id)
           ),
       sessionCount: own.length,
@@ -389,12 +499,18 @@ export function buildSidebarGroups(input: SidebarInput): SidebarGroup[] {
  * The sidebar's 按状态 view (PRD §3.3, Figma 53C): one group per status, most urgent first (等你处理 → 出错 → 已完成 →
  * 运行中 → 空闲 → 已退出); a status no listed session has is not drawn. Within a group, sessions keep the 按项目 order
  * (projects, then store order), so a row only moves when its status does. Rows are flat — a dispatched session goes to
- * its own status's group — and their last line reads `<project> › <branch>`. A session's own subagents stay under it.
+ * its own status's group — and their last line reads `<project> › <branch>`. A session's own subagents, team and workflow runs fold under it.
  */
-export function buildStatusGroups({ projects, worktrees, sessions, collapsedStatusGroups = [], subagents, leaderSessions = {} }: SidebarInput): SidebarGroup[] {
+export function buildStatusGroups({ projects, worktrees, sessions, collapsedStatusGroups = [], subagents, leaderSessions = {}, expandedGroups = [] }: SidebarInput): SidebarGroup[] {
   const worktreeById = new Map(worktrees.map((w) => [w.id, w]))
   const listed = projects.flatMap((project) => sessionsOf(project, sessions, worktreeById).map((session) => ({ session, project })))
   const collapsed = new Set(collapsedStatusGroups)
+  const expanded = new Set(expandedGroups)
+  // Child sessions are rows of their own here, so only a session's own subagents, team and runs fold under it.
+  const groupOf = buildGroups(
+    listed.map(({ session }) => ({ id: session.id, status: glyphStatus(session) })),
+    Object.fromEntries(listed.map(({ session }) => [session.id, memberItems(session, subagents?.[session.id] ?? [])]))
+  )
   return STATUS_ORDER.flatMap((status): SidebarGroup[] => {
     const own = listed.filter(({ session }) => session.status === status)
     if (own.length === 0) return []
@@ -409,14 +525,19 @@ export function buildStatusGroups({ projects, worktrees, sessions, collapsedStat
           ? []
           : own.map(({ session, project }) => {
               const worktree = worktreeById.get(session.worktreeId)
-              const subs = subagents?.[session.id] ?? []
+              const all = subagents?.[session.id] ?? []
+              const g = groupOf[session.id]
+              const open = !g || expanded.has(session.id)
+              const subs = shownItems(all, open)
+              const fold: FoldRowModel | undefined = g && { ownerId: session.id, expanded: open, total: g.total, counts: g.counts, depth: 1, line: subs.length > 0, pass: false }
               const row = toRow(
                 session,
                 worktree,
                 {
                   session,
                   depth: 0,
-                  ...(subs.length > 0 ? { tree: 'parent' as const, after: subagentRows(session, subs, 1, false) } : {})
+                  ...(subs.length > 0 ? { tree: 'parent' as const, after: subagentRows(session, subs, 1, false) } : {}),
+                  ...(fold ? { fold } : {})
                 },
                 leaderSessions[project.id] === session.id
               )
@@ -429,6 +550,16 @@ export function buildStatusGroups({ projects, worktrees, sessions, collapsedStat
       }
     ]
   })
+}
+
+/** The rows split at each top-level session: it and everything drawn under it (its fold row, members, subagents). */
+export function topLevelChunks(rows: readonly SessionRowModel[]): SessionRowModel[][] {
+  const out: SessionRowModel[][] = []
+  for (const row of rows) {
+    if (row.depth === 0 || out.length === 0) out.push([row])
+    else out[out.length - 1]!.push(row)
+  }
+  return out
 }
 
 /** Session ids in the order they appear on screen. */
@@ -479,15 +610,21 @@ export function nextAttentionSessionId(sessions: Session[], activeId: SessionId 
   return queue[(at + 1) % queue.length] ?? null
 }
 
-/** ↑/↓: neighbouring visible session, clamped at the ends. With no current row, down picks the first, up the last. */
+/**
+ * ↑/↓: neighbouring visible session, clamped at the ends. With no current row, down picks the first, up the last. A
+ * current session that is hidden in a folded group (`above`: the sessions that dispatched it, nearest first) starts
+ * from its nearest visible dispatcher.
+ */
 export function adjacentSessionId(
   groups: SidebarGroup[],
   currentId: SessionId | null,
-  direction: 1 | -1
+  direction: 1 | -1,
+  above: readonly SessionId[] = []
 ): SessionId | null {
   const ids = visibleSessionIds(groups)
   if (ids.length === 0) return null
-  const at = currentId === null ? -1 : ids.indexOf(currentId)
+  const from = currentId !== null && !ids.includes(currentId) ? (above.find((id) => ids.includes(id)) ?? currentId) : currentId
+  const at = from === null ? -1 : ids.indexOf(from)
   if (at === -1) return (direction === 1 ? ids[0] : ids[ids.length - 1]) ?? null
   return ids[Math.min(ids.length - 1, Math.max(0, at + direction))] ?? null
 }

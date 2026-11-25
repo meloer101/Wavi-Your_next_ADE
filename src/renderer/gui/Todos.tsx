@@ -1,4 +1,4 @@
-// The agent's task list (PRD F23, Figma 59J; the tray on the composer, 113A, PRD v1.244): Claude's TodoWrite, Codex's and ACP agents' plan. The latest list sits
+// The agent's task list (PRD F23, Figma 59J; the tray on the composer, 113A, PRD v1.245): Claude's TodoWrite, Codex's and ACP agents' plan. The latest list sits
 // in a tray on the composer while something in it is left (ChatPane, `currentTodos`); in the feed its row
 // 「任务 · N 项」 opens to the same list (Feed). Each task: its status glyph — done, in progress, not started — and its
 // text, the one in progress in the primary colour, done ones tertiary.
@@ -30,7 +30,7 @@ export function TodoList({ todos, className }: { todos: readonly ChatTodo[]; cla
   )
 }
 
-/** Collapsed trays by session — in memory only, so a reload starts expanded (PRD v1.244). */
+/** Collapsed trays by session — in memory only, so a reload starts expanded (PRD v1.245). */
 const collapsedSessions = new Set<SessionId>()
 
 /** A task's 16px mark in the tray: done a filled circle with a check, in progress a turning arc, not started a ring. */

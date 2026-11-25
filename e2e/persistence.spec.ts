@@ -190,3 +190,126 @@ test('first run migrates the old localStorage workspace once, then stops using i
   await expect.poll(() => page.evaluate(() => localStorage.getItem('tr.workspace.v1'))).toBeNull()
   await app.close()
 })
+
+// PRD v1.243: a session's members are folded into one row; which groups are open is kept per main session in
+// workspace.json (`expandedGroups`), and the selection covers the whole group. Screenshots in both themes go to
+// test-results/group-fold/.
+test.describe('collaboration groups', () => {
+  const profile = mkdtempSync(join(tmpdir(), 'tr-e2e-groups-'))
+  const project = mkdtempSync(join(tmpdir(), 'tr-e2e-groups-project-'))
+  const workspaceFile = join(profile, 'workspace.json')
+  const env = fakeClaudeEnv()
+  const SHOTS = 'test-results/group-fold'
+  let app: ElectronApplication
+  let page: Page
+
+  const sidebar = () => page.locator('[data-region="sidebar"]')
+  const row = (id: string) => sidebar().locator(`[data-session-id="${id}"]`)
+  const fold = () => sidebar().locator('[data-testid="fold-row"][data-group-owner="g-main"]')
+  const launch = async () => {
+    app = await launchApp(env, { userDataDir: profile })
+    page = await app.firstWindow()
+    await expect(sidebar()).toBeVisible()
+  }
+  const shoot = async (name: string) => {
+    mkdirSync(SHOTS, { recursive: true })
+    for (const theme of ['dark', 'light'] as const) {
+      await page.locator('html').evaluate((html, t) => html.setAttribute('data-theme', t), theme)
+      await page.waitForTimeout(150)
+      await sidebar().screenshot({ path: join(SHOTS, `${name}-${theme}.png`) })
+    }
+  }
+  const box = async (locator: ReturnType<typeof row>) => (await locator.boundingBox())!
+
+  test.beforeAll(() => {
+    mkdirSync(profile, { recursive: true })
+    const member = (id: string, title: string) => ({ id, worktreeId: 'w1', kind: 'claude', title, dispatchedBy: 'g-main', startedAt: STARTED_AT, lastActivityAt: STARTED_AT })
+    writeFileSync(
+      workspaceFile,
+      JSON.stringify({
+        version: 2,
+        projects: [{ id: 'p1', name: 'group-proj', rootPath: project }],
+        worktrees: [{ id: 'w1', projectId: 'p1', branch: '', path: project, isMain: true }],
+        sessions: [
+          { id: 'g-main', worktreeId: 'w1', kind: 'shell', title: 'Main conversation', startedAt: STARTED_AT, lastActivityAt: STARTED_AT },
+          member('g-one', 'First member'),
+          member('g-two', 'Second member'),
+          { id: 'g-other', worktreeId: 'w1', kind: 'shell', title: 'Another session', startedAt: STARTED_AT, lastActivityAt: STARTED_AT }
+        ],
+        activeSessionId: 'g-main',
+        sidebarCollapsed: false,
+        rightPanel: null,
+        drafts: {}
+      })
+    )
+  })
+
+  test.afterEach(async () => {
+    await app?.close().catch(() => {})
+  })
+
+  test('a new group is folded into one row that counts its members; a click opens it and selects nothing', async () => {
+    await launch()
+    await expect(fold()).toContainText('2 个成员')
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+    await expect(row('g-one')).toHaveCount(0)
+    await expect(row('g-two')).toHaveCount(0)
+    await shoot('folded')
+    await fold().click()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'true')
+    await expect(row('g-one')).toBeVisible()
+    await expect(row('g-two')).toBeVisible()
+    await expect(row('g-main')).toHaveAttribute('aria-current', 'true')
+    await expect.poll(() => readJson(workspaceFile).expandedGroups, { timeout: 5000 }).toEqual(['g-main'])
+  })
+
+  test('the open group survives a restart; the main session’s selection block spans the group, a member’s sits on its row', async () => {
+    await launch()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'true')
+    await expect(row('g-two')).toBeVisible()
+    const drop = sidebar().locator('[data-testid="selection-drop"]')
+    await expect(drop).toHaveCount(1)
+    // Main selected: the block runs from the main row's top to the last member's bottom.
+    const main = await box(row('g-main'))
+    const last = await box(row('g-two'))
+    await expect
+      .poll(async () => {
+        const b = (await drop.boundingBox())!
+        return [Math.abs(b.y - main.y) < 1.5, Math.abs(b.y + b.height - (last.y + last.height)) < 1.5, Math.abs(b.x - main.x) < 1.5, Math.abs(b.width - main.width) < 1.5]
+      })
+      .toEqual([true, true, true, true])
+    await shoot('expanded')
+    // A member selected: the group is tinted and the member's own block sits on its row.
+    await row('g-one').click()
+    const group = sidebar().locator('[data-group-of="g-main"]')
+    await expect(group).toHaveAttribute('data-member-selected', 'true')
+    const one = await box(row('g-one'))
+    await expect
+      .poll(async () => {
+        const b = (await drop.boundingBox())!
+        return [Math.abs(b.y - one.y) < 1.5, Math.abs(b.height - one.height) < 1.5]
+      })
+      .toEqual([true, true])
+    await shoot('member-selected')
+    // Folding again is kept too.
+    await fold().click()
+    await expect(row('g-one')).toHaveCount(0)
+    await expect.poll(() => readJson(workspaceFile).expandedGroups, { timeout: 5000 }).toBeUndefined()
+  })
+
+  test('selecting a folded member from anywhere opens the groups above it, once; folding it by hand sticks', async () => {
+    await launch()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+    await expect(row('g-two')).toHaveCount(0)
+    // The board lists every session; a click there selects one the sidebar does not draw.
+    await page.keyboard.press('Shift+Meta+KeyA')
+    await page.locator('[data-region="overview"] [data-session-id="g-two"]').first().click()
+    await page.locator('[data-region="overview"]').getByRole('button', { name: /进入会话/ }).first().click()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'true')
+    await expect(row('g-two')).toHaveAttribute('aria-current', 'true')
+    await fold().click()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+    await page.waitForTimeout(300)
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+  })
+})
