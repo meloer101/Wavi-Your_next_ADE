@@ -8,7 +8,7 @@
 
 ## 当前位置
 
-- 2026-11-25：协作队伍默认折叠（PRD v1.243）第 1 步（桌面侧栏）完成，下一步看板和手机。
+- 2026-11-25：协作队伍默认折叠（PRD v1.243）第 1 步（桌面侧栏）和第 2 步（看板卡片）完成，下一步手机。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
 - 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
@@ -313,7 +313,7 @@ PR 闭环（2026-10-21 定，PRD F16 / F13 v1.63；排在第三批之前；外�
   - [ ] 真 agent 跑一次（Claude、Codex 各一次 leader）
 - [ ] 协作队伍默认折叠（PRD v1.243，Figma 111G / 111H / 111I · 111E / 111F · 111′A–D，2026-11-25 定）：主对话的成员（子会话、subagent、队友、workflow）收成一行折叠行，点开展开一层，选中底色罩住整组
   - [x] ① `src/shared/session-group.ts` + 桌面侧栏（折叠行、整组选中、⌘J 展开、`expandedGroups` 持久化）
-  - [ ] ② 看板 · 进度：主对话卡片的成员摘要和展开列表
+  - [x] ② 看板 · 进度：主对话卡片的成员摘要和展开列表（`src/renderer/overview/CardMembers.tsx`、`members.ts`，折叠状态与侧栏共用 `expandedGroups`）
   - [ ] ③ 手机：`RemoteSession.parentId` / `group`，会话列表和看板的折叠
 - [ ] agent 自带的 subagent 只显示、不接管（PRD F21 v1.66 改，v1.109 改为读文件）：在所在会话下列出 subagent 的任务、模型和状态，不变成 Wavi 会话；状态来自 hook 的 `agent_id` / `SubagentStop`，名字、类型、模型、上一级读 agent 自己的 `subagents/agent-<id>.meta.json`（做法参照 yetone/magpie @ d714c42 `internal/sessions/subagents.go`）
   - [x] 实测 Claude 2.1.316 的 subagent 文件（2026-10-31，PRD §6.14 v1.109）

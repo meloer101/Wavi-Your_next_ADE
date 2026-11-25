@@ -31,6 +31,7 @@ import { DispatchGroups } from '../dispatch/DispatchGroups'
 import { GitHubBoard } from './GitHubBoard'
 import { githubSummary } from './github-model'
 import { refreshGitHub, useGitHubBoard } from './github-store'
+import { CardMembers, MembersContext, useBoardMembers } from './CardMembers'
 import { enterSession, useOverviewStore, type BoardTab } from './store'
 import styles from './Overview.module.css'
 import { formatAccelerator } from '../ui/menu-model'
@@ -119,6 +120,8 @@ export function Overview() {
   }, [sessions, worktrees])
   const attention = shown.filter((s) => needsAttention(s.status)).length
   const rows = useMemo(() => groups.flatMap((g) => g.rows), [groups])
+  const members = useBoardMembers(shown)
+  const onBoard = useMemo(() => new Set(ids), [ids])
   const paneIds = useMemo(() => (layout ? layoutIds(layout) : []), [layout])
 
   // Keep a selection that exists; default to the first card so ↵ / Space work right away.
@@ -203,6 +206,7 @@ export function Overview() {
 
   return (
     <Picked.Provider value={pickedSet}>
+      <MembersContext.Provider value={{ ...members, now, onBoard, open: onCardClick }}>
       <div className={styles.overview} data-region="overview" data-glass-card="" data-tab={tab} onKeyDown={onKeyDown}>
         <header className={styles.header} data-sidebar-collapsed={sidebarCollapsed}>
           {sidebarCollapsed && (
@@ -276,6 +280,7 @@ export function Overview() {
           <SessionOverlay layout={layout} rows={rows} candidates={rows.filter((r) => !paneIds.includes(r.session.id))} onClose={closeOverlay} />
         )}
       </div>
+      </MembersContext.Provider>
     </Picked.Provider>
   )
 }
@@ -346,6 +351,7 @@ function StatusCard({ row, selected, onClick }: RowProps) {
       {row.session.status === 'done_unread' && <TurnChecksTag sessionId={id} />}
       <PortTags sessionId={id} />
       {row.stat && <span className={styles.cardStat}>{row.stat}</span>}
+      <CardMembers sessionId={id} />
     </div>
   )
 }
