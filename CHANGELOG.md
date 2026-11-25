@@ -4,6 +4,31 @@ All notable changes to Wavi (named Terminal Reborn until v0.1.1). Format: [Keep 
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-25
+
+Wavi can claim GitHub issues on its own, the interface is set in Google Sans one step larger, and Wavi keeps the Mac awake while it runs.
+Wavi 能自动领取 GitHub issue；界面字体换成 Google Sans 并整体大一号；Wavi 运行时让 Mac 保持唤醒。
+
+### GitHub issues / GitHub issue
+- Settings · Automation has a GitHub issue section (off for every project by default): Wavi claims new issues from people with write access (others once such a person labels them), opens a session per issue, runs the project's acceptance command, and reports in Git · Changes; 批准 squashes it into the base with `Closes #N`, reviews and pushes.
+  设置 · 自动化新增「GitHub issue」一段（每个项目默认关）：有写权限的人提的新 issue 直接领取（其他人的等有写权限的人打 label），每个 issue 开一个会话，跑项目的验收命令，在 Git · 变更 里汇报；点「批准」后 squash 合并到基线（带 `Closes #号`）、审阅并推送。
+
+### Appearance / 外观
+- The interface font is Google Sans, the sidebar's times, models, shortcuts and counts included (tabular numbers), and interface type is one step larger.
+  界面字体换成 Google Sans，侧栏的时间、模型、快捷键和计数也一样（等宽数字）；界面字号整体大一号。
+
+### GUI sessions / GUI 会话
+- Chat tables keep short cells on one line, give long ones a minimum width, and leave 24 px between columns.
+  对话里的表格：短单元格不换行，长单元格有最小宽度，列间距 24 px。
+
+### Power / 电源
+- Wavi keeps the Mac from idle sleep while it runs, so the phone does not lose it (Settings · Automation · Power, on by default).
+  Wavi 运行时阻止 Mac 空闲睡眠，手机不再因此断开（设置 · 自动化 · 电源，默认开）。
+
+### Phone / 手机
+- The phone has its own 设置 page (theme, what opens at launch, Live Activities, haptics, clearing the cache), and the context sheet is redrawn in system glass.
+  手机有了自己的设置页（主题、启动时打开、灵动岛和锁屏卡片、触感反馈、清除缓存）；context sheet 改用系统玻璃重画。
+
 ## [0.22.0] - 2026-11-24
 
 A near-black dark palette for 实色 and 实心玻璃, a GUI model menu grouped by family, and the phone's board, Markdown, context ring and 设置 groundwork.
@@ -786,7 +811,8 @@ First public release. Unsigned (ad-hoc signature): see the README for the one-ti
 - The app tells you when a newer GitHub release exists (one notification per version; nothing is downloaded or installed automatically). No telemetry.
   有新版本时提示一次（不会自动下载或安装）；无任何遥测。
 
-[Unreleased]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/meloer101/Wavi-Your_next_ADE/compare/v0.19.0...v0.20.0
