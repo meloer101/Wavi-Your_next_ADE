@@ -57,6 +57,30 @@
   align-items: flex-start;
 }
 
+/* ② A new row slides in from above (rows that were there when the panel opened do not). */
+.event[data-new='true'] {
+  animation: row-in var(--motion-duration-slide) var(--motion-spring) both;
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event[data-new='true'] {
+    animation: row-fade var(--motion-reduced) linear both;
+  }
+
+  @keyframes row-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
 .eventDot {
   flex: none;
   width: 7px;

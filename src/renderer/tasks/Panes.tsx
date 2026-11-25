@@ -1,5 +1,6 @@
 // The board's floating panes (Figma 115A4): 「动态」 top right, the toolbar at the bottom, the zoom control bottom right.
 // All three are the thickest solid-glass finish, so they read above notes and dots alike.
+import { useState } from 'react'
 import { defineMessages } from '@shared/i18n'
 import { Minus, Plus } from '../ui/icons'
 import { useMessages } from '../ui/i18n'
@@ -63,6 +64,8 @@ const clock = (at: number): string => new Date(at).toLocaleTimeString([], { hour
 
 export function ActivityPanel({ events, open, onToggle }: { events: readonly ActivityEvent[]; open: boolean; onToggle(): void }) {
   const m = useMessages(M)
+  // Rows newer than the ones here when the panel mounted slide in; coming back to the tab shows the old ones still.
+  const [seenAtMount] = useState(() => events[0]?.id ?? 0)
   if (events.length === 0) return null
   return (
     <section className={styles.activity} data-testid="task-activity" data-open={open} data-no-pan="" aria-label={m.activity}>
@@ -73,7 +76,7 @@ export function ActivityPanel({ events, open, onToggle }: { events: readonly Act
       {open && (
         <ol className={styles.events}>
           {events.slice(0, SHOWN_EVENTS).map((e) => (
-            <li key={e.id} className={styles.event}>
+            <li key={e.id} className={styles.event} data-new={e.id > seenAtMount}>
               <span className={styles.eventDot} data-tone={DOT_OF[e.kind]} aria-hidden />
               <span className={styles.eventBody}>
                 <span className={styles.key}>{clock(e.at)}</span>

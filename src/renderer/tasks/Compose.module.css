@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
-  padding: calc(var(--space-12) + var(--space-2)) calc(var(--space-16) + 1px) var(--space-12);
+  padding: calc(var(--space-12) + var(--space-2)) var(--space-16) var(--space-12);
   border-radius: var(--radius-note);
   background: var(--card-idle);
   box-shadow: var(--tile-edge), inset 0 0 0 1px var(--border-default), var(--shadow-glass-menu);
@@ -132,6 +132,30 @@
   display: block;
   width: 12px;
   height: 12px;
+}
+
+.compose[data-leaving='true'] {
+  pointer-events: none;
+  animation: compose-out var(--motion-note-out) var(--ease-out) forwards;
+}
+
+@keyframes compose-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compose[data-leaving='true'] {
+    animation: compose-fade var(--motion-reduced) linear forwards;
+  }
+
+  @keyframes compose-fade {
+    to {
+      opacity: 0;
+    }
+  }
 }
 
 .menuHost {

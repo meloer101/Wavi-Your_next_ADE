@@ -39,11 +39,13 @@ interface Props {
   /** Resolves true when the card was made; false keeps the box (main refused it). */
   onSubmit(result: ComposeResult): Promise<boolean>
   onCancel(): void
+  /** The card was pasted: the box shrinks away (200 ms) before it is removed. */
+  leaving?: boolean
 }
 
 const ICON = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
-export function Compose({ projects, initialProject, onSubmit, onCancel }: Props) {
+export function Compose({ projects, initialProject, onSubmit, onCancel, leaving = false }: Props) {
   const m = useMessages(M)
   const [text, setText] = useState('')
   const [projectId, setProjectId] = useState(initialProject)
@@ -127,7 +129,7 @@ export function Compose({ projects, initialProject, onSubmit, onCancel }: Props)
   const projectName = projects.find((p) => p.id === projectId)?.name ?? ''
 
   return (
-    <div className={styles.compose} data-testid="task-compose" data-no-pan="">
+    <div className={styles.compose} data-testid="task-compose" data-no-pan="" data-leaving={leaving}>
       <div className={styles.field}>
         {/* The first line is Medium, the rest regular: a textarea has one weight, so the visible text is this mirror and
             the textarea above it carries only the caret and the selection. */}

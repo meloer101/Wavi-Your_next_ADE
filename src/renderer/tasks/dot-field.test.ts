@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GLOW, REDUCED_MS, TIMING, dotLight, dotSize, easeTo, glowBox, glowIntensity, gridStep, lightBucket, newGlow, stepGlow, type GlowState } from './dot-field'
+import { GLOW, REDUCED_MS, TIMING, dotLight, dotSize, easeTo, glowBox, glowIntensity, gridStep, lightBucket, newGlow, rippleAlive, rippleIntensity, rippleRadius, stepGlow, RIPPLE, type GlowState } from './dot-field'
 
 const FRAME = 1000 / 60
 
@@ -185,5 +185,35 @@ describe('grid', () => {
     expect(lightBucket(GLOW.peak, 8)).toBe(8)
     expect(lightBucket(0.3, 8)).toBeGreaterThan(0)
     expect(lightBucket(0.3, 8)).toBeLessThan(8)
+  })
+})
+
+describe('ripples', () => {
+  it('spreads from the centre to the full radius in 600 ms, fast at first and then easing', () => {
+    expect(rippleRadius(0)).toBe(0)
+    expect(rippleRadius(RIPPLE.ms)).toBe(RIPPLE.radius)
+    expect(rippleRadius(100)).toBeGreaterThan(rippleRadius(RIPPLE.ms) / 6)
+    expect(rippleRadius(100)).toBeLessThan(rippleRadius(200))
+    expect(rippleRadius(200)).toBeLessThan(rippleRadius(400))
+    expect(rippleRadius(RIPPLE.ms + 400)).toBe(RIPPLE.radius)
+  })
+  it('lights the dots at the ring and not the ones far from it', () => {
+    const age = 300
+    const ring = rippleRadius(age)
+    const on = rippleIntensity(ring, age)
+    expect(on).toBeGreaterThan(0.1)
+    expect(on).toBeLessThanOrEqual(RIPPLE.peak)
+    expect(rippleIntensity(ring + 4 * RIPPLE.width, age)).toBeLessThan(0.001)
+    expect(rippleIntensity(0, age)).toBeLessThan(on / 10)
+  })
+  it('thins out as it spreads and is gone after 600 ms', () => {
+    expect(rippleIntensity(rippleRadius(100), 100)).toBeGreaterThan(rippleIntensity(rippleRadius(500), 500))
+    expect(rippleIntensity(RIPPLE.radius, RIPPLE.ms)).toBe(0)
+    expect(rippleIntensity(0, -5)).toBe(0)
+  })
+  it('is alive for 600 ms from its birth', () => {
+    const r = { x: 0, y: 0, tone: 'neutral' as const, born: 1000 }
+    expect(rippleAlive(r, 1599)).toBe(true)
+    expect(rippleAlive(r, 1600)).toBe(false)
   })
 })

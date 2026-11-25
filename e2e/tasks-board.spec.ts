@@ -303,6 +303,8 @@ test('dragging a card moves it and its children, a reload keeps the place, and a
   await shoot('drag-mid')
   await page.mouse.up()
   await expect(board()).toHaveAttribute('data-dragging', 'false', WITHIN)
+  // The card springs from 1.02 × back to 1 ×: measure it once it has settled.
+  await page.waitForTimeout(700)
 
   const after = { root: await box(root), child: await box(child), other: await box(other) }
   expect(after.root.x - before.root.x).toBeCloseTo(120, 0)
@@ -360,4 +362,104 @@ test('the new-card box: ⇧Enter is a new line, Enter pastes, the first line is 
   await page.getByTestId('task-compose-input').press('Escape')
   await expect(page.getByTestId('task-compose')).toHaveCount(0)
   await page.evaluate(() => globalThis.localStorage?.removeItem('tr.tasks.leader.v1'))
+})
+
+/** Records every `data-tilt` and `data-fx` value a note takes (they last 90 ms / 1.2 s: polling could miss them). */
+const watchNotes = () =>
+  page.evaluate(() => {
+    const g = globalThis as unknown as { __seen?: { tilt: string[]; fx: string[]; observer: MutationObserver } }
+    g.__seen?.observer.disconnect()
+    const seen = { tilt: [] as string[], fx: [] as string[], observer: null as unknown as MutationObserver }
+    seen.observer = new MutationObserver((records) => {
+      for (const r of records) {
+        // A ghost is inserted with its `data-fx` already set.
+        for (const added of Array.from(r.addedNodes)) {
+          if (added instanceof HTMLElement && added.dataset.fx) seen.fx.push(added.dataset.fx)
+        }
+        if (r.type !== 'attributes') continue
+        const el = r.target as HTMLElement
+        if (r.attributeName === 'data-tilt' && el.dataset.tilt) seen.tilt.push(el.dataset.tilt)
+        if (r.attributeName === 'data-fx' && el.dataset.fx) seen.fx.push(el.dataset.fx)
+      }
+    })
+    seen.observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-tilt', 'data-fx'] })
+    g.__seen = seen
+  })
+const seenNotes = () => page.evaluate(() => (globalThis as unknown as { __seen: { tilt: string[]; fx: string[] } }).__seen)
+const ripples = () => page.locator('canvas[data-ripples]').first().getAttribute('data-ripples')
+
+async function dragFast(card: Made): Promise<void> {
+  const box = (await note(card).boundingBox())!
+  const from = { x: box.x + box.width / 2, y: box.y + 60 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 20, from.y, { steps: 2 })
+  await page.mouse.move(from.x + 260, from.y + 30, { steps: 3 })
+  await page.waitForTimeout(40)
+  await page.mouse.move(from.x + 300, from.y + 30)
+  await page.waitForTimeout(160)
+  await page.mouse.up()
+}
+
+test('motion: a pasted card lands with a ripple, a held card tilts, and what is on the board at open does not animate', async () => {
+  const before = await make('p-acme', '开着就在的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(before)).toBeVisible(WITHIN)
+  await page.waitForTimeout(400)
+  await watchNotes()
+  // Nothing played for the card that was already there.
+  await expect(note(before)).not.toHaveAttribute('data-fx', /./)
+  expect(await ripples()).toBe('0')
+
+  const fresh = await make('p-acme', '新贴的卡')
+  await expect(note(fresh)).toHaveAttribute('data-fx', /land/, WITHIN)
+  await expect.poll(ripples, { timeout: 2000 }).not.toBe('0')
+  // The mark goes again after a moment (animations only on the event).
+  await expect(note(fresh)).not.toHaveAttribute('data-fx', /./, WITHIN)
+  await expect.poll(ripples, WITHIN).toBe('0')
+  await shoot('motion-landed')
+
+  await dragFast(before)
+  const seen = await seenNotes()
+  expect(seen.tilt.length).toBeGreaterThan(0)
+  expect(seen.tilt.every((t) => Math.abs(Number(t)) <= 3)).toBe(true)
+  await expect(note(before)).not.toHaveAttribute('data-tilt', /./, WITHIN)
+})
+
+test('motion: a child slides out along a line that draws in; a deleted card leaves as a ghost', async () => {
+  const parent = await make('p-acme', '会拆分的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(parent)).toBeVisible(WITHIN)
+  await page.waitForTimeout(300)
+  await watchNotes()
+  const kid = await make('p-acme', '拆出来的子卡', { parent })
+  await expect(note(kid)).toHaveAttribute('data-fx', /slide/, WITHIN)
+  await expect(board().locator('g[data-fx="draw"]')).toHaveCount(1)
+  await shoot('motion-split')
+  await expect(board().locator('g[data-fx="draw"]')).toHaveCount(0, WITHIN)
+
+  await page.evaluate((id) => (globalThis as unknown as { tr: { tasks: { remove(id: string): Promise<void> } } }).tr.tasks.remove(id), kid.id)
+  await expect(note(kid)).toHaveCount(0, WITHIN)
+  expect((await seenNotes()).fx.some((v) => v.includes('leave'))).toBe(true)
+})
+
+test('motion: with the system’s reduced motion there is no ripple, no tilt and no slide', async () => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  try {
+    const before = await make('p-acme', '安静的卡')
+    await openTasks({ x: 24, y: 24, zoom: 1 })
+    await expect(note(before)).toBeVisible(WITHIN)
+    await page.waitForTimeout(300)
+    await watchNotes()
+    const fresh = await make('p-acme', '安静地贴上')
+    await expect(note(fresh)).toBeVisible(WITHIN)
+    await page.waitForTimeout(700)
+    expect(await ripples()).toBe('0')
+    await dragFast(before)
+    const seen = await seenNotes()
+    expect(seen.tilt).toEqual([])
+    expect(await ripples()).toBe('0')
+  } finally {
+    await page.emulateMedia({ reducedMotion: null })
+  }
 })

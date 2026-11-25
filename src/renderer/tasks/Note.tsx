@@ -55,6 +55,12 @@ export interface NoteProps {
   selected: boolean
   /** Held by the pointer: raised above the others. */
   dragging: boolean
+  /** Degrees of tilt while it is dragged along (0 at rest); the board computes it from the pointer's speed. */
+  tilt: number
+  /** What just happened to it, for its motion (`data-fx`: land slide pin done cancel leave, space separated). */
+  fx: string
+  /** Its place in a batch of new cards (the stagger). */
+  order: number
   dimmed: boolean
   now: number
   onSelect(id: string): void
@@ -73,12 +79,12 @@ function timeOf(card: Card<Session>, now: number): string {
   return ''
 }
 
-function NoteView({ card, placed, drawing, info, selected, dragging, dimmed, now, onSelect, onOpen }: NoteProps) {
+function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, order, dimmed, now, onSelect, onOpen }: NoteProps) {
   const m = useMessages(NOTE_M)
   const { task, state, session } = card
   const line = actionLine(card, { waitingBelow: info.waiting })
   const action = useActionText(line)
-  const style: CSSProperties = { left: placed.x, top: placed.y, width: placed.w, height: placed.h }
+  const style = { left: placed.x, top: placed.y, width: placed.w, height: placed.h, '--tilt': `${tilt}deg`, '--fx-order': order } as CSSProperties
   const common = {
     className: styles.card,
     style,
@@ -86,6 +92,8 @@ function NoteView({ card, placed, drawing, info, selected, dragging, dimmed, now
     'data-drawing': drawing,
     'data-selected': selected,
     'data-dragging': dragging,
+    'data-tilt': tilt !== 0 ? tilt.toFixed(1) : undefined,
+    'data-fx': fx !== '' ? fx : undefined,
     'data-dimmed': dimmed,
     'data-task-id': task.id,
     'data-seq': task.seq,
@@ -153,6 +161,9 @@ const same = (a: NoteProps, b: NoteProps): boolean =>
   a.drawing === b.drawing &&
   a.selected === b.selected &&
   a.dragging === b.dragging &&
+  a.tilt === b.tilt &&
+  a.fx === b.fx &&
+  a.order === b.order &&
   a.dimmed === b.dimmed &&
   a.now === b.now &&
   a.info.waiting === b.info.waiting &&
