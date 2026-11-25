@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
 - 2026-11-25：协作队伍默认折叠（PRD v1.243，Figma 111 / 111′）三步都做完：侧栏（`src/shared/session-group.ts`、`sidebar/FoldRow.tsx`，选中底色罩住整组，`expandedGroups`）、看板卡片的成员摘要（`overview/CardMembers.tsx`）、手机（`RemoteSession.parentId` / `group`，会话列表和看板）。手机端只在测试宿主里看过截图，没连着真 Mac 用过；`e2e/overview.spec.ts` 的 :78 / :175 在机器负载高时会失败（改动前后都一样），没有处理。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
