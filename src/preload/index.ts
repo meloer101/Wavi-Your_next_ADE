@@ -116,7 +116,8 @@ const api: TrApi = {
     onWindowState: (listener) => listen(IPC.uiWindowState, listener),
     onFullScreen: (listener) => listen(IPC.uiFullScreen, listener),
     confirm: (options) => ipcRenderer.invoke(IPC.uiConfirm, options),
-    revealInFinder: (path) => ipcRenderer.send(IPC.uiRevealInFinder, path)
+    revealInFinder: (path) => ipcRenderer.send(IPC.uiRevealInFinder, path),
+    copyImage: (path) => ipcRenderer.invoke(IPC.uiCopyImage, path)
   },
   agent: {
     onEvent: (listener) => listen(IPC.agentEvent, listener),

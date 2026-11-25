@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-25：GUI 对话显示 agent 回传的图片、所有缩略图点开预览（PRD v1.243，Figma 112F–112H）已做完：Claude / Codex（app-server 与 rollout）/ Pi / ACP 的工具结果和消息里的图片存成 `sent-<哈希>` 文件，`tool` / `text` 条目多 `images`（`src/shared/transcript-chat.ts`，手机不发）；工具行下方 120 高缩略图（折叠时也显示）、正文 markdown 本地图片；预览层 `src/renderer/gui/ImagePreview.tsx`（本会话图片一组，缩放平移、在 Finder 中显示、复制图片 `ui.copyImage`，⎋ 只关预览）。已验证：单测、typecheck、lint、`e2e/gui-session.spec.ts` 新增用例；未验证：真机按 ⌘= 时 View 菜单的字号加速键是否抢先于预览。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
 - 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。

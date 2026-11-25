@@ -16,7 +16,7 @@ import {
   type GuiPermissionOption,
   type GuiPrompt
 } from '@shared/gui-chat'
-import { CHAT_LIMITS, fileDiffs, keptImages, lineDiff, rel, todosArg, todosOf, type ChatItem, type FileDiff, type KeepImage } from '@shared/transcript-chat'
+import { CHAT_LIMITS, fileDiffs, keptImages, keptImagesOfContent, lineDiff, rel, todosArg, todosOf, type ChatItem, type FileDiff, type KeepImage } from '@shared/transcript-chat'
 import { defineMessages, localized, pick } from '@shared/i18n'
 
 const M = defineMessages({
@@ -70,6 +70,11 @@ function outputOfContent(content: unknown): string | undefined {
   return text ? tail(text, CHAT_LIMITS.output) : undefined
 }
 
+/** The pictures of a tool call's content (`{ type: 'content', content: { type: 'image', data, mimeType } }`), kept as files. */
+function imagesOfContent(content: unknown, keep: KeepImage | undefined): string[] | undefined {
+  return keptImagesOfContent((Array.isArray(content) ? content : []).filter(isRec).map((c) => (c.type === 'content' ? c.content : undefined)), keep)
+}
+
 const STATE: Record<string, ToolItem['state']> = { pending: 'running', in_progress: 'running', completed: 'ok', failed: 'error' }
 
 export interface AcpPending {
@@ -98,6 +103,8 @@ export function createAcpNormalizer(cwd: string, now: () => number = Date.now, k
   const waiting = new Map<string, AcpPending>()
   let seq = 0
   let live: { kind: 'text' | 'thinking'; text: string } | null = null
+  // The pictures the streamed message carries (`agent_message_chunk` of type image), kept as files.
+  let liveImages: string[] = []
   // The plan row of this turn: updates rewrite it; a message from the user starts the next one.
   let planId: string | null = null
   // The replayed user message still being received: its chunks arrive back to back.
@@ -119,8 +126,10 @@ export function createAcpNormalizer(cwd: string, now: () => number = Date.now, k
     live = null
     const id = `${done.kind === 'text' ? 't' : 'k'}${seq++}`
     const text = done.text.trim()
+    const images = done.kind === 'text' && liveImages.length > 0 ? liveImages.slice(0, CHAT_LIMITS.images) : undefined
+    liveImages = []
     const events: GuiEvent[] = [{ type: 'live', live: null }]
-    if (text) events.push(put(id, done.kind === 'text' ? { kind: 'text', id, at: now(), text: clip(text, CHAT_LIMITS.text) } : { kind: 'thinking', id, at: now(), text: clip(text, CHAT_LIMITS.thinking) }))
+    if (text || images) events.push(put(id, done.kind === 'text' ? { kind: 'text', id, at: now(), text: clip(text, CHAT_LIMITS.text), ...(images ? { images } : {}) } : { kind: 'thinking', id, at: now(), text: clip(text, CHAT_LIMITS.thinking) }))
     return events
   }
 
@@ -136,6 +145,7 @@ export function createAcpNormalizer(cwd: string, now: () => number = Date.now, k
     const files = 'content' in update ? diffsOfContent(update.content, cwd) : (before?.files ?? (before?.diff ? [before.diff] : []))
     const diff = files[0]
     const output = 'content' in update ? outputOfContent(update.content) : before?.output
+    const images = 'content' in update ? imagesOfContent(update.content, keep) : before?.images
     const item: ToolItem = {
       kind: 'tool',
       id,
@@ -145,7 +155,8 @@ export function createAcpNormalizer(cwd: string, now: () => number = Date.now, k
       state: status ? (STATE[status] ?? 'running') : (before?.state ?? 'running'),
       ...(output ? { output } : {}),
       ...(diff ? { diff } : {}),
-      ...(files.length > 1 ? { files } : {})
+      ...(files.length > 1 ? { files } : {}),
+      ...(images ? { images } : {})
     }
     tools.set(id, item)
     return [...flush(), put(id, item)]
@@ -161,7 +172,10 @@ export function createAcpNormalizer(cwd: string, now: () => number = Date.now, k
           const piece = textOfBlock(update.content)
           const events = live && live.kind !== kind ? flush() : []
           live = { kind, text: (live?.text ?? '') + piece }
-          return [...events, { type: 'live', live: { ...live } }]
+          // A picture chunk (`{ type: 'image', data, mimeType }`): kept as a file, drawn under the message's words.
+          const picture = kind === 'text' ? keptImagesOfContent([update.content], keep) : undefined
+          if (picture) liveImages = [...liveImages, ...picture]
+          return live.text === '' ? events : [...events, { type: 'live', live: { ...live } }]
         }
         case 'user_message_chunk': {
           // Replayed history (session/load); a live session shows the user's message from `sent`.

@@ -1,0 +1,172 @@
+/* The image preview (Figma 112G / 112G′ fitted, 112H zoomed): a layer over the whole window, its colour the app's at 94%.
+   The top bar leaves the traffic lights (left, 84) alone; the stage takes the rest. */
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  --traffic-lights: 84px;
+  background: color-mix(in srgb, var(--bg-app) 94%, transparent);
+  color: var(--text-primary);
+  outline: none;
+  user-select: none;
+}
+
+.bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 52px;
+  padding: 0 var(--space-16);
+  padding-left: var(--traffic-lights);
+  /* The bar is the window's title strip here: it drags it. */
+  -webkit-app-region: drag;
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--text-caption-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position {
+  flex-shrink: 0;
+  margin-left: var(--space-16);
+  font: var(--text-mono-s);
+  color: var(--text-tertiary);
+}
+
+.fill {
+  flex: 1;
+}
+
+.controls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-4);
+  -webkit-app-region: no-drag;
+}
+
+.icon,
+.text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-secondary);
+}
+
+.icon {
+  width: 28px;
+}
+
+.text {
+  padding: 0 var(--space-8);
+  font: var(--text-caption);
+}
+
+.icon:hover,
+.text:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.text:disabled {
+  color: var(--text-disabled);
+}
+
+.ratio {
+  min-width: 44px;
+  font: var(--text-mono-s);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--space-8);
+  background: var(--border-default);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stage[data-pannable] {
+  cursor: grab;
+}
+
+.stage[data-dragging] {
+  cursor: grabbing;
+}
+
+/* The picture sits at its own size on the stage's centre; the view is its transform alone. */
+.picture {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  transition: transform var(--duration-pop) var(--ease-out);
+  will-change: transform;
+}
+
+.picture[data-following] {
+  transition: none;
+}
+
+.nav {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-popover);
+  color: var(--text-secondary);
+  transform: translateY(-50%);
+}
+
+.nav:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.nav:disabled {
+  color: var(--text-disabled);
+}
+
+.prev {
+  left: var(--space-16);
+}
+
+.next {
+  right: var(--space-16);
+}
+
+.icon:focus-visible,
+.text:focus-visible,
+.nav:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picture {
+    transition: none;
+  }
+}

@@ -99,6 +99,22 @@ describe('createAcpNormalizer', () => {
     expect(s.items.at(-1)).toMatchObject({ kind: 'system', text: '已中断' })
   })
 
+  it('keeps a picture the agent sends in a message chunk, and in a tool call’s content, as files (Figma 112F)', () => {
+    const n = createAcpNormalizer('/repo', () => 0, (image) => `/kept/${image.data}.png`)
+    const image = (data: string) => ({ type: 'image', data, mimeType: 'image/png' })
+    let s = fold(n.update(chunk('agent_message_chunk', '截图：')))
+    s = fold(n.update({ sessionUpdate: 'agent_message_chunk', content: image('AAAA') }), s)
+    s = fold(n.update({ sessionUpdate: 'tool_call', toolCallId: 'c1', kind: 'other', title: 'screenshot', status: 'in_progress' }), s)
+    expect(s.items[0]).toMatchObject({ kind: 'text', text: '截图：', images: ['/kept/AAAA.png'] })
+    s = fold(n.update({ sessionUpdate: 'tool_call_update', toolCallId: 'c1', status: 'completed', content: [{ type: 'content', content: image('BBBB') }, { type: 'content', content: { type: 'text', text: 'done' } }] }), s)
+    expect(s.items[1]).toMatchObject({ kind: 'tool', state: 'ok', output: 'done', images: ['/kept/BBBB.png'] })
+    // A later update without content keeps them; a message of only a picture is an item with no words.
+    s = fold(n.update({ sessionUpdate: 'tool_call_update', toolCallId: 'c1', status: 'completed' }), s)
+    expect(s.items[1]).toMatchObject({ images: ['/kept/BBBB.png'] })
+    s = fold([...n.update({ sessionUpdate: 'agent_message_chunk', content: image('CCCC') }), ...n.promptDone('end_turn')], s)
+    expect(s.items[2]).toMatchObject({ kind: 'text', text: '', images: ['/kept/CCCC.png'] })
+  })
+
   it('keeps the pictures of a replayed message as files (session/load, Figma 71A)', () => {
     const n = createAcpNormalizer('/repo', () => 0, (image) => `/kept/${image.data}.png`)
     let s = fold(n.update(chunk('user_message_chunk', '看图')))

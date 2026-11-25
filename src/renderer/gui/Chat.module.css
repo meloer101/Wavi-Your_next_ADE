@@ -1571,6 +1571,85 @@
   user-select: none;
 }
 
+/* Figma 112F: the pictures an agent returned, 120 high, 8 apart; under a tool row they start at its name. The height is
+   fixed, so a picture loading never moves what follows; its width is its shape's (a placeholder's until it is known). */
+.imageRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.imageRow[data-indent] {
+  padding-left: var(--step-indent);
+}
+
+.chatImage {
+  display: inline-block;
+  height: 120px;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  vertical-align: top;
+}
+
+button.chatImage {
+  cursor: zoom-in;
+}
+
+button.chatImage:hover {
+  border-color: var(--border-strong);
+}
+
+button.chatImage:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.chatImage[data-state='loading'] {
+  min-width: 120px;
+}
+
+.chatImage img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* A thumbnail of your own that opens the preview (sent messages only): its border darkens on hover, as the others'. */
+button.thumbButton {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: zoom-in;
+}
+
+button.thumbButton::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px transparent;
+  content: '';
+}
+
+button.thumbButton:hover::after {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+button.thumbButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 /* Figma 50C: pictures as 64 thumbnails, other files as names, 8 apart */
 .attachments {
   display: flex;

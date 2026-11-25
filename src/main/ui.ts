@@ -1,12 +1,15 @@
 // Native pickers and system services the renderer cannot reach itself.
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
-import { isAbsolute } from 'node:path'
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, nativeImage, Notification, shell } from 'electron'
+import { existsSync } from 'node:fs'
+import { extname, isAbsolute } from 'node:path'
 import { IPC } from '@shared/ipc'
 import { hostWindowFor } from './app-windows'
 import { secondaryWindowsOf } from './secondary-windows'
 import { defineMessages, pick } from '@shared/i18n'
 
 const M = defineMessages({ zh: { openProject: '打开项目', add: '添加' }, en: { openProject: 'Open project', add: 'Add' } })
+
+const COPYABLE_IMAGE: ReadonlySet<string> = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
 
 const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
 
@@ -17,6 +20,17 @@ export function registerUiHandlers(): void {
 
   ipcMain.on(IPC.uiRevealInFinder, (_event, path: unknown) => {
     if (typeof path === 'string' && path.length <= 4096 && isAbsolute(path)) shell.showItemInFolder(path)
+  })
+
+  // The image preview's 复制图片 (Figma 112G): a picture file the chat shows, as an image on the clipboard.
+  // Electron 44's clipboard has no `writeImage`: the picture goes as a PNG item (`clipboard.write`, the W3C shape).
+  ipcMain.handle(IPC.uiCopyImage, async (_event, path: unknown) => {
+    if (typeof path !== 'string' || path.length > 4096 || !isAbsolute(path) || path.includes('\0')) return false
+    if (!COPYABLE_IMAGE.has(extname(path).toLowerCase()) || !existsSync(path)) return false
+    const image = nativeImage.createFromPath(path)
+    if (image.isEmpty()) return false
+    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) })])
+    return true
   })
 
   ipcMain.on(IPC.uiSetBadge, (_event, count: unknown) => {

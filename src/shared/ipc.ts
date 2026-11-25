@@ -177,6 +177,8 @@ export interface UiApi {
   onFullScreen(listener: (fullScreen: boolean) => void): Unsubscribe
   /** Reveals a file or folder in Finder. Absolute paths only. */
   revealInFinder(path: string): void
+  /** Puts a picture file (png, jpg, jpeg, gif, webp; absolute path of an existing file) on the clipboard as an image (the chat's image preview, Figma 112G). Resolves to whether it did. */
+  copyImage(path: string): Promise<boolean>
   /** Native confirmation sheet; resolves to true when the user picked the confirm button. */
   confirm(options: ConfirmOptions): Promise<boolean>
 }
@@ -553,6 +555,7 @@ export const IPC = {
   /** main → renderer, payload boolean: the main window is full screen */
   uiFullScreen: 'ui:full-screen',
   uiRevealInFinder: 'ui:reveal-in-finder',
+  uiCopyImage: 'ui:copy-image',
   uiConfirm: 'ui:confirm',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
