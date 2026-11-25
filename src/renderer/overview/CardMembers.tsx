@@ -32,10 +32,13 @@ interface BoardMembers {
   onBoard: ReadonlySet<SessionId>
   /** Clicks a member's row like its own card. */
   open(id: SessionId, e: MouseEvent): void
-  now: number
+  /** Hands the keyboard back to the board, as a card click does: a focused button would swallow ↵ / Space. */
+  focusBoard(): void
 }
 
 export const MembersContext = createContext<BoardMembers | null>(null)
+/** The shared clock, read only by the lists that are open, so a tick re-renders no folded card. */
+export const MembersNowContext = createContext(0)
 
 /** The groups of `sessions` as the sidebar counts them, with the lines they are drawn from (subagents, runs, teams). */
 export function useBoardMembers(sessions: readonly Session[]): Pick<BoardMembers, 'groups' | 'items' | 'byId' | 'expanded' | 'toggle'> {
@@ -69,7 +72,7 @@ export function useBoardMembers(sessions: readonly Session[]): Pick<BoardMembers
   )
   const groups = useMemo(() => groupsOf(sessions, items), [sessions, items])
   const byId = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions])
-  return { groups, items, byId, expanded, toggle }
+  return useMemo(() => ({ groups, items, byId, expanded, toggle }), [groups, items, byId, expanded, toggle])
 }
 
 /** Nothing for a session without members. A click here is the members' own: it opens no card and selects nothing. */
@@ -78,14 +81,13 @@ export const CardMembers = memo(function CardMembers({ sessionId }: { sessionId:
   const m = useMessages(M)
   const group = ctx?.groups[sessionId]
   const open = ctx?.expanded.includes(sessionId) ?? false
-  const rows = useMemo(
-    () => (ctx && group && open ? memberRows({ ownerId: sessionId, groups: ctx.groups, sessions: ctx.byId, items: ctx.items, now: ctx.now }) : []),
-    [ctx, group, open, sessionId]
-  )
   if (!ctx || !group) return null
   return (
     <div className={styles.members} data-testid="card-members" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-      <button type="button" className={styles.summary} data-testid="card-members-toggle" aria-expanded={open} onClick={() => ctx.toggle(sessionId)}>
+      <button type="button" className={styles.summary} data-testid="card-members-toggle" aria-expanded={open} onClick={() => {
+          ctx.toggle(sessionId)
+          ctx.focusBoard()
+        }}>
         <span className={styles.chevron}>{open ? <ChevronDown size={16} strokeWidth={1.75} /> : <ChevronRight size={16} strokeWidth={1.75} />}</span>
         <span className={styles.label}>{m.members(group.total)}</span>
         <span className={styles.counts}>
@@ -97,31 +99,39 @@ export const CardMembers = memo(function CardMembers({ sessionId }: { sessionId:
           ))}
         </span>
       </button>
-      {open && (
-        <ul className={styles.list} aria-label={m.list}>
-          {rows.map((row) => {
-            const body = (
-              <>
-                <StatusGlyph status={row.status} />
-                <span className={styles.name}>{row.name}</span>
-                {row.meta && <span className={styles.meta}>{row.meta}</span>}
-              </>
-            )
-            const target = row.sessionId
-            return (
-              <li key={row.key} data-depth={row.depth} data-member-session={target}>
-                {target && ctx.onBoard.has(target) ? (
-                  <button type="button" className={styles.row} onClick={(e) => ctx.open(target, e)}>
-                    {body}
-                  </button>
-                ) : (
-                  <span className={styles.row}>{body}</span>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      {open && <MemberList ownerId={sessionId} ctx={ctx} />}
     </div>
   )
 })
+
+/** The rows of an open card; the only part that follows the clock. */
+function MemberList({ ownerId, ctx }: { ownerId: SessionId; ctx: BoardMembers }) {
+  const m = useMessages(M)
+  const now = useContext(MembersNowContext)
+  const rows = useMemo(() => memberRows({ ownerId, groups: ctx.groups, sessions: ctx.byId, items: ctx.items, now }), [ownerId, ctx.groups, ctx.byId, ctx.items, now])
+  return (
+    <ul className={styles.list} aria-label={m.list}>
+      {rows.map((row) => {
+        const body = (
+          <>
+            <StatusGlyph status={row.status} />
+            <span className={styles.name}>{row.name}</span>
+            {row.meta && <span className={styles.meta}>{row.meta}</span>}
+          </>
+        )
+        const target = row.sessionId
+        return (
+          <li key={row.key} data-depth={row.depth} data-member-session={target}>
+            {target && ctx.onBoard.has(target) ? (
+              <button type="button" className={styles.row} onClick={(e) => ctx.open(target, e)}>
+                {body}
+              </button>
+            ) : (
+              <span className={styles.row}>{body}</span>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}

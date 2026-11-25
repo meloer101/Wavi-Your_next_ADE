@@ -342,4 +342,15 @@ test('a card with a dispatched child folds its members into one line that shares
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(sideFold).toHaveAttribute('aria-expanded', 'false')
+
+  // The toggle hands the keyboard back to the board: Space opens the selected card's overlay, ↵ enters its session.
+  await expect(overview().locator('[role="listbox"]')).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(overlay()).toBeVisible()
+  await overlay().getByRole('button', { name: '关闭' }).click()
+  await toggle.click()
+  await page.keyboard.press('Enter')
+  await expect(overview()).toBeHidden()
+  await page.keyboard.press('Meta+Shift+A')
+  await expect(overview()).toBeVisible()
 })
