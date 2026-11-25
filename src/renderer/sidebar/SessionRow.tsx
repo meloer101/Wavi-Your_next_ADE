@@ -2,8 +2,6 @@ import { memo, useEffect, useRef, type PointerEvent } from 'react'
 import { agentName } from '@shared/agents'
 import { useLang } from '../ui/i18n'
 import { glyphStatus } from '../lifecycle/present'
-import { PortTags } from '../panels/browser/PortTags'
-import { useBrowser } from '../panels/browser/store'
 import { SessionPrTag } from '../pull-requests/PrTag'
 import { TodoLine } from '../session-meta/MetaChips'
 import { AgentIcon } from '../ui/AgentIcon'
@@ -32,18 +30,16 @@ interface Props {
 }
 
 /**
- * Figma 34P (SessionRow, third round): status glyph · title · time / activity (+ ports) / branch (+ PR) · agent mark.
+ * Figma 34P (SessionRow, third round): status glyph · title · time / branch (+ PR) · agent mark.
  * The glyph hangs in a 16px column so every line starts on the nav labels' text line. A line with nothing to say is not
- * drawn (no activity yet, no branch outside git), and the agent mark always closes the last line.
+ * drawn; the branch line is always drawn, so a row is always two lines and the agent mark closes it. `attention` recolors the branch.
  */
 export const SessionRow = memo(function SessionRow({ row, selected, shown = false, picked = false, onPick, onPress, tabStop, onSelect, onContextMenu }: Props) {
   // Memo'd: the time label, glyph and todo line inside follow the interface language.
   useLang()
-  const { session, secondary, attention, branch } = row
+  const { session, attention, branch } = row
   const ref = useRef<HTMLDivElement>(null)
   const status = glyphStatus(session)
-  const hasPorts = useBrowser((s) => (s.ports[session.id]?.length ?? 0) > 0)
-  const activity = secondary !== '' || hasPorts
 
   const mark = (
     <span className={styles.mark} title={branch ? `${agentName(session.kind)} · ${branch}` : agentName(session.kind)}>
@@ -98,23 +94,13 @@ export const SessionRow = memo(function SessionRow({ row, selected, shown = fals
         </span>
         <span className={styles.title}>{row.title}</span>
         {showsTime(session, status) && <SessionTimeLabel session={session} status={status} className={styles.time} />}
-        {!activity && !branch && mark}
       </span>
-      {activity && (
-        <span className={styles.line}>
-          {secondary && <span className={styles.activity}>{secondary}</span>}
-          <PortTags sessionId={session.id} />
-          {!branch && mark}
-        </span>
-      )}
-      {branch && (
-        <span className={styles.line}>
-          <span className={styles.branch}>{branch}</span>
-          <SessionPrTag sessionId={session.id} />
-          {row.model && <span className={styles.model}>{row.model}</span>}
-          {mark}
-        </span>
-      )}
+      <span className={styles.line}>
+        <span className={styles.branch}>{branch}</span>
+        <SessionPrTag sessionId={session.id} />
+        {row.model && <span className={styles.model}>{row.model}</span>}
+        {mark}
+      </span>
       <TodoLine sessionId={session.id} />
       {row.opens && <span className={styles.opens} aria-hidden />}
       {row.pass && <span className={styles.pass} aria-hidden />}
