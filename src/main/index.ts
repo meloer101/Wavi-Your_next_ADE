@@ -15,6 +15,7 @@ import { registerDispatchHandlers } from './dispatch'
 import { guiSessionOwner, registerGuiHandlers } from './gui'
 import { registerRemoteHandlers } from './remote'
 import { registerScheduleHandlers } from './schedules'
+import { registerTaskHandlers } from './tasks'
 import { registerIssueWatchHandlers } from './issue-watch'
 import { selectProfile } from './profile'
 import { ptySessionOwner, registerPtyHandlers } from './pty'
@@ -126,6 +127,7 @@ function boot(): void {
   registerPtyHandlers()
   registerGuiHandlers()
   registerScheduleHandlers()
+  registerTaskHandlers()
   registerIssueWatchHandlers()
   registerUiHandlers()
   registerSecondaryWindowHandlers(showMainWindow, () => getMainWindow()?.webContents ?? null)
