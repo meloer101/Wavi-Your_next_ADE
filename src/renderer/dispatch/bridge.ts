@@ -6,6 +6,7 @@ import { startAttemptReports } from '../attempts/report'
 import { addSnapshotPart, initialWorkspaceFile, requestSave } from '../state/persistence'
 import { resumeReports, startReports } from './reports'
 import { useWorkspace } from '../state/workspace'
+import { startTaskDelivery } from './task-deliver'
 import { onUserSubmit } from '../terminal/typing'
 import { forgetLeader, restoreDispatch, savedDispatch, setTell, useDispatch } from './store'
 
@@ -39,6 +40,8 @@ export function startDispatchBridge(): () => void {
   })
   // 同任务多解's members report through the same channels (attempts/report.ts).
   const offAttempts = startAttemptReports()
+  // A card the user pastes on the task board reaches the project's leader (PRD F21 v1.249).
+  const offTasks = startTaskDelivery()
   // A leader's `wavi tell` is answered when the user sends a line in its terminal (PRD F21 v1.198 · 交给用户).
   const offSubmits = onUserSubmit((id) => setTell(id, null))
   // A leader closed or no longer the leader (its project's `leaderSessions` entry gone or changed) leaves nothing behind.
@@ -48,6 +51,7 @@ export function startDispatchBridge(): () => void {
     for (const id of Object.values(prev.leaderSessions ?? {})) if (!now.has(id)) forgetLeader(id)
   })
   return () => {
+    offTasks()
     offLeaders()
     offSubmits()
     offAttempts()

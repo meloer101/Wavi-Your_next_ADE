@@ -6,6 +6,7 @@ import { setTell, setWoken, useDispatch } from './store'
 
 vi.mock('./handler', () => ({ handleWaviRequest: async () => ({ ok: true, text: '' }), resumeConfirmTimers: () => {}, setDispatchSettings: () => {} }))
 vi.mock('./reports', () => ({ resumeReports: () => {}, startReports: () => () => {} }))
+vi.mock('./task-deliver', () => ({ startTaskDelivery: () => () => {} }))
 vi.mock('../attempts/report', () => ({ startAttemptReports: () => () => {} }))
 const workspace = vi.hoisted(() => ({ store: null as null | { setState: (s: { leaderSessions: Record<string, string> }) => void } }))
 vi.mock('../state/workspace', async () => {

@@ -12,6 +12,7 @@ import {
   tellLabel,
   wakesThisHour,
   WAVI_LEADER_PROMPT,
+  WAVI_HELP,
   WAVI_SKILL,
   childBrief,
   childEvent,
@@ -525,5 +526,68 @@ describe('leader session (PRD F21 v1.198)', () => {
     expect(tellLabel('\n  Merge A or B?\nDetails…')).toBe('Merge A or B?')
     expect([...tellLabel('x'.repeat(300))]).toHaveLength(200)
     expect(wakesThisHour({ ...emptyQueue(), sent: [0, 10 * 60_000, 50 * 60_000] }, 61 * 60_000)).toBe(2)
+  })
+})
+
+describe('wavi task and wavi run --task (PRD F21 v1.249)', () => {
+  const command = (...argv: string[]) => {
+    const args = parseWaviArgv(argv)
+    return args.kind === 'command' ? parseWaviCommand(args.command) : args
+  }
+
+  it('reads task add, with a parent, a body and the title or body from stdin', () => {
+    expect(command('task', 'add', 'Login', 'form')).toEqual({ ok: true, command: { name: 'task-add', title: 'Login form' } })
+    expect(command('task', 'add', 'Login', '--parent', '12', '--body', 'Fields and errors')).toEqual({ ok: true, command: { name: 'task-add', title: 'Login', parent: 12, body: 'Fields and errors' } })
+    expect(command('task', 'add', 'Login', '--parent=#3')).toEqual({ ok: true, command: { name: 'task-add', title: 'Login', parent: 3 } })
+    expect(parseWaviArgv(['task', 'add', '-'])).toEqual({ kind: 'command-stdin', command: { name: 'task-add' }, field: 'title', json: false })
+    expect(parseWaviArgv(['task', 'add', 'Login', '--body', '-', '--parent', '2'])).toEqual({
+      kind: 'command-stdin',
+      command: { name: 'task-add', title: 'Login', parent: '2' },
+      field: 'body',
+      json: false
+    })
+    expect(command('task', 'add', '  ')).toMatchObject({ ok: false })
+    expect(command('task', 'add', 'x'.repeat(121))).toMatchObject({ ok: false })
+    expect(command('task', 'add', 'x', '--parent', 'abc')).toMatchObject({ ok: false })
+    expect(command('task', 'add', 'x', '--parent', '0')).toMatchObject({ ok: false })
+    expect(parseWaviArgv(['task', 'add', 'x', '--note', 'n'])).toMatchObject({ kind: 'error' })
+  })
+
+  it('reads task update, ls and show', () => {
+    expect(command('task', 'update', '23', '--note', 'half done', '--done')).toEqual({ ok: true, command: { name: 'task-update', seq: 23, note: 'half done', done: true } })
+    expect(command('task', 'update', '23', '--cancel', '--title', 'New')).toEqual({ ok: true, command: { name: 'task-update', seq: 23, title: 'New', cancel: true } })
+    expect(command('task', 'update', '23')).toMatchObject({ ok: false })
+    expect(command('task', 'update', '23', '--done', '--cancel')).toMatchObject({ ok: false })
+    expect(command('task', 'update', 'x', '--done')).toMatchObject({ ok: false })
+    expect(command('task', 'update', '23', '--progress', '50')).toMatchObject({ kind: 'error' })
+    expect(command('task', 'ls')).toEqual({ ok: true, command: { name: 'task-ls' } })
+    expect(command('task', 'ls', '--all')).toEqual({ ok: true, command: { name: 'task-ls', all: true } })
+    expect(parseWaviArgv(['task', 'ls', '--json'])).toEqual({ kind: 'command', command: { name: 'task-ls' }, json: true })
+    expect(command('task', 'show', '7')).toEqual({ ok: true, command: { name: 'task-show', seq: 7 } })
+    expect(command('task', 'show')).toMatchObject({ ok: false })
+    expect(command('task', 'done', '7')).toMatchObject({ kind: 'error' })
+    expect(command('task')).toMatchObject({ kind: 'error' })
+    expect(parseWaviArgv(['task', 'show', '7', '--all'])).toMatchObject({ kind: 'error' })
+  })
+
+  it('reads run --task as the card number', () => {
+    expect(command('run', 'codex', 'Fix it', '--task', '12')).toEqual({ ok: true, command: { name: 'run', agent: 'codex', task: 'Fix it', base: 'head', card: 12 } })
+    expect(command('run', 'codex', 'Fix it', '--task', 'x')).toMatchObject({ ok: false })
+    expect(command('run', 'codex', 'Fix it')).toEqual({ ok: true, command: { name: 'run', agent: 'codex', task: 'Fix it', base: 'head' } })
+    expect(parseWaviArgv(['ls', '--task', '1'])).toMatchObject({ kind: 'error' })
+  })
+
+  it('names the card in the brief of a session bound to it, and only then', () => {
+    const base = { task: 'Do X', parentTitle: 'Lead', parentAgent: 'claude' as const, depth: 1, branch: 'jacob/x', base: 'main', snapshot: false }
+    const text = withLang('en', () => childBrief({ ...base, card: { seq: 12, title: 'Login form' } }))
+    expect(text).toContain('card #12 "Login form"')
+    expect(text).toContain('wavi report')
+    expect(withLang('en', () => childBrief(base))).not.toContain('task board')
+  })
+
+  it('explains the cards in wavi --skill and --help', () => {
+    expect(WAVI_SKILL).toContain('## A card from the board')
+    expect(WAVI_HELP).toContain('wavi task add')
+    expect(WAVI_HELP).toContain('--task <card>')
   })
 })

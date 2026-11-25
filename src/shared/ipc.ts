@@ -8,6 +8,7 @@ import type { ActivitySummary, ConfirmOptions } from './lifecycle'
 import type { BrowserApi } from './browser'
 import type { SimulatorApi } from './simulator'
 import type { ScheduleApi } from './schedule'
+import type { TaskApi } from './task-board'
 import type { IssueWatchApi } from './issue-watch'
 import type { CliPermission } from './gui-chat'
 import type { ArchiveApi } from './archive'
@@ -467,6 +468,8 @@ export interface TrApi {
   repoScripts: RepoScriptsApi
   /** 定时任务 (PRD F24); channels in SCHEDULE_IPC. */
   schedules: ScheduleApi
+  /** 看板 · 任务: the task cards (PRD F9 v1.249); channels in TASK_IPC. */
+  tasks: TaskApi
   /** 自动领取 GitHub issue (PRD F26); channels in ISSUE_WATCH_IPC. */
   issueWatch: IssueWatchApi
   /** Background code review (PRD F13); channels in REVIEW_IPC. */
