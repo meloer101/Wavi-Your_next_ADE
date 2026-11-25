@@ -1,0 +1,189 @@
+/* Figma 114B: a modal over the board, solid glass. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: var(--space-32);
+  background: var(--overlay-scrim);
+}
+
+.dialog {
+  width: min(880px, calc(100% - var(--space-32)));
+  max-height: calc(100% - 2 * var(--space-32));
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-window);
+  background: var(--float-bg);
+  box-shadow: var(--float-edge), var(--shadow-glass-menu);
+  color: var(--text-primary);
+  outline: none;
+  overflow: hidden;
+}
+
+.bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  height: 48px;
+  padding: 0 var(--space-12) 0 var(--space-16);
+}
+
+.title {
+  margin: 0;
+  font: var(--text-body-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.where {
+  margin-left: var(--space-16);
+  font: var(--text-caption);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.mono {
+  font: var(--text-mono-s);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--text-tertiary);
+}
+
+.button,
+.primary,
+.danger,
+.close {
+  height: 24px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: var(--text-caption);
+  color: var(--text-primary);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.button {
+  box-shadow: inset 0 0 0 1px var(--border-default);
+}
+
+.primary {
+  background: var(--glass-primary-bg, var(--text-primary));
+  color: var(--glass-primary-fg, var(--text-inverse));
+}
+
+.danger {
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--status-error);
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  padding: 0;
+}
+
+.button:hover,
+.danger:hover,
+.close:hover {
+  background: var(--bg-hover);
+}
+
+.button:focus-visible,
+.primary:focus-visible,
+.danger:focus-visible,
+.close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4) var(--space-16) var(--space-16) calc(var(--space-40) + var(--space-12));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font: var(--text-caption);
+}
+
+.text {
+  margin: 0;
+  font: var(--text-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.heading {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.subtask {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 24px;
+}
+
+.subtitle {
+  font: var(--text-body-strong);
+  white-space: nowrap;
+}
+
+.subaction {
+  flex: 1;
+  min-width: 0;
+  font: var(--text-caption);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-8);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--border-subtle);
+}

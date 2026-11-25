@@ -1,0 +1,45 @@
+.compose {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 220px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: calc(var(--space-12) + var(--space-2)) var(--space-16);
+  border-radius: var(--radius-note);
+  background: var(--card-idle);
+  box-shadow: var(--tile-edge), inset 0 0 0 1px var(--border-default), var(--note-shadow);
+}
+
+.input,
+.project {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.input {
+  height: 18px;
+  padding: 0;
+  font: var(--text-body-strong);
+  line-height: 18px;
+}
+
+.input::placeholder {
+  color: var(--card-idle-meta);
+}
+
+.project {
+  height: 20px;
+  padding: 0;
+  font: var(--text-caption);
+  color: var(--card-idle-meta);
+}

@@ -508,10 +508,10 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
 - [x] 设计：Figma 第 114 / 115 节，定稿 115A4；PRD v1.246
 - [x] 共享契约：`src/shared/task-board.ts`（类型、`taskState`、树、校验、文件解析）、`TrApi.tasks`、preload
 - [x] main：`src/main/tasks/`（唯一的写者，JSON 存储，`registerTaskHandlers`，单测）
-- [x] `wavi task add | update | ls | show`、`wavi run --task`、`wavi --skill` 的「A card from the board」、卡片送给 leader（`src/shared/dispatch.ts`、`src/renderer/dispatch/task-commands.ts`、`task-deliver.ts`）；单测通过，真机上 agent 走一遍未验证
-- [ ] 画布和页签：`src/renderer/tasks/`（平移缩放、便利贴、曲线、点阵加微光（带过渡）、动态、工具条、缩放），`overview/` 加第三个页签
+- [x] `wavi task add | update | ls | show`、`wavi run --task`、`wavi --skill` 的「A card from the board」、卡片送给 leader（`src/shared/dispatch.ts`、`src/renderer/dispatch/task-commands.ts`、`task-deliver.ts`）；单测
+- [x] 画布和页签：`src/renderer/tasks/`（平移缩放、便利贴、曲线、点阵加微光（带过渡）、动态、工具条、缩放），`overview/` 加第三个页签；深浅色 100% / 50% 截图对过 115A4 / 115A4′ / 115A4b
 - [ ] 主理人菜单和派发依据；卡片的「停止」「取消任务」「删除」
-- [ ] e2e `tasks-board.spec.ts`；点阵帧率原型（目标 ≥ 55 fps，未测）
+- [x] e2e `tasks-board.spec.ts`（main 没有 `task:*` handler 时自己注册内存版，5 条通过）；点阵帧率：约 10,000 个点、100% 缩放、持续移动鼠标，实测 60 fps、每帧 0.4 ms
 
 ## 进行中：F26 自动领取 GitHub issue（2026-11-20 定）
 

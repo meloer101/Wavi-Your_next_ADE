@@ -1,0 +1,47 @@
+.board {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.board[data-space='true'],
+.board[data-panning='true'] {
+  cursor: grabbing;
+}
+
+/* The world: cards, links and labels in layout units, moved and scaled by the viewport. */
+.world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.links {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.link path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.link circle {
+  fill: var(--border-strong);
+}
+
+.board[data-space='true'] .world * {
+  cursor: grabbing;
+}

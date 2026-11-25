@@ -18,6 +18,8 @@
   --space-40: 40px;
   --radius-none: 0;
   --radius-xs: 2px;
+  /* 任务 board's notes and chips (Figma 115A4). */
+  --radius-note: 8px;
   --radius-sm: 3px;
   --radius-md: 5px;
   /* A card's corner: the window's own radius (main/appearance.ts GLASS_RADIUS, 16) less --card-gap (PRD §5 窗口留边, Figma 75). */
@@ -224,6 +226,9 @@
   --drop-edge: inset 0 1px 0 #ffffff8c, inset 0 -1px 0 #ffffff2e, inset 0 0 0 0.5px #ffffff59, 0 6px 18px #0000002e;
   --drop-iris: linear-gradient(115deg, #ffffffe6, #a0d2ff66 30%, #ffaae659 55%, #fff5b459 75%, #ffffffb3);
   --card-shadow: 0 1px 3px #00000059;
+  /* 任务 board's notes (Figma 115A4): a drop that tightens downward; the edge comes from --tile-edge. */
+  --note-shadow: 0 8px 9px #00000073, 0 1px 1px #0000001a;
+  --note-pin-shadow: 0 4px 10px -4px #00000080;
   /* 实心玻璃's edges (Figma 93), drawn with box-shadow; a shadow that draws nothing everywhere else, so they can sit in a
      list beside a focus ring. The one state (hovered, chosen, menu open), the primary button and a text field; the
      board's status cards (Figma 95A: a card's edge without its drop shadow, as they sit on a card). */
@@ -333,6 +338,8 @@
   --drop-edge: inset 0 1px 0 #ffffff, inset 0 -1px 0 #ffffff80, inset 0 0 0 0.5px #0000000f, 0 4px 12px #00000017;
   --drop-iris: linear-gradient(115deg, #ffffff, #a0d2ff80 30%, #ffaae673 55%, #fff5b473 75%, #ffffffcc);
   --card-shadow: 0 1px 3px #00000014;
+  --note-shadow: 0 6px 8px #0000001f, 0 1px 1px #00000014;
+  --note-pin-shadow: 0 4px 10px -4px #00000040;
 }
 
 /* 实色 (PRD §5 v1.139, Figma 57; dark palette v1.233, Figma 103): an opaque window, <html data-material='solid'>

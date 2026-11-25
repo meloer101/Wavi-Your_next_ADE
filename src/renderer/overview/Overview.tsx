@@ -29,6 +29,8 @@ import { BatchBar } from './BatchBar'
 import { AttemptGroups } from '../attempts/AttemptGroups'
 import { DispatchGroups } from '../dispatch/DispatchGroups'
 import { GitHubBoard } from './GitHubBoard'
+import { TaskBoard } from '../tasks/TaskBoard'
+import { TasksSummary } from '../tasks/TasksSummary'
 import { githubSummary } from './github-model'
 import { refreshGitHub, useGitHubBoard } from './github-store'
 import { CardMembers, MembersContext, MembersNowContext, useBoardMembers } from './CardMembers'
@@ -49,13 +51,16 @@ const Picked = createContext<ReadonlySet<SessionId>>(new Set())
 const M = defineMessages({
   zh: {
     progress: '进度',
+    tasks: '任务',
     showSidebar: '显示侧栏',
     board: '看板',
     refresh: '刷新',
     filterProgress: '过滤  p:项目  s:状态',
     filterGitHub: '过滤  #编号  标签',
+    filterTasks: '过滤  标题  #编号  p:项目',
     filterSessions: '过滤会话',
     filterItems: '过滤 issue 和 PR',
+    filterNotes: '过滤任务',
     sessions: '会话',
     noSessions: '还没有会话。打开一个项目，在侧栏的项目上点 ＋ 新建会话。',
     noMatch: (filter: string) => `没有匹配“${filter}”的会话。`,
@@ -63,13 +68,16 @@ const M = defineMessages({
   },
   en: {
     progress: 'Progress',
+    tasks: 'Tasks',
     showSidebar: 'Show sidebar',
     board: 'Board',
     refresh: 'Refresh',
     filterProgress: 'Filter  p:project  s:status',
     filterGitHub: 'Filter  #number  label',
+    filterTasks: 'Filter  title  #number  p:project',
     filterSessions: 'Filter sessions',
     filterItems: 'Filter issues and PRs',
+    filterNotes: 'Filter tasks',
     sessions: 'Sessions',
     noSessions: 'No sessions yet. Open a project, then click ＋ on it in the sidebar to start a session.',
     noMatch: (filter: string) => `No sessions match “${filter}”.`,
@@ -79,6 +87,7 @@ const M = defineMessages({
 
 const tabs = (m: (typeof M)['zh']): ReadonlyArray<{ value: BoardTab; label: string }> => [
   { value: 'progress', label: m.progress },
+  { value: 'tasks', label: m.tasks },
   { value: 'github', label: 'GitHub' }
 ]
 
@@ -225,28 +234,32 @@ export function Overview() {
           )}
           <h1 className={styles.title}>{m.board}</h1>
           <Segmented label={m.board} variant="outline" semantics="tab" value={tab} options={tabs(m)} onChange={setTab} />
-          <span className={styles.summary}>{tab === 'progress' ? overviewSummary(shown, attention) : github.summary}</span>
+          <span className={styles.summary}>{tab === 'progress' ? overviewSummary(shown, attention) : tab === 'tasks' ? <TasksSummary /> : github.summary}</span>
           <span className={styles.spacer} />
           {tab === 'progress' ? (
             <PlanUsage />
-          ) : (
+          ) : tab === 'github' ? (
             <IconButton label={m.refresh} title={m.refresh} disabled={github.loading} onClick={() => refreshGitHub(true)}>
               <RefreshCw {...ICON} />
             </IconButton>
-          )}
+          ) : null}
           <label className={styles.filter}>
             <Search {...ICON} />
             <input
               ref={filterRef}
               type="search"
               value={filter}
-              placeholder={tab === 'progress' ? m.filterProgress : m.filterGitHub}
-              aria-label={tab === 'progress' ? m.filterSessions : m.filterItems}
+              placeholder={tab === 'progress' ? m.filterProgress : tab === 'tasks' ? m.filterTasks : m.filterGitHub}
+              aria-label={tab === 'progress' ? m.filterSessions : tab === 'tasks' ? m.filterNotes : m.filterItems}
               onChange={(e) => setFilter(e.target.value)}
             />
           </label>
         </header>
-        {tab === 'github' ? (
+        {tab === 'tasks' ? (
+          <div ref={bodyRef} className={styles.body} data-view="tasks" tabIndex={-1}>
+            <TaskBoard />
+          </div>
+        ) : tab === 'github' ? (
           <div ref={bodyRef} className={styles.body} data-view="github" tabIndex={-1}>
             <GitHubBoard filter={filter} />
           </div>
