@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-25：任务看板（PRD v1.246，Figma 115A4）开工：设计定稿；共享契约 `src/shared/task-board.ts`、`TrApi.tasks`（`TaskApi`，preload 已接）已提交，纯逻辑 19 个单测通过；基线 `npm run check` 改动前通过（304 个测试文件、4089 个用例）。下面「进行中：任务看板」是剩下的步骤。
 - 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
 - 2026-11-25：协作队伍默认折叠（PRD v1.243，Figma 111 / 111′）三步都做完：侧栏（`src/shared/session-group.ts`、`sidebar/FoldRow.tsx`，选中底色罩住整组，`expandedGroups`）、看板卡片的成员摘要（`overview/CardMembers.tsx`）、手机（`RemoteSession.parentId` / `group`，会话列表和看板）。手机端只在测试宿主里看过截图，没连着真 Mac 用过；`e2e/overview.spec.ts` 的 :78 / :175 在机器负载高时会失败（改动前后都一样），没有处理。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
@@ -501,6 +502,16 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
   - [x] Mac 端和线格式（2026-11-22）：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式。`src/shared/remote.ts`、`src/shared/github-board.ts`（新增 `startBranch` / `BoardStart`）、`src/main/remote/index.ts`、`src/main/remote/github-start.ts`、`src/renderer/remote/*`、`src/renderer/new-session/hand-task.ts`、`src/shared/remote-wire-samples.json`、`ios/Wavi/Model/Wire.swift`、`ios/WaviTests/WireTests.swift`；e2e `remote-github.spec.ts`。手机界面还没做
   - [x] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线（2026-11-22）：`ios/Wavi/App/WaviApp.swift`（标签栏、两个栈、记住的页签）、`App/Orientation.swift`（只有进度能横屏）、`Model/Board.swift`（分组和卡片色、检查行、横屏第三行、GitHub 列表和详情、旧 Mac）、`Views/BoardView.swift`、`Views/GitHubItemView.swift`、`Views/NewSessionView.swift`（任务模式）、`Views/Theme.swift`（`card-*`、卡片圆角）、`Model/AppModel.swift`（每次请求的超时）、`project.yml`（横屏）；`src/main/remote/phone-assets.test.ts` 加 15 个 `card-*` 颜色和 7 个图标，重生成 `ios/Wavi/Resources/Shared.json` 和 `ios/Wavi/Assets.xcassets/Icons`。单测 `WaviTests/BoardTests.swift`（分组顺序、颜色、横屏第三行、旧 Mac、GitHub 列表和详情），截图 `WaviTests/BoardShots.swift` → `test-results/board/`（进度竖排 / 横排、GitHub 列表、issue / PR 详情、交给 agent、gh 没登录、离线，深浅各一）。真机上还没看过
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
+
+## 进行中：任务看板（2026-11-25 定，PRD v1.246）
+
+- [x] 设计：Figma 第 114 / 115 节，定稿 115A4；PRD v1.246
+- [x] 共享契约：`src/shared/task-board.ts`（类型、`taskState`、树、校验、文件解析）、`TrApi.tasks`、preload
+- [ ] main：`src/main/tasks/`（唯一的写者，JSON 存储，`registerTaskHandlers`，单测）
+- [ ] `wavi task add | update | ls | show`、`wavi run --task`、`wavi --skill` 的「接到看板上的卡」、卡片送给 leader（`src/shared/dispatch.ts`、`src/renderer/dispatch/handler.ts`）
+- [ ] 画布和页签：`src/renderer/tasks/`（平移缩放、便利贴、曲线、点阵加微光（带过渡）、动态、工具条、缩放），`overview/` 加第三个页签
+- [ ] 主理人菜单和派发依据；卡片的「停止」「取消任务」「删除」
+- [ ] e2e `tasks-board.spec.ts`；点阵帧率原型（目标 ≥ 55 fps，未测）
 
 ## 进行中：F26 自动领取 GitHub issue（2026-11-20 定）
 

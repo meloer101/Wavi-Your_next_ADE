@@ -8,6 +8,7 @@ import { RADAR_IPC } from '@shared/conflict-radar'
 import { DISPATCH_IPC } from '@shared/dispatch'
 import { REMOTE_IPC } from '@shared/remote'
 import { SCHEDULE_IPC } from '@shared/schedule'
+import { TASK_IPC } from '@shared/task-board'
 import { ISSUE_WATCH_IPC } from '@shared/issue-watch'
 import { GUI_IPC, type GuiEvent } from '@shared/gui-chat'
 import { SIM_PORT_MESSAGE, SIMULATOR_IPC } from '@shared/simulator'
@@ -221,6 +222,13 @@ const api: TrApi = {
     ready: () => ipcRenderer.send(SCHEDULE_IPC.ready),
     onChanged: (listener) => listen(SCHEDULE_IPC.changed, listener),
     onFire: (listener) => listen(SCHEDULE_IPC.fire, listener)
+  },
+  tasks: {
+    list: () => ipcRenderer.invoke(TASK_IPC.list),
+    create: (draft) => ipcRenderer.invoke(TASK_IPC.create, draft),
+    update: (id, patch) => ipcRenderer.invoke(TASK_IPC.update, id, patch),
+    remove: (id) => ipcRenderer.invoke(TASK_IPC.remove, id),
+    onChanged: (listener) => listen(TASK_IPC.changed, listener)
   },
   issueWatch: {
     get: () => ipcRenderer.invoke(ISSUE_WATCH_IPC.get),
