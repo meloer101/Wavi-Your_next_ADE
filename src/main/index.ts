@@ -18,6 +18,7 @@ import { registerScheduleHandlers } from './schedules'
 import { selectProfile } from './profile'
 import { ptySessionOwner, registerPtyHandlers } from './pty'
 import { installQuitGuard } from './quit'
+import { installKeepAwake } from './keep-awake'
 import { registerSettingsHandlers } from './settings'
 import { registerLanguage } from './language'
 import { registerThemeImportHandler } from './theme-import'
@@ -129,6 +130,7 @@ function boot(): void {
   registerUpdateHandlers()
   installAppMenu()
   installQuitGuard(getMainWindow)
+  installKeepAwake()
   createMainWindow()
   registerLiveRebuilds()
   // Dock icon click: the close button only hid the window. With a secondary window in front, macOS brings that one.

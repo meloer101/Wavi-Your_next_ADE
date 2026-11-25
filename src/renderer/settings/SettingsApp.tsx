@@ -53,7 +53,7 @@ const NAV: ReadonlyArray<{ id: PaneId; Icon: IconComponent }> = [
 ]
 
 export function SettingsApp({ onClose }: { onClose(): void }) {
-  const { settings, loaded, updateAppearance, updatePorts, updateReview, updateArchive, updateAlerts, updatePr, updateDispatch, updateRemote, updateSchedules } = useSettings()
+  const { settings, loaded, updateAppearance, updatePorts, updateReview, updateArchive, updateAlerts, updatePr, updateDispatch, updateRemote, updateSchedules, updatePower } = useSettings()
   const pane = useSettingsPane((s) => s.pane)
   const items = useRef(new Map<PaneId, HTMLButtonElement>())
   const m = useMessages(M)
@@ -121,6 +121,8 @@ export function SettingsApp({ onClose }: { onClose(): void }) {
             updateDispatch={updateDispatch}
             schedules={settings.schedules}
             updateSchedules={updateSchedules}
+            power={settings.power}
+            updatePower={updatePower}
           />
         )}
         {pane === 'phone' && loaded && <PhonePane remote={settings.remote} update={updateRemote} />}

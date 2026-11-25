@@ -1,6 +1,6 @@
 # Wavi PRD
 
-> 版本 v1.236 · 2026-11-24 · 本文写**产品最终会长什么样**：目标、功能、设计和技术架构。做到哪了见 [ROADMAP](ROADMAP.md)。
+> 版本 v1.237 · 2026-11-24 · 本文写**产品最终会长什么样**：目标、功能、设计和技术架构。做到哪了见 [ROADMAP](ROADMAP.md)。
 > 维护规则：产品决定一变就改这里，并在“变更记录”里加一行。不再另建产品简报、调研、spike 或任务单；实测得到的技术结论压缩后写进 §6。
 > 设计稿：[Figma](https://www.figma.com/design/x6HGsLiMTk7fWDoKI5YkKh/coding-terminal)
 
@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
+| v1.237 | 2026-11-24 | **Wavi 运行时阻止 Mac 空闲睡眠**（作者 2026-11-24：离开后手机显示「Mac 已睡眠 / 离线」；选「整个 Wavi 进程持有，不只在手机服务开着时」；Figma 67N `1916:81856`）：① 设置 · 自动化新增「电源」一节，一行「运行时阻止 Mac 睡眠」（开关，没有说明文字），设置项 `power.keepAwake`，默认开；② 用 Electron `powerSaveBlocker.start('prevent-app-suspension')`（IOKit `PreventUserIdleSystemSleep`），关掉开关或退出 Wavi 时释放；不用 `prevent-display-sleep`，屏幕仍可以熄灭；③ 它**不能**阻止合盖睡眠：§6.12 对 `caffeinate -s` 的实测是电池供电时合盖仍然睡眠，接电源合盖的情况还没有实测；④ 改 F22「前提」；代码 `src/main/keep-awake.ts`、`src/shared/settings.ts` 的 `PowerSettings` |
 | v1.236 | 2026-11-24 | **界面字号整体大一号**（作者 2026-11-24 看过 Antigravity、Claude Code 对比后选「整套界面字号 +1px」；按截图量，两家侧栏和菜单的字约 14px、次要字约 13px，我们是 13 / 12）：`--text-body` / `-strong` / `-heading` 13/18 → 14/20，`--text-caption` / `-strong` 12/16 → 13/18，`--text-title-m` 15/20 → 16/22，全屏的 `--fs-text-caption` 11/16 → 12/18。等宽字号和对话区（设置 · 对话 的字号）不变；28 高的控件行和 git 图的 28 行高不变。侧栏会话行、队伍条、合并面板里按行高写死的行框随之改成 20 / 18（作者 2026-11-24：会话行「有点挤」）。 |
 | v1.235 | 2026-11-24 | **侧栏的字全部用界面字体 Google Sans**（作者 2026-11-24：「全部统一成 Google Sans，保证设计和显示上的规范」；修改 v1.234 留下的等宽部分）：侧栏里原来用 JetBrains Mono 的时间（`35m ago`）、模型名（`haiku`）、快捷键（`⌘K`）、导航角标、项目的会话数、「更新」的版本号、subagent 行的模型和 workflow 名，改用 `--text-caption`（等待久的时间用 `--text-caption-strong`），字号和行高不变（12 / 16）；数字开 `tabular-nums`，一列时间照样对齐（实测 Google Sans 12px「1111」「8888」都是 28.8px）。侧栏以外的等宽字（代码、diff、终端、会话头的分支名、路径）不变。 |
 | v1.234 | 2026-11-24 | **界面字体换成 Google Sans**（§5 字体，Figma 第 103 节 103D `1913:81580`；作者 2026-11-24：「直接换成 Google Sans」，参照 Antigravity）：① 界面的英文和数字从系统字体 SF Pro 换成 Google Sans（2025-12-10 以 SIL OFL 1.1 开源），通过 `@fontsource-variable/google-sans` 随 app 打包、不联网加载；用 opsz 可变轴，小字号自动放宽；字重 400–700。中文仍是苹方，等宽仍是 JetBrains Mono。② 对话区没有选英文字体时，默认跟随界面字体（原来是 SF Pro）；设置 · 对话 里的这一项从「跟随系统」改名为「跟随界面」。Google Sans 最细 400，对话字重选 300 时显示为 400。 |
@@ -771,7 +772,7 @@ PermissionRequest / AskUserQuestion 只用来把会话标成“等你处理”�
 ### F22 手机远程 · P1 · Figma「手机 · iOS」页（v1.141）：现行稿是 45A 扫码配对 · 45D 工具详情 · 45F 提问 · 45H 新建会话 · 45K 桌面 设置 · 手机（Section `719:32350`）、46′C 聊天视图 · 46′G 照片（Section `737:33097`）、46″E 权限 · 46″I Git · 变更 · 46″J 出口进度（Section `743:2`）、46‴B 会话列表（Section `754:33393`）、47 / 47′ 灵动岛与锁屏，会话列表的标题以 60C 为准（Section `899:2079`）；被取代的 45B / C / E / G / I / J、第 46 节和 46′B / E / I / J 已删除（v1.141）（v1.112；外部来源见 v1.112 变更记录）
 在 iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话：看对话（消息、工具调用、diff），发 prompt 和照片，回答权限和提问，开新会话（项目、worktree、分支、agent），提交、推送、PR、合并、归档。agent 仍在 Mac 的 PTY 里跑原生 TUI，手机是同一个会话的另一个视图，桌面和手机随时可以交替操作。
 
-- **前提**：Mac 上 Wavi 开着（窗口可以隐藏），Mac 不睡眠。手机的请求由 main 转给拥有这个会话的渲染进程执行，和 F21 的 broker 同一种转发方式，所以手机和桌面按钮走同一段代码（§6.9 发送队列、选择框开着时不写、状态机）。Wavi 退出后手机显示「Mac 上的 Wavi 没有打开」（其他连不上的原因见 v1.143）。
+- **前提**：Mac 上 Wavi 开着（窗口可以隐藏），Mac 不睡眠：Wavi 默认持有「阻止空闲睡眠」的系统断言（设置 · 自动化 · 电源，v1.237）；合盖睡眠它拦不住（§6.12）。手机的请求由 main 转给拥有这个会话的渲染进程执行，和 F21 的 broker 同一种转发方式，所以手机和桌面按钮走同一段代码（§6.9 发送队列、选择框开着时不写、状态机）。Wavi 退出后手机显示「Mac 上的 Wavi 没有打开」（其他连不上的原因见 v1.143）。
 - **客户端**（v1.119）：原生 SwiftUI 应用，放在 `ios/`，最低 iOS 26，iOS 用 TestFlight 分发。协议在 Swift 里另写一份，靠 `src/shared/remote-vectors.json`（加密逐字节）和 `phone-assets.test.ts` 生成的资源（状态文字、智能体、图标、分支名词库）和 Mac 保持一致。
 - **连接**：不建中转服务器、不做账号（§1.4）。
   - 首选 Tailscale：手机连 Mac 的 tailnet 地址（`ws://100.x.y.z:<端口>`，v1.113），传输有 WireGuard 加密；设置里显示 MagicDNS 名（只读 `tailscale status --json`），不改用户的 Tailscale 配置。
