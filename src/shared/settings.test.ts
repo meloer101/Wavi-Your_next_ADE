@@ -235,3 +235,16 @@ describe('设置 · 外观 · 对话 and the window material (PRD v1.127, Figma 
     expect(isOpaqueMaterial('glass')).toBe(false)
   })
 })
+
+describe('设置 · 自动化 · 电源 (PRD v1.238)', () => {
+  it('keeps the Mac awake by default', () => {
+    expect(DEFAULT_SETTINGS.power).toEqual({ keepAwake: true })
+  })
+  it('falls back to true for a non-boolean', () => {
+    expect(sanitizeSettings({ power: { keepAwake: 'no' } }).power.keepAwake).toBe(true)
+    expect(sanitizeSettings({ power: 3 }).power.keepAwake).toBe(true)
+  })
+  it('merges a patch', () => {
+    expect(applySettingsPatch(DEFAULT_SETTINGS, { power: { keepAwake: false } }).power.keepAwake).toBe(false)
+  })
+})
