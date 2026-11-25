@@ -1,6 +1,6 @@
 # Wavi PRD
 
-> 版本 v1.236 · 2026-11-24 · 本文写**产品最终会长什么样**：目标、功能、设计和技术架构。做到哪了见 [ROADMAP](ROADMAP.md)。
+> 版本 v1.237 · 2026-11-24 · 本文写**产品最终会长什么样**：目标、功能、设计和技术架构。做到哪了见 [ROADMAP](ROADMAP.md)。
 > 维护规则：产品决定一变就改这里，并在“变更记录”里加一行。不再另建产品简报、调研、spike 或任务单；实测得到的技术结论压缩后写进 §6。
 > 设计稿：[Figma](https://www.figma.com/design/x6HGsLiMTk7fWDoKI5YkKh/coding-terminal)
 
@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
+| v1.237 | 2026-11-24 | **GUI 对话里的表格：短单元格不换行、长单元格有最小宽度**（F23；作者 2026-11-24：表格「每一列的宽还是高」都不合适，短列被压成竖排；调研了 Claude 桌面版、ChatGPT 安装包里的 CSS 和 Orca、LobeChat（lobe-ui）、Streamdown、T3 Code、Open WebUI 的源码，照 Claude 的组合）：① 单元格文字显示宽度 ≤ 20 格（中文算 2 格，`src/renderer/gui/table-cells.ts`）标 `data-short`，不换行；其余 `td` 至少 11em、`th` 至少 8em（长表头 `text-wrap: balance`），所有单元格至少 2.5em。② 长单元格里的 `code`（路径、命令）可以在任意处断开，不再撑宽整列。③ 表格宽度随内容（`fit-content`），超过对话宽度时横向滚动；单元格上下内边距 4 → 8；数字用等宽数字。手机端的表格不在这次范围。 |
 | v1.236 | 2026-11-24 | **界面字号整体大一号**（作者 2026-11-24 看过 Antigravity、Claude Code 对比后选「整套界面字号 +1px」；按截图量，两家侧栏和菜单的字约 14px、次要字约 13px，我们是 13 / 12）：`--text-body` / `-strong` / `-heading` 13/18 → 14/20，`--text-caption` / `-strong` 12/16 → 13/18，`--text-title-m` 15/20 → 16/22，全屏的 `--fs-text-caption` 11/16 → 12/18。等宽字号和对话区（设置 · 对话 的字号）不变；28 高的控件行和 git 图的 28 行高不变。侧栏会话行、队伍条、合并面板里按行高写死的行框随之改成 20 / 18（作者 2026-11-24：会话行「有点挤」）。 |
 | v1.235 | 2026-11-24 | **侧栏的字全部用界面字体 Google Sans**（作者 2026-11-24：「全部统一成 Google Sans，保证设计和显示上的规范」；修改 v1.234 留下的等宽部分）：侧栏里原来用 JetBrains Mono 的时间（`35m ago`）、模型名（`haiku`）、快捷键（`⌘K`）、导航角标、项目的会话数、「更新」的版本号、subagent 行的模型和 workflow 名，改用 `--text-caption`（等待久的时间用 `--text-caption-strong`），字号和行高不变（12 / 16）；数字开 `tabular-nums`，一列时间照样对齐（实测 Google Sans 12px「1111」「8888」都是 28.8px）。侧栏以外的等宽字（代码、diff、终端、会话头的分支名、路径）不变。 |
 | v1.234 | 2026-11-24 | **界面字体换成 Google Sans**（§5 字体，Figma 第 103 节 103D `1913:81580`；作者 2026-11-24：「直接换成 Google Sans」，参照 Antigravity）：① 界面的英文和数字从系统字体 SF Pro 换成 Google Sans（2025-12-10 以 SIL OFL 1.1 开源），通过 `@fontsource-variable/google-sans` 随 app 打包、不联网加载；用 opsz 可变轴，小字号自动放宽；字重 400–700。中文仍是苹方，等宽仍是 JetBrains Mono。② 对话区没有选英文字体时，默认跟随界面字体（原来是 SF Pro）；设置 · 对话 里的这一项从「跟随系统」改名为「跟随界面」。Google Sans 最细 400，对话字重选 300 时显示为 400。 |

@@ -866,18 +866,41 @@
 
 .markdown table {
   display: block;
+  width: fit-content;
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
   font: var(--type-step);
+  font-variant-numeric: tabular-nums;
 }
 
-/* One line, under the header: rows read apart by their spacing (no line between rows). */
+/* One line, under the header: rows read apart by their spacing (no line between rows). Column widths (PRD v1.237, as
+   Claude's desktop app): a short cell (table-cells.ts, data-short) stays on one line; a longer one is at least 11em
+   (8em for a header) so it is never squeezed to a character a line; past the chat's width the table scrolls. */
 .markdown :is(th, td) {
-  padding: var(--space-4) var(--space-12) var(--space-4) 0;
+  min-width: 2.5em;
+  padding: var(--space-8) var(--space-12) var(--space-8) 0;
   text-align: left;
   vertical-align: top;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
+}
+
+.markdown :is(th, td)[data-short] {
+  white-space: nowrap;
+}
+
+.markdown td:not([data-short]) {
+  min-width: 11em;
+}
+
+.markdown th:not([data-short]) {
+  min-width: 8em;
+  text-wrap: balance;
+}
+
+/* A path or command in a cell breaks anywhere rather than widening its column. */
+.markdown td:not([data-short]) code {
+  overflow-wrap: anywhere;
 }
 
 .markdown th {

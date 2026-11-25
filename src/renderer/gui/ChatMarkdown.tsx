@@ -12,6 +12,7 @@ import { CopyButton } from './CopyButton'
 import { codeRef, hrefRef, rehypeFileRefs, spanRef } from './file-refs'
 import { FileRef, RefSession } from './FileRef'
 import { highlightLines } from './highlight'
+import { rehypeShortCells } from './table-cells'
 import { Tokens } from './Highlighted'
 import { WebLink } from './WebLink'
 import { useMessages } from '../ui/i18n'
@@ -23,8 +24,9 @@ const M = defineMessages({
 })
 
 const REMARK = [remarkGfm]
-// Paths in prose become file links after sanitizing (the plugin's spans are Wavi's, not the text's).
-const REHYPE = [rehypeSanitize, rehypeFileRefs]
+// Paths in prose become file links after sanitizing (the plugin's spans are Wavi's, not the text's); short table cells
+// are marked to stay on one line (table-cells.ts).
+const REHYPE = [rehypeSanitize, rehypeFileRefs, rehypeShortCells]
 
 /** A Markdown (hast) node's text: a code block's source. */
 function hastText(node: unknown): string {
