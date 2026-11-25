@@ -8,6 +8,8 @@ struct SessionsView: View {
   @State private var unpairing = false
   @State private var creating = false
   @State private var settings = false
+  /// The parents whose members are shown, kept on this phone and shared with 看板 (PRD v1.243).
+  @AppStorage(FoldOpen.key) private var openFolds = ""
 
   var body: some View {
     content
@@ -86,6 +88,7 @@ struct SessionsView: View {
                   SessionRow(session: row.session, projectName: row.projectName, now: now, stale: stale)
                 }
                 .buttonStyle(RowStyle())
+                FoldList(session: row.session, list: model.sessions, now: now, open: FoldOpen.ids(openFolds)) { openFolds = FoldOpen.toggled(openFolds, $0) }
               }
             }
           }

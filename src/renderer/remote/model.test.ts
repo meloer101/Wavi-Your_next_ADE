@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Project, Session, Worktree } from '@shared/types'
 import { EMPTY_TEXTS, fail, startState, toGlance } from '../pull-requests/ship-flow'
+import { groupsOf, type SideItem } from '../sidebar/model'
 import { agentModels, remoteContext, remoteSessions, remoteShip, remoteUsage, sessionUsageVendor } from './model'
 
 const project: Project = { id: 'p1', name: 'acme-web', rootPath: '/code/acme' }
@@ -51,6 +52,78 @@ describe('remoteSessions', () => {
     expect(quiet.sessions[0]!.checks).toBeUndefined()
     expect(quiet.sessions[0]!.stat).toBeUndefined()
     expect(quiet.sessions[0]!.github).toBeUndefined()
+  })
+})
+
+describe('remoteSessions groups (PRD v1.243)', () => {
+  const parent = session({ id: 'p', title: '主会话', status: 'running' })
+  const child = session({ id: 'c', title: '补测试', status: 'needs_you', dispatchedBy: 'p' })
+  const grand = session({ id: 'g', title: '补边界', status: 'running', dispatchedBy: 'c' })
+  const orphan = session({ id: 'o', title: '孤儿', dispatchedBy: 'not-listed' })
+  const items: Record<string, SideItem[]> = {
+    p: [
+      { id: 'workflow:w1', title: '发版检查', kind: 'workflow', glyph: 'running', right: '1 / 3' },
+      { id: 'phase:w1:0', title: '测试', kind: 'phase', glyph: 'running', right: '0 / 2' },
+      { id: 'a1', title: '查调用点', model: 'Opus 5.5' }
+    ],
+    c: [{ id: 'teammate:t1', title: 'reviewer', kind: 'teammate', glyph: 'idle', right: 'Sonnet 5' }]
+  }
+  const data = { projects: [project], worktrees: [tree], sessions: [parent, child, grand, orphan] }
+
+  it('sets parentId only when the dispatcher is listed, and group on a session with members', () => {
+    const rows = Object.fromEntries(remoteSessions(data, undefined, undefined, undefined, undefined, undefined, items).sessions.map((r) => [r.id, r]))
+    expect(rows.p!.parentId).toBeUndefined()
+    expect(rows.c!.parentId).toBe('p')
+    expect(rows.g!.parentId).toBe('c')
+    expect(rows.o!.parentId).toBeUndefined()
+    expect(rows.o!.group).toBeUndefined()
+    expect(rows.g!.group).toBeUndefined()
+  })
+
+  it('lists direct members in the group order with their meta, and counts like the sidebar', () => {
+    const rows = Object.fromEntries(remoteSessions(data, undefined, undefined, undefined, undefined, undefined, items).sessions.map((r) => [r.id, r]))
+    expect(rows.p!.group!.members).toEqual([
+      { id: 'c', kind: 'session', title: '补测试', status: 'needs_you' },
+      { id: 'workflow:w1', kind: 'workflow', title: '发版检查', status: 'running', meta: '测试' },
+      { id: 'a1', kind: 'subagent', title: '查调用点', status: 'running', meta: 'Opus 5.5' }
+    ])
+    expect(rows.c!.group!.members).toEqual([
+      { id: 'g', kind: 'session', title: '补边界', status: 'running' },
+      { id: 'teammate:t1', kind: 'teammate', title: 'reviewer', status: 'idle', meta: 'Sonnet 5' }
+    ])
+    for (const id of ['p', 'c']) {
+      const want = groupsOf(data.sessions, items)[id]!
+      expect(rows[id]!.group).toMatchObject({ total: want.total, counts: want.counts })
+    }
+    // Members at any depth: the child, the grandchild, the run, the subagent and the teammate.
+    expect(rows.p!.group!.total).toBe(5)
+  })
+
+  it('hides local folders in member titles and meta, each under its own session\'s folders', () => {
+    const leak: Record<string, SideItem[]> = {
+      p: [
+        { id: 'a1', title: '读 /wt/refresh/src/a.ts 和 /code/acme/README.md', model: '/wt/refresh/model' },
+        { id: 'workflow:w1', title: '检查 /code/acme', kind: 'workflow', glyph: 'running', right: '1 / 2' },
+        { id: 'phase:w1:0', title: '跑 /wt/refresh/test', kind: 'phase', glyph: 'running', right: '0 / 1' }
+      ]
+    }
+    const named = session({ id: 'c', title: '改 /wt/refresh/x.ts', dispatchedBy: 'p' })
+    const rows = remoteSessions({ projects: [project], worktrees: [tree], sessions: [parent, named] }, undefined, undefined, undefined, undefined, undefined, leak).sessions
+    const members = rows.find((r) => r.id === 'p')!.group!.members
+    expect(members.map((m) => m.title)).toEqual(['改 ./x.ts', '读 ./src/a.ts 和 ./README.md', '检查 acme'])
+    expect(members.map((m) => m.meta)).toEqual([undefined, './model', '跑 ./test'])
+    expect(JSON.stringify(members)).not.toContain('/wt/')
+    expect(JSON.stringify(members)).not.toContain('/code/')
+  })
+
+  it('sends no group without members and counts only sessions the phone lists', () => {
+    const plain = remoteSessions({ ...data, sessions: [parent, orphan] }).sessions
+    expect(plain.every((r) => r.group === undefined && r.parentId === undefined)).toBe(true)
+    // A dispatched session in an archived worktree is not listed, so it is no member.
+    const archived = { ...tree, id: 'w9', archived: { at: 1 } as Worktree['archived'] }
+    const out = remoteSessions({ projects: [project], worktrees: [tree, archived], sessions: [parent, { ...child, worktreeId: 'w9' }] }).sessions
+    expect(out.map((r) => r.id)).toEqual(['p'])
+    expect(out[0]!.group).toBeUndefined()
   })
 })
 

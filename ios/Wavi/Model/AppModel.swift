@@ -208,6 +208,19 @@ final class AppModel {
   var connection: ConnectionWords { connectionWords(link, mac: macName, dropped: dropped) }
 
 
+  /// Folds left open for sessions that are gone are forgotten (PRD v1.243) — judged only by what the Mac says, and only by
+  /// a list that has sessions: an empty one (the Mac restarting, a window whose workspace has not loaded) says nothing about
+  /// which are gone. UserDefaults is read only when the set of sessions changed since the last list.
+  @ObservationIgnored private var foldedIds: Set<String> = []
+  private func pruneOpenFolds(_ list: RemoteSessionList) {
+    let ids = Set(list.sessions.map(\.id))
+    guard !ids.isEmpty, ids != foldedIds else { return }
+    foldedIds = ids
+    let raw = UserDefaults.standard.string(forKey: FoldOpen.key) ?? ""
+    let kept = FoldOpen.pruned(raw, keeping: ids)
+    if kept != raw { UserDefaults.standard.set(kept, forKey: FoldOpen.key) }
+  }
+
   func session(_ id: String) -> RemoteSession? { sessions.sessions.first { $0.id == id } }
 
   /// Just paired.
@@ -385,6 +398,7 @@ final class AppModel {
   func refresh(timeout: Double = Link.requestSeconds) async -> Bool {
     guard let snapshot = await client?.request(.snapshot, timeout: timeout).decode(Snapshot.self) else { return false }
     sessions = RemoteSessionList(projects: snapshot.projects, sessions: snapshot.sessions, usage: snapshot.usage)
+    pruneOpenFolds(sessions)
     turnStarts = nextTurnStarts(turnStarts, sessions: sessions.sessions)
     heardAt = Date().timeIntervalSince1970 * 1000
     promptsListed(snapshot.prompts ?? [])
@@ -424,6 +438,7 @@ final class AppModel {
       }
     case .sessions(let list):
       sessions = list
+      pruneOpenFolds(list)
       turnStarts = nextTurnStarts(turnStarts, sessions: list.sessions)
       heardAt = Date().timeIntervalSince1970 * 1000
       cacheSessions()

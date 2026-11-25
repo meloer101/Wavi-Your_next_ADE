@@ -289,3 +289,68 @@ test('↵ enters the selected session; ⌘⇧A toggles 看板', async () => {
   await page.keyboard.press('Meta+Shift+A')
   await expect(overview()).toBeHidden()
 })
+
+// PRD v1.243 (F9 主对话卡片的成员, Figma 111E / 111F): a session with members shows one summary line at the bottom of
+// its card, folded; the fold state is the sidebar's own.
+test('a card with a dispatched child folds its members into one line that shares the sidebar’s state', async () => {
+  const GROUP_SHOTS = join(process.cwd(), 'test-results', 'group-fold-board')
+  mkdirSync(GROUP_SHOTS, { recursive: true })
+  const groupShot = async (name: string) => {
+    for (const theme of ['dark', 'light'] as const) {
+      await setTheme(theme)
+      await page.waitForTimeout(150)
+      await row('s-cookie').screenshot({ path: join(GROUP_SHOTS, `card-${name}-${theme}.png`) })
+      await page.screenshot({ path: join(GROUP_SHOTS, `board-${name}-${theme}.png`) })
+    }
+    await setTheme('dark')
+  }
+  // s-nav (待审阅) becomes a child of s-cookie (运行中), both in acme-web.
+  await page.evaluate(() => {
+    const ws = (globalThis as unknown as { __trWorkspace: { setState(f: (s: { sessions: Array<{ id: string }> }) => unknown): void } }).__trWorkspace
+    ws.setState((s) => ({ sessions: s.sessions.map((x) => (x.id === 's-nav' ? { ...x, dispatchedBy: 's-cookie' } : x)) }))
+  })
+  await page.keyboard.press('Meta+Shift+A')
+  await expect(overview()).toBeVisible()
+  const toggle = row('s-cookie').locator('[data-testid="card-members-toggle"]')
+  const sideFold = page.locator('[data-region="sidebar"] [data-testid="fold-row"][data-group-owner="s-cookie"]')
+  // Folded, with the count; the child keeps its own card in its own column.
+  await expect(toggle).toContainText('1 个成员')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(row('s-cookie').locator('li')).toHaveCount(0)
+  await expect(group('待审阅').locator('[data-session-id="s-nav"]')).toBeVisible()
+  await expect(sideFold).toHaveAttribute('aria-expanded', 'false')
+  await groupShot('folded')
+
+  // Opening lists the member; the click opens neither the card's overlay nor changes the selection.
+  const selected = await overview().locator('[role="option"][aria-selected="true"]').getAttribute('data-session-id')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(row('s-cookie').locator('li')).toHaveCount(1)
+  await expect(row('s-cookie').locator('li')).toContainText('修复移动端导航抖动')
+  await expect(overlay()).toBeHidden()
+  await expect(overview().locator('[role="option"][aria-selected="true"]')).toHaveAttribute('data-session-id', selected!)
+  await expect(sideFold).toHaveAttribute('aria-expanded', 'true')
+  await groupShot('expanded')
+
+  // A child's row goes where a click on its own card goes.
+  await row('s-cookie').locator('li[data-member-session="s-nav"] button').click()
+  await expect(overlay().getByRole('dialog', { name: '修复移动端导航抖动' })).toBeVisible()
+  await overlay().getByRole('button', { name: '关闭' }).click()
+  await expect(overlay()).toBeHidden()
+
+  // Folding on the card folds the sidebar's group too.
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(sideFold).toHaveAttribute('aria-expanded', 'false')
+
+  // The toggle hands the keyboard back to the board: Space opens the selected card's overlay, ↵ enters its session.
+  await expect(overview().locator('[role="listbox"]')).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(overlay()).toBeVisible()
+  await overlay().getByRole('button', { name: '关闭' }).click()
+  await toggle.click()
+  await page.keyboard.press('Enter')
+  await expect(overview()).toBeHidden()
+  await page.keyboard.press('Meta+Shift+A')
+  await expect(overview()).toBeVisible()
+})

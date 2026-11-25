@@ -9,7 +9,7 @@
 ## 当前位置
 
 - 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
-- 2026-11-25：协作队伍默认折叠（PRD v1.243）第 1 步（桌面侧栏）完成，下一步看板和手机。
+- 2026-11-25：协作队伍默认折叠（PRD v1.243，Figma 111 / 111′）三步都做完：侧栏（`src/shared/session-group.ts`、`sidebar/FoldRow.tsx`，选中底色罩住整组，`expandedGroups`）、看板卡片的成员摘要（`overview/CardMembers.tsx`）、手机（`RemoteSession.parentId` / `group`，会话列表和看板）。手机端只在测试宿主里看过截图，没连着真 Mac 用过；`e2e/overview.spec.ts` 的 :78 / :175 在机器负载高时会失败（改动前后都一样），没有处理。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
 - 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
@@ -312,10 +312,10 @@ PR 闭环（2026-10-21 定，PRD F16 / F13 v1.63；排在第三批之前；外�
   - [x] 数据、命令和启动参数（2026-11-13）：workspace.json 的 `leaderSessions`、设置 `dispatch.leader`（默认关）、`wavi ls --all` / `wavi adopt` / `wavi tell`、`wavi ls` 分开写等权限和等回答、leader 能读本项目任一会话、接管走确认条、leader 的子会话简报写「有问题写在回复里」、报告叫醒的一轮不提醒；Claude 加 `--permission-mode default --disallowedTools Edit Write NotebookEdit MultiEdit`，Codex 加只读权限 profile（`$CODEX_HOME/config.toml` 有 `sandbox_mode` 时 `leaderCheck` 报出来）；单元测试 `dispatch.test.ts`、`handler.test.ts`、`reports.test.ts`、`bridge.test.ts`、`workspace-model.test.ts`、`workspace-file.test.ts`、`saved-runs.test.ts`、`typing.test.ts`、`controller.test.ts`、`src/main/dispatch/leader.test.ts`、`validate.test.ts`
   - [x] 界面（Figma 81，2026-11-13）：设置 · 自动化 · 派活的「leader 会话」开关、新建会话面板「作为 leader」（当前目录、只 CLI、智能体菜单只列能当 leader 的，不能选的写 `<版本> · <原因>`）、项目 ⋯「新建 leader…」、侧栏第三行 `leader · <分支>`、确认条的「接管」行和 `想开 N 个会话 · 接管 M 个`、会话头 `leader · 本小时叫醒 N 次`、总览 tell 的「等你回答」、派出的会话的 Split 图标改 text-primary；e2e `dispatch.spec.ts`「leader 会话」一组，截图在 `test-results/dispatch/leader-*`
   - [ ] 真 agent 跑一次（Claude、Codex 各一次 leader）
-- [ ] 协作队伍默认折叠（PRD v1.243，Figma 111G / 111H / 111I · 111E / 111F · 111′A–D，2026-11-25 定）：主对话的成员（子会话、subagent、队友、workflow）收成一行折叠行，点开展开一层，选中底色罩住整组
+- [x] 协作队伍默认折叠（PRD v1.243，Figma 111G / 111H / 111I · 111E / 111F · 111′A–D，2026-11-25 定）：主对话的成员（子会话、subagent、队友、workflow）收成一行折叠行，点开展开一层，选中底色罩住整组
   - [x] ① `src/shared/session-group.ts` + 桌面侧栏（折叠行、整组选中、⌘J 展开、`expandedGroups` 持久化）
-  - [ ] ② 看板 · 进度：主对话卡片的成员摘要和展开列表
-  - [ ] ③ 手机：`RemoteSession.parentId` / `group`，会话列表和看板的折叠
+  - [x] ② 看板 · 进度：主对话卡片的成员摘要和展开列表（`src/renderer/overview/CardMembers.tsx`、`members.ts`，折叠状态与侧栏共用 `expandedGroups`）
+  - [x] ③ 手机（2026-11-25）：`RemoteSession.parentId` / `group`（`src/shared/remote.ts`，加字段，旧手机忽略、旧 Mac 不发）由 `remoteGroups`（`src/renderer/remote/model.ts`，用侧栏的 `groupsOf`）算好；会话列表和看板卡片折叠，展开状态按设备记（`@AppStorage` `group.expanded`）。手机端只在测试宿主里渲染截图核对过，没在连着 Mac 的真会话里看过
 - [ ] agent 自带的 subagent 只显示、不接管（PRD F21 v1.66 改，v1.109 改为读文件）：在所在会话下列出 subagent 的任务、模型和状态，不变成 Wavi 会话；状态来自 hook 的 `agent_id` / `SubagentStop`，名字、类型、模型、上一级读 agent 自己的 `subagents/agent-<id>.meta.json`（做法参照 yetone/magpie @ d714c42 `internal/sessions/subagents.go`）
   - [x] 实测 Claude 2.1.316 的 subagent 文件（2026-10-31，PRD §6.14 v1.109）
   - [ ] 实测 Codex 0.165 `spawn_agent` 的 rollout（`thread_spawn.parent_thread_id`）：2026-10-31 服务商对 `gpt-6-sol` 返回 503，阻塞
