@@ -1,4 +1,4 @@
-// The image preview's view math (PRD F23 v1.243, Figma 112G / 112H): pure, so the zoom around the cursor, the fit and
+// The image preview's view math (PRD F23 v1.244, Figma 112G / 112H): pure, so the zoom around the cursor, the fit and
 // the pan limits are tested without a DOM. The picture sits at the stage's centre moved by `offset`, drawn at `scale`
 // times its own size.
 

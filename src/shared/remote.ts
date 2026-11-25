@@ -238,6 +238,32 @@ export interface RemoteSession {
    * actually running, else the session's own. Absent when none applies (no plan windows, or a third-party endpoint).
    */
   usageVendor?: UsageVendor
+  /**
+   * The session that dispatched this one, only when that session is in the same list (PRD v1.243): the phone folds it
+   * under its parent. Absent for a top-level session. Additive: an older phone ignores it, an older Mac sends none.
+   */
+  parentId?: string
+  /** The members folded under this session, counted on the Mac (`groupsOf`); the phone never counts. Absent without members. */
+  group?: RemoteGroup
+}
+
+/** A member of a collaboration group as one line of the phone's fold (PRD v1.243). */
+export interface RemoteMember {
+  /** A `session` member's id is a session id in the same list; the others are opaque. */
+  id: string
+  kind: 'session' | 'subagent' | 'teammate' | 'workflow'
+  title: string
+  status: SessionStatus
+  /** The model of a subagent / teammate, the current phase of a workflow run. */
+  meta?: string
+}
+
+/** The members of a session, direct ones listed in the group's order, `total` and `counts` at any depth. */
+export interface RemoteGroup {
+  total: number
+  /** Most urgent status first; statuses with none are left out. */
+  counts: { status: SessionStatus; count: number }[]
+  members: RemoteMember[]
 }
 
 /** One session's context window. `high` is worked out on the Mac (`contextHigh`); the phone never re-derives it. */
@@ -747,6 +773,30 @@ function windowUsage(raw: unknown): RemoteVendorUsage[] {
   return out
 }
 
+const MEMBER_KINDS: ReadonlySet<unknown> = new Set<RemoteMember['kind']>(['session', 'subagent', 'teammate', 'workflow'])
+const MAX_MEMBERS = 200
+
+/** The members of a session as the phone may fold them; null when anything does not validate (the session still shows). */
+function windowGroup(raw: unknown): RemoteGroup | null {
+  const g = record(raw)
+  if (!g || !isCount(g.total) || g.total > 10_000 || !Array.isArray(g.counts) || g.counts.length > STATUSES.size || !Array.isArray(g.members) || g.members.length > MAX_MEMBERS) return null
+  const counts: RemoteGroup['counts'] = []
+  for (const item of g.counts) {
+    const c = record(item)
+    if (!c || !STATUSES.has(c.status) || !isCount(c.count) || c.count > 10_000) return null
+    counts.push({ status: c.status as SessionStatus, count: c.count })
+  }
+  const members: RemoteMember[] = []
+  for (const item of g.members) {
+    const m = record(item)
+    const title = cleanText(m?.title, 500)
+    const meta = optText(m?.meta, 200)
+    if (!m || typeof m.id !== 'string' || m.id.length === 0 || m.id.length > 300 || title === null || meta === null || !MEMBER_KINDS.has(m.kind) || !STATUSES.has(m.status)) return null
+    members.push({ id: m.id, kind: m.kind as RemoteMember['kind'], title, status: m.status as SessionStatus, ...(meta ? { meta } : {}) })
+  }
+  return { total: g.total, counts, members }
+}
+
 function windowSession(raw: unknown): RemoteSession | null {
   const s = record(raw)
   if (!s || !isId(s.id) || !isId(s.projectId) || !STATUSES.has(s.status) || (s.agent !== 'shell' && !isCliAgent(s.agent))) return null
@@ -782,6 +832,12 @@ function windowSession(raw: unknown): RemoteSession | null {
   }
   const vendor = usageVendor(s.usageVendor)
   if (vendor) out.usageVendor = vendor
+  // The collaboration group (PRD v1.243): fields that do not validate are left off, the session still shows.
+  if (isId(s.parentId) && s.parentId !== s.id) out.parentId = s.parentId
+  if (s.group !== undefined) {
+    const group = windowGroup(s.group)
+    if (group) out.group = group
+  }
   if (s.context !== undefined) {
     const context = windowContext(s.context)
     if (context) out.context = context

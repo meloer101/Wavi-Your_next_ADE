@@ -3,7 +3,7 @@
 // ↵ enter · Esc closes, then leaves. ⌘ / ⇧ click picks sessions for a batch action (BatchBar); 一题多解 groups sit
 // above the columns and open the overlay with their members side by side. GitHub lists each project's open issues and
 // PRs (GitHubBoard). The list view and its in-place terminal were removed in v1.184.
-import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
 import { Check, PanelLeft, RefreshCw, Search } from '../ui/icons'
 import { rangeBetween, togglePicked } from '@shared/batch-actions'
 import { useShallow } from 'zustand/react/shallow'
@@ -31,6 +31,7 @@ import { DispatchGroups } from '../dispatch/DispatchGroups'
 import { GitHubBoard } from './GitHubBoard'
 import { githubSummary } from './github-model'
 import { refreshGitHub, useGitHubBoard } from './github-store'
+import { CardMembers, MembersContext, MembersNowContext, useBoardMembers } from './CardMembers'
 import { enterSession, useOverviewStore, type BoardTab } from './store'
 import styles from './Overview.module.css'
 import { formatAccelerator } from '../ui/menu-model'
@@ -119,6 +120,13 @@ export function Overview() {
   }, [sessions, worktrees])
   const attention = shown.filter((s) => needsAttention(s.status)).length
   const rows = useMemo(() => groups.flatMap((g) => g.rows), [groups])
+  const members = useBoardMembers(shown)
+  const onBoard = useMemo(() => new Set(ids), [ids])
+  // The members' clicks go through the latest onCardClick without making the context value change on every render.
+  const cardClick = useRef<(id: SessionId, e: MouseEvent) => void>(() => undefined)
+  const openMember = useCallback((id: SessionId, e: MouseEvent) => cardClick.current(id, e), [])
+  const focusBoard = useCallback(() => bodyRef.current?.focus(), [])
+  const membersValue = useMemo(() => ({ ...members, onBoard, open: openMember, focusBoard }), [members, onBoard, openMember, focusBoard])
   const paneIds = useMemo(() => (layout ? layoutIds(layout) : []), [layout])
 
   // Keep a selection that exists; default to the first card so ↵ / Space work right away.
@@ -201,8 +209,13 @@ export function Overview() {
     bodyRef.current?.focus()
   }
 
+  useEffect(() => {
+    cardClick.current = onCardClick
+  })
   return (
     <Picked.Provider value={pickedSet}>
+      <MembersContext.Provider value={membersValue}>
+      <MembersNowContext.Provider value={now}>
       <div className={styles.overview} data-region="overview" data-glass-card="" data-tab={tab} onKeyDown={onKeyDown}>
         <header className={styles.header} data-sidebar-collapsed={sidebarCollapsed}>
           {sidebarCollapsed && (
@@ -276,6 +289,8 @@ export function Overview() {
           <SessionOverlay layout={layout} rows={rows} candidates={rows.filter((r) => !paneIds.includes(r.session.id))} onClose={closeOverlay} />
         )}
       </div>
+      </MembersNowContext.Provider>
+      </MembersContext.Provider>
     </Picked.Provider>
   )
 }
@@ -346,6 +361,7 @@ function StatusCard({ row, selected, onClick }: RowProps) {
       {row.session.status === 'done_unread' && <TurnChecksTag sessionId={id} />}
       <PortTags sessionId={id} />
       {row.stat && <span className={styles.cardStat}>{row.stat}</span>}
+      <CardMembers sessionId={id} />
     </div>
   )
 }

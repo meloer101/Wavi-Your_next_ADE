@@ -1,0 +1,123 @@
+/*
+ * Figma 111E / 111F: the card's members under a hairline. Text uses the card's own hue (--card-meta, set by Overview's
+ * .card[data-card]), so it reads on every status fill in both themes. Rows are 18 high; a member's own members are one
+ * step (16 + 8) further in.
+ */
+.members {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid color-mix(in srgb, var(--card-meta) 30%, transparent);
+  cursor: default;
+}
+
+.summary,
+button.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--card-meta);
+  font: var(--text-caption);
+  text-align: left;
+  cursor: default;
+}
+
+.summary {
+  padding: var(--space-2) 0;
+}
+
+.summary:focus-visible,
+button.row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.chevron {
+  flex: none;
+  display: flex;
+  width: 16px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+
+.label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.counts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.count svg,
+.row svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  list-style: none;
+}
+
+.list li[data-depth='2'] {
+  padding-left: var(--space-24);
+}
+
+.list li[data-depth='3'] {
+  padding-left: calc(var(--space-24) * 2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  padding: var(--space-2) 0;
+  font: var(--text-caption);
+  color: var(--text-primary);
+}
+
+button.row {
+  color: var(--text-primary);
+}
+
+button.row:hover {
+  background: color-mix(in srgb, var(--card-meta) 14%, transparent);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  flex: none;
+  font: var(--text-mono-s);
+  color: var(--card-meta);
+  white-space: nowrap;
+}

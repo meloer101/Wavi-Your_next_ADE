@@ -1,5 +1,5 @@
 /* The image preview (Figma 112G / 112G′ fitted, 112H zoomed): a layer over the whole window, the app's own colour and
-   opaque (at 94% the chat read through it; PRD v1.243 said 94%). The top bar leaves the traffic lights (left, 84) alone; the stage takes the rest. */
+   opaque (at 94% the chat read through it; PRD v1.244 first said 94%). The top bar leaves the traffic lights (left, 84) alone; the stage takes the rest. */
 .layer {
   position: fixed;
   inset: 0;

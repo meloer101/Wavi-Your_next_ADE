@@ -26,12 +26,14 @@ import { openSchedules } from '../schedules/store'
 import { ProjectHeader } from './ProjectHeader'
 import { SelectionDrops } from './SelectionDrop'
 import { SessionRow } from './SessionRow'
+import { FoldRow } from './FoldRow'
 import { SubagentRow } from './SubagentRow'
 import { useSessionMeta } from '../session-meta/store'
 import { useDispatch } from '../dispatch/store'
 import type { SubagentInfo } from '@shared/agent-events'
 import type { SessionId } from '@shared/types'
-import { adjacentSessionId, buildSidebarGroups, pendingItems, pickSessions, teamItems, visibleSessionIds, workflowItems, type SideItem } from './model'
+import { adjacentSessionId, buildSidebarGroups, pendingItems, pickSessions, sideItemsOf, topLevelChunks, visibleSessionIds, type SideItem } from './model'
+import { dispatchAncestors } from '@shared/session-group'
 import type { WorkflowRun } from '@shared/workflow-run'
 import type { TeamState } from '@shared/agent-team'
 import './shortcuts-runtime'
@@ -112,11 +114,13 @@ export function Sidebar() {
     collapsedProjectIds,
     groupBy,
     collapsedStatusGroups,
+    expandedGroups,
     leaderSessions,
     setActiveSession,
     toggleSidebar,
     toggleProjectCollapsed,
     toggleStatusGroupCollapsed,
+    toggleGroupExpanded,
     mainOverview
   } =
     useWorkspace(
@@ -127,6 +131,8 @@ export function Sidebar() {
         collapsedProjectIds: s.collapsedProjectIds,
         groupBy: s.sidebarGroupBy,
         collapsedStatusGroups: s.collapsedStatusGroups,
+        expandedGroups: s.expandedGroups,
+        toggleGroupExpanded: s.toggleGroupExpanded,
         leaderSessions: s.leaderSessions,
         toggleStatusGroupCollapsed: s.toggleStatusGroupCollapsed,
         setActiveSession: s.setActiveSession,
@@ -190,24 +196,20 @@ export function Sidebar() {
   // Figma 83B: the sessions a `wavi run` asked for hang under the session that asked until the user answers.
   const confirms = useDispatch((s) => s.confirms)
   const subagents = useMemo(() => {
-    const out: Record<string, SideItem[]> = { ...subagentLists }
-    for (const [id, runs] of Object.entries(runLists)) {
-      const unread = sessions.find((s) => s.id === id)?.status === 'done_unread'
-      const lines = workflowItems(runs, { unread, folded })
-      if (lines.length > 0) out[id] = [...lines, ...(subagentLists[id] ?? [])]
-    }
-    for (const [id, team] of Object.entries(teams)) {
-      const lines = teamItems(team)
-      if (lines.length > 0) out[id] = [...lines, ...(out[id] ?? [])]
-    }
+    const out: Record<string, SideItem[]> = sideItemsOf({ sessions, subagents: subagentLists, runs: runLists, teams, folded })
     for (const [id, waiting] of Object.entries(pendingItems(confirms.flatMap((c) => (c.kind === 'start' ? [c] : []))))) out[id] = [...waiting, ...(out[id] ?? [])]
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lang: the lines' text follows the interface language
   }, [subagentLists, runLists, sessions, folded, confirms, teams, lang])
   const groups = useMemo(
-    () => buildSidebarGroups({ projects, worktrees, sessions, collapsedProjectIds, subagents, groupBy, collapsedStatusGroups, ...(leaderSessions ? { leaderSessions } : {}) }),
+    () => buildSidebarGroups({ projects, worktrees, sessions, collapsedProjectIds, subagents, groupBy, collapsedStatusGroups, expandedGroups, ...(leaderSessions ? { leaderSessions } : {}) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lang: the rows' text follows the interface language
-    [projects, worktrees, sessions, collapsedProjectIds, subagents, groupBy, collapsedStatusGroups, leaderSessions, lang]
+    [projects, worktrees, sessions, collapsedProjectIds, subagents, groupBy, collapsedStatusGroups, expandedGroups, leaderSessions, lang]
+  )
+  // Sessions above the selected one: a group holding the selection is tinted (Figma 111I). In 按状态 children are flat rows.
+  const selectionAbove = useMemo(
+    () => (groupBy === 'status' || activeSessionId === null ? [] : dispatchAncestors(sessions, activeSessionId)),
+    [groupBy, sessions, activeSessionId]
   )
   const ids = useMemo(() => visibleSessionIds(groups), [groups])
   // Rows picked with ⇧ / ⌘ click (issue #6), closed together after one confirmation. A closed or folded row drops out.
@@ -268,13 +270,14 @@ export function Sidebar() {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
       const focusedId = (e.target as HTMLElement).closest<HTMLElement>('[data-session-id]')?.dataset.sessionId ?? null
-      const next = adjacentSessionId(groups, focusedId ?? activeSessionId, e.key === 'ArrowDown' ? 1 : -1)
+      const current = focusedId ?? activeSessionId
+      const next = adjacentSessionId(groups, current, e.key === 'ArrowDown' ? 1 : -1, current !== null && groupBy !== 'status' ? dispatchAncestors(sessions, current) : [])
       if (!next) return
       e.preventDefault()
       setActiveSession(next)
       listRef.current?.querySelector<HTMLElement>(`[data-session-id="${CSS.escape(next)}"]`)?.focus()
     },
-    [groups, activeSessionId, setActiveSession, picked, closePicked]
+    [groups, groupBy, sessions, activeSessionId, setActiveSession, picked, closePicked]
   )
 
   return (
@@ -334,22 +337,39 @@ export function Sidebar() {
                 onMenu={(anchor) => void openProjectMenu(group.id, anchor)}
               />
             )}
-            {group.rows.map((row) => (
-              <Fragment key={row.session.id}>
-                <SessionRow
-                  row={row}
-                  selected={!overview && row.session.id === activeSessionId}
-                  shown={!overview && !inPanes.includes(row.session.id) && shown.split('\n').includes(row.session.id)}
-                  picked={pickedSet.has(row.session.id)}
-                  onPick={onPick}
-                  onPress={onRowPress}
-                  tabStop={row.session.id === tabStopId}
-                  onSelect={onRowSelect}
-                  onContextMenu={onRowContextMenu}
-                />
-                {row.after?.map((sub) => <SubagentRow key={sub.id} row={sub} onSelect={setActiveSession} onToggle={toggleRun} />)}
-              </Fragment>
-            ))}
+            {topLevelChunks(group.rows).map((chunk) => {
+              const main = chunk[0]!
+              const body = chunk.map((row) => (
+                <Fragment key={row.session.id}>
+                  <SessionRow
+                    row={row}
+                    selected={!overview && row.session.id === activeSessionId}
+                    shown={!overview && !inPanes.includes(row.session.id) && shown.split('\n').includes(row.session.id)}
+                    picked={pickedSet.has(row.session.id)}
+                    onPick={onPick}
+                    onPress={onRowPress}
+                    tabStop={row.session.id === tabStopId}
+                    onSelect={onRowSelect}
+                    onContextMenu={onRowContextMenu}
+                  />
+                  {row.fold && <FoldRow row={row.fold} onToggle={toggleGroupExpanded} />}
+                  {row.after?.map((sub) => <SubagentRow key={sub.id} row={sub} onSelect={setActiveSession} onToggle={toggleRun} />)}
+                </Fragment>
+              ))
+              // One box per session with members, so the selection can cover the whole group (PRD v1.243).
+              return main.fold ? (
+                <div
+                  key={main.session.id}
+                  className={styles.groupBox}
+                  data-group-of={main.session.id}
+                  data-member-selected={!overview && selectionAbove.includes(main.session.id)}
+                >
+                  {body}
+                </div>
+              ) : (
+                <Fragment key={main.session.id}>{body}</Fragment>
+              )
+            })}
             {group.kind === 'project' && !group.collapsed && group.sessionCount === 0 && (
               <button type="button" className={styles.newSession} aria-haspopup="dialog" onClick={() => newSessionInProject(group.id)}>
                 <Plus {...ICON} />
