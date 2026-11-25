@@ -727,7 +727,8 @@ async function mergeSteps(request: ShipMainRequest, checked: MergePrecheck, root
       baseHead: check.baseHead,
       push: request.push === true && remote !== null,
       // '' (only without paths): the title and the branch's subjects (its own message without a title).
-      ...(request.message ? { message: request.message } : request.title ? { title: request.title } : {})
+      ...(request.message ? { message: request.message } : request.title ? { title: request.title } : {}),
+      ...(request.closes !== undefined ? { closes: request.closes } : {})
     },
     { remote }
   )

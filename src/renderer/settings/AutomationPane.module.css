@@ -56,3 +56,97 @@
   margin-left: var(--space-8);
   color: var(--text-secondary);
 }
+
+/* GitHub issue (PRD F26, Figma 102A): a project's expanded settings sit under its switch, quieter than the rows. */
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.number {
+  width: 64px;
+  height: 28px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-selected);
+  box-shadow: var(--field-finish);
+  color: var(--text-primary);
+  font: var(--text-mono-s);
+}
+
+.number:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
+.count {
+  font: var(--text-caption);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.project {
+  display: flex;
+  flex-direction: column;
+}
+
+.indent {
+  padding-left: var(--space-32);
+}
+
+/* 102A: a project's row — name and repository on the left, the switch alone on the right. */
+.projectRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 40px;
+  padding: var(--space-4) 0;
+}
+
+.projectName {
+  flex: none;
+  font: var(--text-body);
+  color: var(--text-primary);
+}
+
+.repo {
+  flex: none;
+  font: var(--text-mono-s);
+  color: var(--text-tertiary);
+}
+
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The globals' selects: compact, at the right of their row. */
+.compact {
+  display: inline-block;
+  width: 120px;
+}
+
+.projectEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.note {
+  margin: 0 0 var(--space-8);
+  padding-left: var(--space-16);
+  font: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.note[data-tone='error'] {
+  color: var(--status-error);
+}
+
+.error {
+  margin: 0 0 var(--space-8);
+  font: var(--text-caption);
+  color: var(--status-error);
+}

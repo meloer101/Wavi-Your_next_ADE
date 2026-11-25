@@ -20,6 +20,7 @@ import {
   parseMergeTree,
   squashMessage,
   trackedDirtyPaths,
+  withClosing,
   type GitOperation,
   type MergeBlocker,
   type MergeConflict,
@@ -456,7 +457,11 @@ export async function mergeWorktree(raw: unknown, options: { remote?: string | n
       const message =
         request.method === 'merge'
           ? mergeMessage(check.branch, check.base)
-          : (request.message ?? squashMessage(check.branch, await squashCommits(realRoot, check.baseHead, check.head, check.ahead), request.title))
+          : request.method === 'squash'
+            ? request.message
+              ? withClosing(request.message, request.closes)
+              : squashMessage(check.branch, await squashCommits(realRoot, check.baseHead, check.head, check.ahead), request.title, request.closes)
+            : squashMessage(check.branch, await squashCommits(realRoot, check.baseHead, check.head, check.ahead), request.title)
       const parents = request.method === 'merge' ? ['-p', check.baseHead, '-p', check.head] : ['-p', check.baseHead]
       commit = (await git(realRoot, ['commit-tree', inspection.tree!, ...parents, '-F', '-'], { input: message })).trim()
     }

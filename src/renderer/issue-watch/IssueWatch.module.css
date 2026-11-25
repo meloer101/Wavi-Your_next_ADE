@@ -1,0 +1,202 @@
+/* 自动领取 in Git · 变更 (PRD F26, Figma 102B1–102B4): the report sits on the panel itself (no card), a hairline below it
+   and the file list's rows beneath; 批准's three steps sit in the exit zone, one row each, glyph · label · detail. */
+
+.report {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* On the panel's rows' inset, as Figma 102B1 lines the block up with the file list below it. */
+  padding: var(--space-8) var(--space-16) var(--space-12);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 22px;
+}
+
+.issueGlyph {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.number {
+  flex: none;
+  font: var(--text-mono-s-medium);
+  color: var(--text-tertiary);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--text-body-strong);
+  color: var(--text-primary);
+}
+
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.linkButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 22px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font: var(--text-caption);
+  white-space: nowrap;
+}
+
+.linkButton:hover {
+  color: var(--text-primary);
+}
+
+.linkButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.meta {
+  margin: 0;
+  padding-left: calc(var(--space-16) + var(--space-6));
+  overflow: hidden;
+  font: var(--text-caption);
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  color: var(--status-attention);
+}
+
+.acceptance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: 0;
+  padding-left: calc(var(--space-16) + var(--space-6));
+  min-width: 0;
+  min-height: 18px;
+  font: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.acceptance[data-tone='error'] {
+  color: var(--status-error);
+}
+
+.verdict {
+  flex: none;
+  font: var(--text-caption-strong);
+}
+
+.command {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--text-mono-s);
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  flex: none;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.output {
+  margin: var(--space-4) 0 0 calc(var(--space-8) + var(--space-20) + var(--space-2));
+  padding: var(--space-6) var(--space-8);
+  max-height: 180px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  font: var(--text-mono-s);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.reply {
+  display: -webkit-box;
+  margin: 0;
+  padding-left: calc(var(--space-16) + var(--space-6));
+  overflow: hidden;
+  font: var(--text-body);
+  color: var(--text-secondary);
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* 批准's steps (Figma 102B3 / 102B4): in the exit zone, one row each, the same 28px rhythm as the zone's rows. */
+.approval {
+  display: flex;
+  flex-direction: column;
+  margin: 0 var(--space-6);
+  padding: var(--space-8) 0;
+  gap: var(--space-2);
+}
+
+.approvalStep {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 26px;
+  padding: 0 var(--space-8);
+  font: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.approvalLabel {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.approvalLabel[data-done='true'] {
+  color: var(--text-primary);
+}
+
+.approvalDetail {
+  flex: none;
+  font: var(--text-mono-s);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.approvalFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+  padding: 0 var(--space-8);
+}
+
+/* 102B4: 归档 below the steps, the only primary left once the issue is closed. */
+.archiveButton {
+  height: 26px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--fill-primary);
+  box-shadow: var(--primary-finish);
+  color: var(--text-inverse);
+  font: var(--text-caption-strong);
+}
+
+.archiveButton:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}

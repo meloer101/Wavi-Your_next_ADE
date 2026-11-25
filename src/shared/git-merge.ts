@@ -83,6 +83,8 @@ export interface MergeRequest {
   title?: string
   /** Squash only (exit A, PRD F16 v1.78): the whole agent-written message, subject first; wins over `title`. */
   message?: string
+  /** Squash only (PRD F26): an issue this merge finishes — `Closes #n` ends the message when no line closes it yet. */
+  closes?: number
 }
 
 export type MergeFailure =
@@ -144,6 +146,10 @@ export function parseMergeRequest(raw: unknown): MergeRequest | null {
     const message = multiLine(r.message)
     if (message) request.message = message
   }
+  if (r.closes !== undefined) {
+    if (typeof r.closes !== 'number' || !Number.isInteger(r.closes) || r.closes < 1 || r.closes > 1e9) return null
+    request.closes = r.closes
+  }
   return request
 }
 
@@ -199,23 +205,46 @@ export function mergeMessage(branch: string, base: string): string {
 
 /** A GitHub closing keyword and the issue it names ("Closes #12", "fixes: acme/web#3", "Resolves https://…/issues/4"),
  *  anywhere in a line. */
-const CLOSING_REFERENCE = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:(?:[\w.-]+\/[\w.-]+)?#\d+|https?:\/\/\S+\/issues\/\d+)/i
+const CLOSING_SOURCE = '\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\b:?\\s+(?:(?:[\\w.-]+\\/[\\w.-]+)?#(\\d+)|https?:\\/\\/\\S+\\/issues\\/(\\d+))'
+const CLOSING_REFERENCE = new RegExp(CLOSING_SOURCE, 'i')
+
+/** Whether a line already closes issue `n` ("Closes #12", "fixes #12", "Resolves https://…/issues/12"). */
+function closesIssue(line: string, n: number): boolean {
+  for (const match of line.matchAll(new RegExp(CLOSING_SOURCE, 'gi'))) {
+    if (Number(match[1] ?? match[2]) === n) return true
+  }
+  return false
+}
+
+/**
+ * The message with `Closes #n` at its end, unless one of its lines already closes that issue (so a message that carries
+ * the line itself, from the agent's commit, never gets it twice). Absent `closes`: the message unchanged.
+ */
+export function withClosing(message: string, closes?: number): string {
+  if (closes === undefined) return message
+  if (message.split('\n').some((line) => closesIssue(line, closes))) return message
+  return `${message.trimEnd()}\n\nCloses #${closes}`
+}
 
 /**
  * A squash commit's message: the title (the session's) and a list of the commits' subjects (oldest first), one commit
  * or several. Without a title one commit keeps its own message and several get "Squash merge branch 'x'" and the list.
  * The lines of the commits' bodies that close an issue ("Closes #12") follow the list, once each: GitHub closes the
  * issue when they reach the default branch, as it would have from the commits themselves (PRD F16 v1.192).
+ * `closes` (PRD F26): an issue this merge finishes, closed by a line at the end when no line already closes it.
  */
-export function squashMessage(branch: string, commits: readonly { subject: string; body: string }[], title?: string): string {
+export function squashMessage(branch: string, commits: readonly { subject: string; body: string }[], title?: string, closes?: number): string {
   const titled = title?.trim()
-  if (commits.length === 1 && !titled) return commits[0]!.body.trim() || commits[0]!.subject
-  const subject = titled || `Squash merge branch '${branch}'`
-  if (commits.length === 0) return subject
-  // `body` is the whole message: its first line is the subject, which the list already carries.
-  const closing = [...new Set(commits.flatMap((c) => c.body.split('\n').slice(1).map((l) => l.trim()).filter((l) => CLOSING_REFERENCE.test(l))))]
-  const list = commits.map((c) => `- ${c.subject}`).join('\n')
-  return `${subject}\n\n${list}\n${closing.length > 0 ? `\n${closing.join('\n')}\n` : ''}`
+  const message = (() => {
+    if (commits.length === 1 && !titled) return commits[0]!.body.trim() || commits[0]!.subject
+    const subject = titled || `Squash merge branch '${branch}'`
+    if (commits.length === 0) return subject
+    // `body` is the whole message: its first line is the subject, which the list already carries.
+    const closing = [...new Set(commits.flatMap((c) => c.body.split('\n').slice(1).map((l) => l.trim()).filter((l) => CLOSING_REFERENCE.test(l))))]
+    const list = commits.map((c) => `- ${c.subject}`).join('\n')
+    return `${subject}\n\n${list}\n${closing.length > 0 ? `\n${closing.join('\n')}\n` : ''}`
+  })()
+  return withClosing(message, closes)
 }
 
 /** Which operation a git dir shows in progress, from the names of the files and folders in it. */

@@ -26,6 +26,7 @@ import { startShipRuns } from '../pull-requests/ship-runner'
 import { startDispatchBridge } from '../dispatch/bridge'
 import { startRemoteBridge } from '../remote/bridge'
 import { startScheduleRunner } from '../schedules/runner'
+import { startIssueWatchRunner } from '../issue-watch/runner'
 import { SameTaskSheet } from '../attempts/SameTaskSheet'
 import { startTaskSources } from '../attempts/sources'
 import { ArchiveSheet } from '../archive/ArchiveSheet'
@@ -107,6 +108,7 @@ export function AppShell() {
   useEffect(() => startDispatchBridge(), [])
   useEffect(() => startRemoteBridge(), [])
   useEffect(() => startScheduleRunner(), [])
+  useEffect(() => startIssueWatchRunner(), [])
   useEffect(() => startTaskSources(), [])
   useEffect(() => startConflictRadarBridge(), [])
   useEffect(() => startBranchSync(), [])

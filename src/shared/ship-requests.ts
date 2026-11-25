@@ -73,6 +73,7 @@ export function parseShipMainRequest(raw: unknown): ShipMainRequest | null {
   if (raw.push !== undefined && typeof raw.push !== 'boolean') return null
   if (raw.title !== undefined && typeof raw.title !== 'string') return null
   if (raw.head !== undefined && !isFullSha(raw.head)) return null
+  if (raw.closes !== undefined && (typeof raw.closes !== 'number' || !Number.isInteger(raw.closes) || raw.closes < 1 || raw.closes > 1e9)) return null
   const title = typeof raw.title === 'string' ? oneLine(raw.title).slice(0, MAX_TITLE) : ''
   return {
     ...target,
@@ -81,7 +82,8 @@ export function parseShipMainRequest(raw: unknown): ShipMainRequest | null {
     paths,
     ...(raw.push === true ? { push: true } : {}),
     ...(title ? { title } : {}),
-    ...(typeof raw.head === 'string' ? { head: raw.head } : {})
+    ...(typeof raw.head === 'string' ? { head: raw.head } : {}),
+    ...(typeof raw.closes === 'number' ? { closes: raw.closes } : {})
   }
 }
 

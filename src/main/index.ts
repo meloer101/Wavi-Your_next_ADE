@@ -15,6 +15,7 @@ import { registerDispatchHandlers } from './dispatch'
 import { guiSessionOwner, registerGuiHandlers } from './gui'
 import { registerRemoteHandlers } from './remote'
 import { registerScheduleHandlers } from './schedules'
+import { registerIssueWatchHandlers } from './issue-watch'
 import { selectProfile } from './profile'
 import { ptySessionOwner, registerPtyHandlers } from './pty'
 import { installQuitGuard } from './quit'
@@ -125,6 +126,7 @@ function boot(): void {
   registerPtyHandlers()
   registerGuiHandlers()
   registerScheduleHandlers()
+  registerIssueWatchHandlers()
   registerUiHandlers()
   registerSecondaryWindowHandlers(showMainWindow, () => getMainWindow()?.webContents ?? null)
   registerUpdateHandlers()

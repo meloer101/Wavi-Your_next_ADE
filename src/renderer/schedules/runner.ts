@@ -4,18 +4,15 @@
 // session that ends its turn with nothing changed is archived (F15) when the task says so. Every outcome goes back to main.
 import { AGENT_SPECS, usageVendor } from '@shared/agents'
 import { defineMessages, pick } from '@shared/i18n'
-import { isCliPermission } from '@shared/gui-chat'
-import { cliPermissionLevels } from '@shared/agent-launch'
 import { runBranch, runSessionTitle, type Schedule, type ScheduleFire, type ScheduleRun } from '@shared/schedule'
 import type { SessionId, SessionStatus } from '@shared/types'
 import { archiveTargetFor, archiveWorktree, blockerFor } from '../archive/actions'
-import { setLaunch } from '../dispatch/store'
-import { createWorktreeFor, holdForWorktree, startEagerly } from '../new-session/creation'
+import { startEagerly } from '../new-session/creation'
+import { launchWorktreeSession } from '../new-session/launch'
 import { binaryInstalled, branchProblemText, planCreate, uiRow } from '../new-session/model'
 import { submitPrompt, whenAgentReady } from '../session-io'
 import { useSessionMeta } from '../session-meta/store'
 import { useWorkspace } from '../state/workspace'
-import { randomId } from '../state/workspace-model'
 import { freeBranch, previousRunActive, quotaBlock, sendStep, unchanged } from './model'
 import { setAgentSchedulesAllowed } from './agent-requests'
 import { followSchedules, useSchedules } from './store'
@@ -97,21 +94,21 @@ async function openSession(schedule: Schedule, planned: number): Promise<Outcome
   }
   const plan = created.plan
   const ui = uiRow(action.agent, action.ui, binaryInstalled(installed))?.value ?? 'cli'
-  const id = workspace.addBackgroundSession(project.id, { path: plan.path, branch: plan.request.branch, baseBranch: plan.request.base }, action.agent, randomId('s'), ui)
-  if (!id) return fail(pick(M).noSession)
   const title = runSessionTitle(schedule.name, planned)
-  workspace.patchSession(id, {
+  // The same steps 新建会话 takes (new-session/launch.ts), shared with 自动领取.
+  const id = launchWorktreeSession({
+    projectId: project.id,
+    agent: action.agent,
+    ui,
+    path: plan.path,
+    request: plan.request,
     title,
-    titleSource: 'user',
-    scheduledBy: { id: schedule.id, name: schedule.name, planned },
-    ...(ui === 'gui' && action.permission ? { guiPermission: action.permission } : {})
+    prompt: schedule.prompt,
+    ...(action.model ? { model: action.model } : {}),
+    ...(action.permission ? { permission: action.permission } : {}),
+    patch: { scheduledBy: { id: schedule.id, name: schedule.name, planned } }
   })
-  // A terminal session takes the 权限 as its CLI's launch flag or variable (PRD F24 v1.205); none is its own default.
-  const cliPermission = ui === 'cli' && isCliPermission(action.permission) && cliPermissionLevels(action.agent).includes(action.permission) ? action.permission : undefined
-  setLaunch(id, { initialPrompt: schedule.prompt, ...(action.model ? { model: action.model } : {}), ...(cliPermission ? { permission: cliPermission } : {}) })
-  holdForWorktree(id)
-  void createWorktreeFor(id, action.agent, plan.request)
-  startEagerly(id)
+  if (!id) return fail(pick(M).noSession)
   return { outcome: 'opened', sessionId: id, reason: pick(M).opened(title) }
 }
 

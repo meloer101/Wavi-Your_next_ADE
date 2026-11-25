@@ -157,6 +157,8 @@ interface Run {
   prepared?: boolean
   range?: CommitRange | null
   commits?: number
+  /** The issue this 合并 closes (PRD F26); 合并 only. */
+  closes?: number
   /** The tip prepush answered (what the review read): main pushes exactly it, or answers stale. */
   tip?: string
   /** The remote has no base to compare the push with: the review step says nothing was read. */
@@ -177,9 +179,18 @@ export interface ShipStartOptions {
   baseRemote?: string | null
   /** 拉取: what it fetches (the preflight's `pullFrom`), for the step's label; a push of the branch goes there too. */
   pullFrom?: string | null
+  /** PRD F26: an issue this 合并 finishes — the squash message ends with `Closes #n` (once, and not when it already does). */
+  closes?: number
 }
 
 const runs = new Map<string, Run>()
+/** Worktrees whose last run went through (finish), not 取消: a block that went away is either. */
+const completed = new Set<string>()
+
+/** Whether the last run in this worktree ended by going through rather than by 取消. */
+export function shipCompleted(worktree: string): boolean {
+  return completed.has(worktree)
+}
 let counter = 0
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error))
@@ -320,11 +331,19 @@ export function startShipRuns(): () => void {
 
 export function startShip(ctx: ShipContext, kind: ShipKind, title: string, options: ShipStartOptions = {}): void {
   if (runs.has(ctx.worktree)) return
+  completed.delete(ctx.worktree)
   const token = ++counter
   // The tip the starting command just read (or the run's own, carried over by 改为创建 PR); never an older preflight a
   // panel left in the chain store, which would make the reload check judge commits made before the run.
   const head = options.head ?? ctx.head
-  runs.set(ctx.worktree, { ctx: head ? { ...ctx, head } : ctx, kind, token, committed: false, behind: options.behind ?? null })
+  runs.set(ctx.worktree, {
+    ctx: head ? { ...ctx, head } : ctx,
+    kind,
+    token,
+    committed: false,
+    behind: options.behind ?? null,
+    ...(options.closes !== undefined ? { closes: options.closes } : {})
+  })
   const state = startState(
     {
       kind,
@@ -350,6 +369,7 @@ export function cancelShip(worktree: string): void {
   const run = runs.get(worktree)
   if (!run) return
   runs.delete(worktree)
+  completed.delete(worktree)
   window.tr.pr.cancelWrite(worktree)
   if (useBackgroundReview.getState().byRoot[worktree]?.phase === 'running' && current(worktree)?.steps.some((s) => s.id === 'review' && s.state === 'working'))
     cancelBackgroundReview(worktree)
@@ -993,7 +1013,15 @@ async function runMain(worktree: string, token: number, run: Run, state: ShipSta
     }
   }
   const title = sessionOf(ctx.sessionId)?.title.trim()
-  const result = await window.tr.ship.shipToMain({ root: ctx.root, worktree: ctx.worktree, message: '', method: 'squash', paths: null, ...(title ? { title } : {}) })
+  const result = await window.tr.ship.shipToMain({
+    root: ctx.root,
+    worktree: ctx.worktree,
+    message: '',
+    method: 'squash',
+    paths: null,
+    ...(title ? { title } : {}),
+    ...(run.closes !== undefined ? { closes: run.closes } : {})
+  })
   if (!alive(worktree, token)) return
   if (!result.ok) {
     patch(worktree, token, (s) =>
@@ -1186,6 +1214,7 @@ function finish(worktree: string, token: number, notice: string): void {
   if (isExitRun(run.kind)) remember(run.ctx.root, run.kind)
   window.tr.pr.refresh(worktree)
   runs.delete(worktree)
+  completed.add(worktree)
   useShips.setState((s) => {
     const { [worktree]: _gone, ...rest } = s.byWorktree
     return { byWorktree: rest }

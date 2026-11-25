@@ -15,6 +15,10 @@ import { formatElapsed } from '../sidebar/format-elapsed'
 import { useWorkspace } from '../state/workspace'
 import { StatusGlyph } from '../ui/StatusGlyph'
 import { glyphStatus } from '../lifecycle/present'
+import { issueStateLabel } from '@shared/issue-watch'
+import { repoArg } from '@shared/pull-requests'
+import { recordFor } from '../issue-watch/model'
+import { useIssueWatch } from '../issue-watch/store'
 import { checksMark, ghProblem, linkedSessions, linkKey, linkOf, matchesFilter, orderProjects, prTags } from './github-model'
 import { openItem, refreshGitHub, setScope, useGitHubBoard } from './github-store'
 import { GitHubDetail } from './GitHubDetail'
@@ -37,7 +41,8 @@ const M = defineMessages({
     noReviews: '没有请你审阅的 PR',
     nothingOpen: '没有打开的 issue 和 PR',
     comments: (n: number) => `${n} 条评论`,
-    enter: '进入会话'
+    enter: '进入会话',
+    toReview: '待审阅'
   },
   en: {
     ghMissing: 'GitHub needs the GitHub CLI: install gh, then run gh auth login in a terminal',
@@ -52,7 +57,8 @@ const M = defineMessages({
     noReviews: 'No PRs waiting for your review',
     nothingOpen: 'No open issues or PRs',
     comments: (n: number) => (n === 1 ? '1 comment' : `${n} comments`),
-    enter: 'Enter session'
+    enter: 'Enter session',
+    toReview: 'To review'
   }
 })
 const SMALL = { size: 14, strokeWidth: 1.75, 'aria-hidden': true } as const
@@ -167,6 +173,9 @@ function Column({ label, count, items, project, result }: { label: string; count
 function ItemRow({ item, project, result }: { item: BoardItem; project: Project; result: Extract<BoardProject, { state: 'ok' }> }) {
   const m = useMessages(M)
   const linked = useContext(Linked).get(linkKey(linkOf(result.repo, item))) ?? null
+  // 自动领取 (PRD F26, Figma 102C): a claimed issue waiting for its turn says 排队; once its session runs, that row is the
+  // session's status (LinkedSession).
+  const claimed = useIssueWatch((s) => (item.kind === 'issue' ? recordFor(s.state?.issues ?? [], repoArg(result.repo), item.number) : undefined))
   const selected = useGitHubBoard((g) => g.open?.root === project.rootPath && g.open.kind === item.kind && g.open.number === item.number)
   const pr = item.kind === 'pr' ? (item as BoardPr) : null
   const mark = pr ? checksMark(pr) : null
@@ -182,6 +191,7 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             {label}
           </span>
         ))}
+
         {pr &&
           prTags(pr).map((tag) => (
             <span key={tag.text} className={styles.tag} data-tone={tag.tone}>
@@ -195,7 +205,7 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             {mark?.state === 'failing' && <span>{mark.text}</span>}
           </span>
         )}
-        {!linked && (
+        {!linked && claimed?.state !== 'queued' && (
           <span className={styles.comments} aria-label={item.comments > 0 ? m.comments(item.comments) : undefined}>
             {item.comments > 0 && (
               <>
@@ -205,21 +215,31 @@ function ItemRow({ item, project, result }: { item: BoardItem; project: Project;
             )}
           </span>
         )}
-        {!linked && <span className={styles.time}>{item.updatedAt > 0 ? formatElapsed(now - item.updatedAt) : ''}</span>}
+        {!linked && claimed?.state !== 'queued' && <span className={styles.time}>{item.updatedAt > 0 ? formatElapsed(now - item.updatedAt) : ''}</span>}
       </button>
-      {linked && <LinkedSession session={linked} />}
+      {linked && <LinkedSession session={linked} awaiting={claimed?.state === 'awaiting'} />}
+      {/* 自动领取 (PRD F26, Figma 102C): claimed, waiting for a free slot — a hollow glyph and 排队 where the session goes. */}
+      {!linked && claimed?.state === 'queued' && (
+        <span className={styles.linked} data-testid="github-queued">
+          <Circle {...SMALL} />
+          <span>{issueStateLabel.queued}</span>
+        </span>
+      )}
     </div>
   )
 }
 
-/** The session started on this item: its status (glyph and word) and title; a click enters it. */
-function LinkedSession({ session }: { session: Session }) {
+/**
+ * The session started on this item: its status (glyph and word) and title; a click enters it. A 自动领取 issue whose report
+ * waits says 待审阅 — the word 看板 · 进度 gives done_unread — even when the user has already looked at the session (idle).
+ */
+function LinkedSession({ session, awaiting }: { session: Session; awaiting: boolean }) {
   const m = useMessages(M)
   const status = glyphStatus(session)
   return (
     <button type="button" className={styles.linked} onClick={() => enterSession(session.id)} title={m.enter} data-testid="github-linked">
-      <StatusGlyph status={status} />
-      <span>{`${STATUS_LABEL[status]} · ${session.title}`}</span>
+      <StatusGlyph status={awaiting ? 'done_unread' : status} />
+      <span>{`${awaiting ? m.toReview : STATUS_LABEL[status]} · ${session.title}`}</span>
     </button>
   )
 }

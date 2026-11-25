@@ -9,6 +9,8 @@
 // say gh is not logged in; a `fail-pr-list` file makes `pr list` fail as an unreachable GitHub does.
 // 看板 · GitHub (PRD F9 v1.184): `pr list` without --head answers board-prs.json, `issue list` board-issues.json,
 // `issue view N` / `pr view N` issue-N.json / prview-N.json, and `api user` the login jacob.
+// 自动领取 (PRD F26): `issue edit` and `api -X` (👀) succeed and are logged; a collaborator's permission comes from
+// permission.json (read by default) and an issue's timeline from timeline.json.
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -27,6 +29,8 @@ case "$1 $2" in
     cat "$d/pr-$head.json" 2>/dev/null || echo '[]'; exit 0 ;;
   "issue list") cat "$d/board-issues.json" 2>/dev/null || echo '[]'; exit 0 ;;
   "issue view") cat "$d/issue-$3.json" 2>/dev/null || { echo "issue $3 not found" >&2; exit 1; }; exit 0 ;;
+  "issue edit") exit 0 ;;
+  "api -X") exit 0 ;;
   "pr view") cat "$d/prview-$3.json" 2>/dev/null || { echo "PR $3 not found" >&2; exit 1; }; exit 0 ;;
   "api user") echo jacob; exit 0 ;;
   "pr create")
@@ -42,6 +46,8 @@ case "$1 $2" in
         if [ "$(cat "$d/protection.txt" 2>/dev/null)" = 200 ]; then echo '{}'; exit 0; fi
         echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;
       */check-runs*) cat "$d/check-runs.json" 2>/dev/null || echo '{"check_runs":[]}'; exit 0 ;;
+      */collaborators/*/permission) cat "$d/permission.json" 2>/dev/null || echo '{"permission":"read"}'; exit 0 ;;
+      */timeline) cat "$d/timeline.json" 2>/dev/null || echo '[[]]'; exit 0 ;;
       */status*) cat "$d/commit-status.json" 2>/dev/null || echo '{"statuses":[]}'; exit 0 ;;
     esac ;;
   "api graphql")
