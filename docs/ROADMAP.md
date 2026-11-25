@@ -8,7 +8,7 @@
 
 ## 当前位置
 
-- 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.243，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。进行中：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.244，Figma 113A / 113D′ 已定稿），代码未开始。
+- 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.243，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.244，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
 - 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
 - 2026-11-24：手机设置页的「主题」和「启动时打开」改成全宽玻璃 sheet（PRD v1.239，Figma 109，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：不再用系统 `Menu`，点一行改值并关闭，高度贴合内容。已验证：`xcodebuild test` 通过，109A / 109B 深浅色四张截图对过；未验证：系统 sheet 的真实玻璃和拖动条位置（窗口截图画不出系统的 sheet）。

@@ -122,6 +122,8 @@ export const ChatPane = memo(function ChatPane({ sessionId, agent, cwd, active }
   const scope = useSecondaryWindow()?.projectId ?? null
   const choices = useMemo(() => projectChoices(scope ? projects.filter((p) => p.id === scope) : projects, worktrees), [scope, projects, worktrees])
   const projectId = worktrees.find((w) => w.id === worktreeId)?.projectId
+  const questionTray = prompt?.kind === 'question'
+  const promptCard = prompt && <PromptCard key={prompt.id} sessionId={sessionId} prompt={prompt} agentLabel={label} answer={answer} pending={answering === prompt.id} bindKeys={bindKeys} />
   // Figma 59J: the agent's current task list, above the composer.
   const todos = useMemo(() => currentTodos(state.items), [state.items])
   // Figma 74: Claude's workflow runs, drawn at their Workflow calls; a Workflow ask is answered on that card.
@@ -361,9 +363,8 @@ export const ChatPane = memo(function ChatPane({ sessionId, agent, cwd, active }
         <div className={styles.dockStrips}>
           <PaneStrips sessionId={sessionId} active={active} />
         </div>
-        {todos && <TodoCard todos={todos} />}
         <DispatchStripGui parentId={sessionId} />
-        {prompt && !workflowAsk && <PromptCard key={prompt.id} sessionId={sessionId} prompt={prompt} agentLabel={label} answer={answer} pending={answering === prompt.id} bindKeys={bindKeys} />}
+        {prompt && !workflowAsk && !questionTray && promptCard}
         {state.queued.map((queued) => (
           <QueuedBar key={queued.id} sessionId={sessionId} id={queued.id} text={queued.text} />
         ))}
@@ -371,6 +372,14 @@ export const ChatPane = memo(function ChatPane({ sessionId, agent, cwd, active }
           <div className={styles.failure} role="alert">
             <StatusGlyph status="error" />
             <span className={styles.failureText}>{state.failure ?? sendError}</span>
+          </div>
+        )}
+        {/* PRD v1.244: the question and the task list are trays on the composer's top edge — the question next to it,
+            the tasks above it. */}
+        {(todos || (prompt && questionTray && !workflowAsk)) && (
+          <div className={styles.trays}>
+            {todos && <TodoCard sessionId={sessionId} todos={todos} />}
+            {prompt && questionTray && !workflowAsk && promptCard}
           </div>
         )}
         <Composer

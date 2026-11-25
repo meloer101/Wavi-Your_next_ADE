@@ -553,7 +553,7 @@ test.describe('F23 GUI session (Claude)', () => {
     await send('make tasks')
     const card = page.getByTestId('gui-todos')
     await expect(card).toBeVisible(WITHIN)
-    await expect(card.locator('header')).toHaveText('任务1 / 3')
+    await expect(card.locator('header')).toHaveText('任务1/3')
     await expect(card.locator('li')).toHaveText(['登录接口改成 Set-Cookie', '跑 auth 测试并修失败', '确认 Safari 的 SameSite 行为'])
     await expect(card.locator('li[data-status="in_progress"]')).toHaveText('跑 auth 测试并修失败')
     // Directly above the composer.
