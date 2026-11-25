@@ -75,6 +75,8 @@ export const ChatPane = memo(function ChatPane({ sessionId, agent, cwd, active }
     cardKeys.current = keys
   }, [])
   const [answering, setAnswering] = useState<string | null>(null)
+  // An answered prompt that has left the list no longer waits: the next one with the same id (the fake Claude reuses them) is open.
+  if (answering && !state.prompts.some((p) => p.id === answering)) setAnswering(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const prompt = state.prompts[0]
   const label = agent === 'shell' ? '' : shortAgentName(agentName(agent))

@@ -2123,6 +2123,7 @@
 .round:focus-visible,
 .button:focus-visible,
 .option:focus-visible,
+.optionMarkButton:focus-visible,
 .toolRow:focus-visible,
 .thinkingRow:focus-visible,
 .queuedText:focus-visible,

@@ -270,7 +270,9 @@ function QuestionCard({ prompt, answer, pending, bindKeys }: CardProps<Extract<G
               } else if (e.key === 'Escape') {
                 e.preventDefault()
                 e.stopPropagation()
-                setChoices((all) => Object.assign([...all], { [step]: undefined }))
+                // The pane ignores keys typed in an input, so a second ⎋ skips here.
+                if (choice?.kind === 'other') setChoices((all) => Object.assign([...all], { [step]: undefined }))
+                else skip()
               }
             }}
           />
