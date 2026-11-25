@@ -565,6 +565,18 @@ describe('collaboration groups fold their members (PRD v1.243)', () => {
     expect(visibleSessionIds(build(['parent']))).toEqual(['parent', 'c1', 'c2'])
   })
 
+  it('↑/↓ from a member hidden by a fold start at its nearest visible dispatcher', () => {
+    const groups = build([])
+    const above = ['c1', 'parent']
+    expect(adjacentSessionId(groups, 'g1', 1, above)).toBe('parent')
+    expect(adjacentSessionId(groups, 'g1', -1, above)).toBe('parent')
+    const open = build(['parent'])
+    // c1 is drawn, g1 is not: down from g1 continues after c1.
+    expect(adjacentSessionId(open, 'g1', 1, above)).toBe('c2')
+    expect(adjacentSessionId(open, 'g1', -1, above)).toBe('parent')
+    expect(adjacentSessionId(open, 'g1', 1)).toBe('parent')
+  })
+
   it('does not fold a pending confirm: it stays under the session that asked', () => {
     const plan = { item: { title: '登录页 e2e' } } as never
     const rows = buildSidebarGroups({

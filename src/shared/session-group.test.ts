@@ -38,6 +38,20 @@ describe('buildGroups', () => {
     expect(groups).toEqual({})
   })
 
+  it('does not count the items of a grandchild, which are drawn nowhere', () => {
+    const groups = buildGroups([s('main'), s('c', 'idle', 'main'), s('g', 'idle', 'c')], {
+      main: [{ id: 'a', status: 'running' }],
+      c: [{ id: 'b', status: 'running' }],
+      g: [{ id: 'x', status: 'needs_you' }]
+    })
+    expect(groups['main']!.counts).toEqual([
+      { status: 'running', count: 2 },
+      { status: 'idle', count: 2 }
+    ])
+    expect(groups['c']!.total).toBe(2)
+    expect(groups['g']).toBeUndefined()
+  })
+
   it('does not count pending confirms: callers leave them out of the items', () => {
     // A pending `wavi run` is no member; the sidebar passes only subagents, teammates and workflow runs.
     expect(buildGroups([s('main')], { main: [] })).toEqual({})

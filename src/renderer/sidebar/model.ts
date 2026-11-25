@@ -474,6 +474,11 @@ export function buildStatusGroups({ projects, worktrees, sessions, collapsedStat
   const listed = projects.flatMap((project) => sessionsOf(project, sessions, worktreeById).map((session) => ({ session, project })))
   const collapsed = new Set(collapsedStatusGroups)
   const expanded = new Set(expandedGroups)
+  // Child sessions are rows of their own here, so only a session's own subagents, team and runs fold under it.
+  const groupOf = buildGroups(
+    listed.map(({ session }) => ({ id: session.id, status: glyphStatus(session) })),
+    Object.fromEntries(listed.map(({ session }) => [session.id, memberItems(session, subagents?.[session.id] ?? [])]))
+  )
   return STATUS_ORDER.flatMap((status): SidebarGroup[] => {
     const own = listed.filter(({ session }) => session.status === status)
     if (own.length === 0) return []
@@ -489,8 +494,7 @@ export function buildStatusGroups({ projects, worktrees, sessions, collapsedStat
           : own.map(({ session, project }) => {
               const worktree = worktreeById.get(session.worktreeId)
               const all = subagents?.[session.id] ?? []
-              // Child sessions are rows of their own here, so only the session's own subagents, team and runs fold.
-              const g = buildGroups([{ id: session.id, status: glyphStatus(session) }], { [session.id]: memberItems(session, all) })[session.id]
+              const g = groupOf[session.id]
               const open = !g || expanded.has(session.id)
               const subs = shownItems(all, open)
               const fold: FoldRowModel | undefined = g && { ownerId: session.id, expanded: open, total: g.total, counts: g.counts, depth: 1, line: subs.length > 0, pass: false }
@@ -574,15 +578,21 @@ export function nextAttentionSessionId(sessions: Session[], activeId: SessionId 
   return queue[(at + 1) % queue.length] ?? null
 }
 
-/** ↑/↓: neighbouring visible session, clamped at the ends. With no current row, down picks the first, up the last. */
+/**
+ * ↑/↓: neighbouring visible session, clamped at the ends. With no current row, down picks the first, up the last. A
+ * current session that is hidden in a folded group (`above`: the sessions that dispatched it, nearest first) starts
+ * from its nearest visible dispatcher.
+ */
 export function adjacentSessionId(
   groups: SidebarGroup[],
   currentId: SessionId | null,
-  direction: 1 | -1
+  direction: 1 | -1,
+  above: readonly SessionId[] = []
 ): SessionId | null {
   const ids = visibleSessionIds(groups)
   if (ids.length === 0) return null
-  const at = currentId === null ? -1 : ids.indexOf(currentId)
+  const from = currentId !== null && !ids.includes(currentId) ? (above.find((id) => ids.includes(id)) ?? currentId) : currentId
+  const at = from === null ? -1 : ids.indexOf(from)
   if (at === -1) return (direction === 1 ? ids[0] : ids[ids.length - 1]) ?? null
   return ids[Math.min(ids.length - 1, Math.max(0, at + direction))] ?? null
 }

@@ -279,13 +279,14 @@ export function Sidebar() {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
       const focusedId = (e.target as HTMLElement).closest<HTMLElement>('[data-session-id]')?.dataset.sessionId ?? null
-      const next = adjacentSessionId(groups, focusedId ?? activeSessionId, e.key === 'ArrowDown' ? 1 : -1)
+      const current = focusedId ?? activeSessionId
+      const next = adjacentSessionId(groups, current, e.key === 'ArrowDown' ? 1 : -1, current !== null && groupBy !== 'status' ? dispatchAncestors(sessions, current) : [])
       if (!next) return
       e.preventDefault()
       setActiveSession(next)
       listRef.current?.querySelector<HTMLElement>(`[data-session-id="${CSS.escape(next)}"]`)?.focus()
     },
-    [groups, activeSessionId, setActiveSession, picked, closePicked]
+    [groups, groupBy, sessions, activeSessionId, setActiveSession, picked, closePicked]
   )
 
   return (

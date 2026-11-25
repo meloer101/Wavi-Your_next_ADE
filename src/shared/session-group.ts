@@ -32,12 +32,16 @@ export interface SessionGroup {
   counts: StatusCount[]
 }
 
+/** Dispatch goes two levels down (PRD F21): a session at this depth (a grandchild) has no members of its own that are drawn. */
+const MEMBERS_UP_TO_DEPTH = 1
+
 /** The fold row's order: needs you → error → working → done → idle → exited. */
 export const GROUP_STATUS_ORDER: readonly SessionStatus[] = ['needs_you', 'error', 'running', 'done_unread', 'idle', 'exited']
 
 /**
  * The group of every session that has members. A session whose dispatcher is not in `sessions` has no parent here, so
- * it is no member (it stays top level). A dispatch cycle is cut where it closes.
+ * it is no member (it stays top level). A dispatch cycle is cut where it closes. Only what can be drawn is counted: the
+ * subagents, teammates and workflow runs of a grandchild (two dispatchers above it) are no members.
  */
 export function buildGroups(sessions: readonly GroupSession[], itemsOf: Readonly<Record<SessionId, readonly GroupItem[] | undefined>> = {}): Record<SessionId, SessionGroup> {
   const byId = new Map(sessions.map((s) => [s.id, s]))
@@ -48,15 +52,16 @@ export function buildGroups(sessions: readonly GroupSession[], itemsOf: Readonly
     list.push(s)
     childrenOf.set(s.dispatchedBy, list)
   }
+  const itemsAt = (id: SessionId): readonly GroupItem[] => (dispatchAncestors(sessions, id).length > MEMBERS_UP_TO_DEPTH ? [] : (itemsOf[id] ?? []))
   const out: Record<SessionId, SessionGroup> = {}
   for (const session of sessions) {
     const children = childrenOf.get(session.id) ?? []
-    const items = itemsOf[session.id] ?? []
+    const items = itemsAt(session.id)
     if (children.length + items.length === 0) continue
     const tally = new Map<SessionStatus, number>()
     const seen = new Set<SessionId>([session.id])
     const visit = (id: SessionId): void => {
-      for (const item of itemsOf[id] ?? []) tally.set(item.status, (tally.get(item.status) ?? 0) + 1)
+      for (const item of itemsAt(id)) tally.set(item.status, (tally.get(item.status) ?? 0) + 1)
       for (const child of childrenOf.get(id) ?? []) {
         if (seen.has(child.id)) continue
         seen.add(child.id)

@@ -10,6 +10,7 @@ import type { WorktreeArchive } from '@shared/archive'
 import type { GuiPicks } from '@shared/gui-chat'
 import { rememberUi, rememberWorkdir, type Workdir } from '@shared/new-session'
 import type { AgentKind, ProjectId, Session, SessionId, SessionStatus, SessionUi, Worktree, WorktreeId } from '@shared/types'
+import { dispatchAncestors } from '@shared/session-group'
 import { hasPane, pane, paneIds, PICKER_PANE, placeSession, removePane, replacePane, sessionsIn, splitPane, type DropZone, type Side, type SplitNode } from '@shared/split-layout'
 import {
   closeWindow,
@@ -596,6 +597,15 @@ export function shownSessionIds(state: Pick<WorkspaceState, 'split' | 'activeSes
   if (state.split) return sessionsIn(state.split)
   return state.activeSessionId ? [state.activeSessionId] : []
 }
+
+// A session that becomes active from anywhere (a click, ⌘1–9, ⌘J, ⌘K, the board, a notification) is drawn in the sidebar:
+// the groups above it open (PRD v1.243). Only on a change, so folding the group by hand while it is selected sticks.
+useWorkspace.subscribe((state, prev) => {
+  const id = state.activeSessionId
+  if (id === null || id === prev.activeSessionId || state.sidebarGroupBy === 'status') return
+  const above = dispatchAncestors(state.sessions, id)
+  if (above.some((a) => !state.expandedGroups.includes(a))) state.expandGroups(above)
+})
 
 /** The sessions every window shows (F20 · 多窗口): they all have a terminal on screen. */
 export function shownEverywhere(state: Pick<WorkspaceState, 'windows' | 'keyWindow' | 'windowViews' | 'split' | 'activeSessionId'>): SessionId[] {

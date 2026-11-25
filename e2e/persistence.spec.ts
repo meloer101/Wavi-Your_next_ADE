@@ -296,4 +296,20 @@ test.describe('collaboration groups', () => {
     await expect(row('g-one')).toHaveCount(0)
     await expect.poll(() => readJson(workspaceFile).expandedGroups, { timeout: 5000 }).toBeUndefined()
   })
+
+  test('selecting a folded member from anywhere opens the groups above it, once; folding it by hand sticks', async () => {
+    await launch()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+    await expect(row('g-two')).toHaveCount(0)
+    // The board lists every session; a click there selects one the sidebar does not draw.
+    await page.keyboard.press('Shift+Meta+KeyA')
+    await page.locator('[data-region="overview"] [data-session-id="g-two"]').first().click()
+    await page.locator('[data-region="overview"]').getByRole('button', { name: /进入会话/ }).first().click()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'true')
+    await expect(row('g-two')).toHaveAttribute('aria-current', 'true')
+    await fold().click()
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+    await page.waitForTimeout(300)
+    await expect(fold()).toHaveAttribute('aria-expanded', 'false')
+  })
 })

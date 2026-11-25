@@ -5,7 +5,6 @@ import { MAIN_WINDOW, type WindowKey } from '@shared/window-layout'
 import { everyWindow } from '../app-shell/windows-runtime'
 import { noteKeyCommand } from '../state/key-commands'
 import { useWorkspace, windowEffects } from '../state/workspace'
-import { dispatchAncestors } from '@shared/session-group'
 import { buildSidebarGroups, nextAttentionSessionId, sessionForShortcut } from './model'
 import { installSidebarShortcuts } from './shortcuts'
 import { toggleOverview } from '../overview/store'
@@ -20,13 +19,9 @@ function groupsNow(key: WindowKey) {
 
 /** ⌘J: the next session that needs the user, if any. */
 export function jumpToNextAttention(): SessionId | null {
-  const { sessions, activeSessionId, sidebarGroupBy } = useWorkspace.getState()
+  const { sessions, activeSessionId } = useWorkspace.getState()
   const id = nextAttentionSessionId(sessions, activeSessionId)
-  if (id) {
-    // A folded member that needs the user opens every group above it, so the row it lands on is drawn (PRD v1.243).
-    if (sidebarGroupBy !== 'status') useWorkspace.getState().expandGroups(dispatchAncestors(sessions, id))
-    useWorkspace.getState().setActiveSession(id)
-  }
+  if (id) useWorkspace.getState().setActiveSession(id)
   return id
 }
 
