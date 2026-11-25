@@ -46,7 +46,7 @@ export function memberRows(input: {
       const status = glyphStatus(child)
       mine.push({
         status,
-        rows: () => [{ key: `session:${childId}`, status, name: child.title, meta: sessionTime(child, status, now).text, depth, sessionId: childId }, ...level(childId, depth + 1)]
+        rows: () => [{ key: `session:${childId}`, status, name: child.title, meta: sessionTime(child, status, now, true).text, depth, sessionId: childId }, ...level(childId, depth + 1)]
       })
     }
     for (const member of group.items) {

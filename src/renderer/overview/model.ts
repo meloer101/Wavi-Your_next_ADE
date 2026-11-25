@@ -144,7 +144,7 @@ function toRow(session: Session, worktree: Worktree | undefined, project: Projec
     projectName,
     summary: summaryOf(session, worktree),
     stat: added + removed > 0 ? `+${added} −${removed}` : '',
-    ...timeFields(sessionTime(session, status, now))
+    ...timeFields(sessionTime(session, status, now, true))
   }
 }
 
