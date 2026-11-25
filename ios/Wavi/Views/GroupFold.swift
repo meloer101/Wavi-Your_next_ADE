@@ -17,7 +17,7 @@ struct MemberFoldRow: View {
       HStack(spacing: 8) {
         Icon(open ? "chevron-down" : "chevron-right", size: 14).foregroundStyle(Color.textSecondary).frame(width: 14)
         Text("\(group.total) 个成员").font(.ui(.subheadline)).foregroundStyle(Color.textSecondary)
-        ForEach(group.counts, id: \.status) { count in
+        ForEach(Array(group.counts.enumerated()), id: \.offset) { _, count in
           HStack(spacing: 4) {
             StatusGlyph(status: count.status)
             Text("\(count.count)").font(.ui(.subheadline)).monospacedDigit().foregroundStyle(Color.textSecondary)

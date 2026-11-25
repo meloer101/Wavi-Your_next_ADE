@@ -99,6 +99,23 @@ describe('remoteSessions groups (PRD v1.243)', () => {
     expect(rows.p!.group!.total).toBe(5)
   })
 
+  it('hides local folders in member titles and meta, each under its own session\'s folders', () => {
+    const leak: Record<string, SideItem[]> = {
+      p: [
+        { id: 'a1', title: '读 /wt/refresh/src/a.ts 和 /code/acme/README.md', model: '/wt/refresh/model' },
+        { id: 'workflow:w1', title: '检查 /code/acme', kind: 'workflow', glyph: 'running', right: '1 / 2' },
+        { id: 'phase:w1:0', title: '跑 /wt/refresh/test', kind: 'phase', glyph: 'running', right: '0 / 1' }
+      ]
+    }
+    const named = session({ id: 'c', title: '改 /wt/refresh/x.ts', dispatchedBy: 'p' })
+    const rows = remoteSessions({ projects: [project], worktrees: [tree], sessions: [parent, named] }, undefined, undefined, undefined, undefined, undefined, leak).sessions
+    const members = rows.find((r) => r.id === 'p')!.group!.members
+    expect(members.map((m) => m.title)).toEqual(['改 ./x.ts', '读 ./src/a.ts 和 ./README.md', '检查 acme'])
+    expect(members.map((m) => m.meta)).toEqual([undefined, './model', '跑 ./test'])
+    expect(JSON.stringify(members)).not.toContain('/wt/')
+    expect(JSON.stringify(members)).not.toContain('/code/')
+  })
+
   it('sends no group without members and counts only sessions the phone lists', () => {
     const plain = remoteSessions({ ...data, sessions: [parent, orphan] }).sessions
     expect(plain.every((r) => r.group === undefined && r.parentId === undefined)).toBe(true)

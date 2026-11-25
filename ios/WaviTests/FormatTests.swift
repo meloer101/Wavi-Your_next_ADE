@@ -198,15 +198,22 @@ private func session(_ id: String = "s", project: String = "p1", status: Session
       s.parentId = parent
       return s
     }
+    var holder = session("parent", activity: 9)
+    holder.group = RemoteGroup(total: 2, counts: [.init(status: .running, count: 1), .init(status: .needsYou, count: 1)], members: [
+      RemoteMember(id: "kid", kind: .session, title: "kid", status: .running, meta: nil),
+      RemoteMember(id: "asking", kind: .session, title: "asking", status: .needsYou, meta: nil)
+    ])
     let list = RemoteSessionList(projects: [.init(id: "p1", name: "acme-web")], sessions: [
-      session("parent", activity: 9), child("kid", .running, parent: "parent"), child("asking", .needsYou, parent: "parent"),
-      child("orphan", .idle, parent: "gone")
+      holder, child("kid", .running, parent: "parent"), child("asking", .needsYou, parent: "parent"),
+      child("orphan", .idle, parent: "gone"),
+      // parentId alone is not enough: this parent's group does not list it, so it keeps its row.
+      child("unlisted", .idle, parent: "parent")
     ])
     let groups = groupSessions(list)
     #expect(groups.map(\.title) == ["等你处理", "acme-web"])
     #expect(groups[0].rows.map(\.session.id) == ["asking"])
     // A parent that is not listed leaves the session where it was.
-    #expect(groups[1].rows.map(\.session.id) == ["parent", "orphan"])
+    #expect(groups[1].rows.map(\.session.id).sorted() == ["orphan", "parent", "unlisted"])
   }
 
   @Test func foldMembersFollowTheMacsOrderAndResolveSessionMembers() {

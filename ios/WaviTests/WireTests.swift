@@ -264,6 +264,10 @@ private func command(_ type: String, _ v: JSONValue) throws -> PhoneCommand {
     #expect(group.members.map(\.kind) == [.session, .subagent, .teammate, .workflow])
     #expect(group.members[1].meta == "Opus 5.5" && group.members[0].meta == nil)
     #expect(list.sessions.last?.parentId == nil && list.sessions.last?.group == nil)
+    // A group this phone cannot read is dropped for that session; the list still decodes.
+    let bad = Data(#"{"projects":[],"sessions":[{"id":"a","projectId":"p","title":"t","agent":"claude","status":"idle","activity":1,"parentId":"z","group":{"total":"many","members":7}},{"id":"b","projectId":"p","title":"u","agent":"claude","status":"idle","activity":2}]}"#.utf8)
+    let lenient = try JSONDecoder().decode(RemoteSessionList.self, from: bad)
+    #expect(lenient.sessions.map(\.id) == ["a", "b"] && lenient.sessions[0].group == nil && lenient.sessions[0].parentId == "z")
     let odd = Data(#"{"id":"x","kind":"robot","title":"t","status":"running"}"#.utf8)
     #expect(try JSONDecoder().decode(RemoteMember.self, from: odd).kind == .subagent)
   }

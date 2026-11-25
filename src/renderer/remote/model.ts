@@ -122,19 +122,22 @@ const MAX_MEMBERS = 200
  */
 export function remoteGroups(
   listed: readonly Session[],
-  items: Readonly<Record<SessionId, readonly SideItem[]>>
+  items: Readonly<Record<SessionId, readonly SideItem[]>>,
+  /** Each listed session's worktree path and project root: local folders never go to the phone (`hidePaths`). */
+  folders: Readonly<Record<SessionId, readonly string[]>> = {}
 ): { parents: Record<SessionId, SessionId>; groups: Record<SessionId, RemoteGroup> } {
   const byId = new Map(listed.map((s) => [s.id, s]))
   const parents: Record<SessionId, SessionId> = {}
   for (const s of listed) if (s.dispatchedBy && s.dispatchedBy !== s.id && byId.has(s.dispatchedBy)) parents[s.id] = s.dispatchedBy
   const groups: Record<SessionId, RemoteGroup> = {}
   for (const [id, group] of Object.entries(groupsOf(listed, items))) {
+    const text = (owner: SessionId, value: string, max: number) => clip(hidePaths(value, folders[owner] ?? []), max)
     const lines = new Map((items[id] ?? []).map((item) => [item.id, item]))
     const phases = (items[id] ?? []).filter((item) => item.kind === 'phase')
     const members: RemoteMember[] = [
       ...group.children.flatMap((child): RemoteMember[] => {
         const s = byId.get(child)
-        return s ? [{ id: s.id, kind: 'session', title: clip(s.title, 500), status: glyphStatus(s) }] : []
+        return s ? [{ id: s.id, kind: 'session', title: text(s.id, s.title, 500), status: glyphStatus(s) }] : []
       }),
       ...group.items.flatMap((item): RemoteMember[] => {
         const line = lines.get(item.id)
@@ -142,7 +145,7 @@ export function remoteGroups(
         const kind = line.kind === 'workflow' ? 'workflow' : line.kind === 'teammate' ? 'teammate' : 'subagent'
         // A run's meta is the phase it is in; a subagent's and a teammate's is their model.
         const meta = kind === 'workflow' ? (phases.find((p) => p.id.startsWith(`phase:${line.id.slice('workflow:'.length)}:`) && p.glyph === 'running')?.title ?? line.right) : kind === 'teammate' ? line.right : line.model
-        return [{ id: item.id, kind, title: clip(line.title, 500), status: item.status, ...(meta ? { meta: clip(meta, 200) } : {}) }]
+        return [{ id: item.id, kind, title: text(id, line.title, 500), status: item.status, ...(meta ? { meta: text(id, meta, 200) } : {}) }]
       })
     ]
     groups[id] = { total: group.total, counts: group.counts.map((c) => ({ status: c.status, count: c.count })), members: members.slice(0, MAX_MEMBERS) }
@@ -163,6 +166,7 @@ export function remoteSessions(
   const worktrees = new Map(data.worktrees.map((w) => [w.id, w]))
   const out: RemoteWindowSessions = { projects: [], sessions: [], folders: {}, roots: {} }
   const listed: Session[] = []
+  const hidden: Record<SessionId, string[]> = {}
   for (const s of data.sessions) {
     const w = worktrees.get(s.worktreeId)
     if (!w || w.archived || s.kind === 'shell') continue
@@ -192,9 +196,10 @@ export function remoteSessions(
     if (ending && !ship) row.shipNotice = clip(hidePaths(ending, [w.path, root]), 300)
     out.sessions.push(row)
     listed.push(s)
+    hidden[s.id] = [w.path, root]
     out.folders[s.id] = { cwd: w.path, ...(w.baseBranch ? { base: w.baseBranch } : {}), ...(s.agentSessionId ? { agentSession: s.agentSessionId } : {}) }
   }
-  const { parents, groups } = remoteGroups(listed, items)
+  const { parents, groups } = remoteGroups(listed, items, hidden)
   for (const row of out.sessions) {
     const parentId = parents[row.id]
     if (parentId) row.parentId = parentId

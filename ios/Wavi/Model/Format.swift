@@ -43,23 +43,28 @@ func groupSessions(_ list: RemoteSessionList) -> [SessionGroup] {
   let names = Dictionary(list.projects.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
   // A session under a parent that is listed too is a member of its fold (PRD v1.243), no row of its project; it stays
   // in 等你处理 while it needs the user.
-  let listed = Set(list.sessions.map(\.id))
+  let held = foldedIds(list)
   let waiting = list.sessions.filter { $0.status == .needsYou }.sorted { ($0.since ?? $0.activity) > ($1.since ?? $1.activity) }
   var groups: [SessionGroup] = []
   if !waiting.isEmpty {
     groups.append(SessionGroup(id: SessionGroup.needsYouId, title: String(localized: "等你处理"), rows: waiting.map { .init(session: $0, projectName: names[$0.projectId]) }))
   }
   for project in list.projects {
-    let rows = list.sessions.filter { $0.projectId == project.id && $0.status != .needsYou && !isFoldedMember($0, listed: listed) }.sorted { $0.activity > $1.activity }
+    let rows = list.sessions.filter { $0.projectId == project.id && $0.status != .needsYou && !held.contains($0.id) }.sorted { $0.activity > $1.activity }
     if !rows.isEmpty { groups.append(SessionGroup(id: project.id, title: project.name, rows: rows.map { .init(session: $0, projectName: nil) })) }
   }
   return groups
 }
 
-/// Whether the Mac put `session` under a parent that this list has (the Mac sends `parentId` only then; the check keeps a
-/// list cut down on the phone, or an older cache, from losing the session).
-func isFoldedMember(_ session: RemoteSession, listed: Set<String>) -> Bool {
-  session.parentId.map(listed.contains) ?? false
+/// The sessions some listed parent's fold holds: a session leaves its project's rows only when a parent lists it among its
+/// members, so it always has an entry — a `parentId` whose parent does not list it (or a cut-down or older cache) keeps it.
+func foldedIds(_ list: RemoteSessionList) -> Set<String> {
+  let listed = Set(list.sessions.map(\.id))
+  var held: Set<String> = []
+  for session in list.sessions {
+    for member in session.group?.members ?? [] where member.kind == .session && listed.contains(member.id) && member.id != session.id { held.insert(member.id) }
+  }
+  return held
 }
 
 /// One line under a fold: a member and, for a session member, the session itself.
