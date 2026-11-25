@@ -174,9 +174,13 @@
   color: var(--text-primary);
 }
 
-.row[data-attention='true'] .branch {
+.branch {
   font: var(--text-caption);
   color: var(--text-tertiary);
+}
+
+.row[data-attention='true'] .branch {
+  color: var(--status-attention);
 }
 
 .time {
