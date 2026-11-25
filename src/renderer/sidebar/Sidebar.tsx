@@ -32,7 +32,7 @@ import { useSessionMeta } from '../session-meta/store'
 import { useDispatch } from '../dispatch/store'
 import type { SubagentInfo } from '@shared/agent-events'
 import type { SessionId } from '@shared/types'
-import { adjacentSessionId, buildSidebarGroups, pendingItems, pickSessions, teamItems, topLevelChunks, visibleSessionIds, workflowItems, type SideItem } from './model'
+import { adjacentSessionId, buildSidebarGroups, pendingItems, pickSessions, sideItemsOf, topLevelChunks, visibleSessionIds, type SideItem } from './model'
 import { dispatchAncestors } from '@shared/session-group'
 import type { WorkflowRun } from '@shared/workflow-run'
 import type { TeamState } from '@shared/agent-team'
@@ -196,16 +196,7 @@ export function Sidebar() {
   // Figma 83B: the sessions a `wavi run` asked for hang under the session that asked until the user answers.
   const confirms = useDispatch((s) => s.confirms)
   const subagents = useMemo(() => {
-    const out: Record<string, SideItem[]> = { ...subagentLists }
-    for (const [id, runs] of Object.entries(runLists)) {
-      const unread = sessions.find((s) => s.id === id)?.status === 'done_unread'
-      const lines = workflowItems(runs, { unread, folded })
-      if (lines.length > 0) out[id] = [...lines, ...(subagentLists[id] ?? [])]
-    }
-    for (const [id, team] of Object.entries(teams)) {
-      const lines = teamItems(team)
-      if (lines.length > 0) out[id] = [...lines, ...(out[id] ?? [])]
-    }
+    const out: Record<string, SideItem[]> = sideItemsOf({ sessions, subagents: subagentLists, runs: runLists, teams, folded })
     for (const [id, waiting] of Object.entries(pendingItems(confirms.flatMap((c) => (c.kind === 'start' ? [c] : []))))) out[id] = [...waiting, ...(out[id] ?? [])]
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lang: the lines' text follows the interface language

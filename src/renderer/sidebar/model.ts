@@ -7,7 +7,7 @@ import type { SidebarGroupBy } from '@shared/workspace-file'
 import { defineMessages, pick } from '@shared/i18n'
 import type { PendingRun } from '@shared/dispatch'
 import { memberLine, TEAM_GLYPH, type TeamState } from '@shared/agent-team'
-import { buildGroups, type GroupItem, type StatusCount } from '@shared/session-group'
+import { buildGroups, type GroupItem, type SessionGroup, type StatusCount } from '@shared/session-group'
 import { glyphStatus, phaseLine } from '../lifecycle/present'
 import { currentPhase, isLiveRun, phaseViews, runOutcome, type WorkflowPhaseView, type WorkflowRun } from '@shared/workflow-run'
 
@@ -345,7 +345,7 @@ export function pendingItems(confirms: ReadonlyArray<Pick<PendingRun, 'childId' 
  * heading line and `wavi run` confirms waiting for 开始 are not members: the first two belong to a member, the last
  * stays visible under the session that asked.
  */
-function memberItems(session: Pick<Session, 'askingAgents'>, items: readonly SideItem[]): GroupItem[] {
+export function memberItems(session: Pick<Session, 'askingAgents'>, items: readonly SideItem[]): GroupItem[] {
   return items.flatMap((item): GroupItem[] => {
     if (item.kind === 'phase' || item.kind === 'team' || item.kind === 'pending') return []
     const asking = item.attention ?? (!item.kind && (session.askingAgents?.includes(item.id) ?? false))
@@ -355,6 +355,41 @@ function memberItems(session: Pick<Session, 'askingAgents'>, items: readonly Sid
 
 /** What stays drawn under a session whose group is folded: the confirms waiting for 开始. */
 const shownItems = (items: readonly SideItem[], open: boolean): SideItem[] => (open ? [...items] : items.filter((item) => item.kind === 'pending'))
+
+/**
+ * Every session's lines that are not sessions (PRD v1.243 members, plus a team's heading and a run's phases): its team,
+ * then its workflow runs, then its subagents — the order the sidebar draws them. The board and the phone build their
+ * groups from the same lines, so all three count the same members. `folded`: workflow runs whose phases are folded.
+ */
+export function sideItemsOf(input: {
+  sessions: readonly Pick<Session, 'id' | 'status'>[]
+  subagents: Readonly<Record<SessionId, readonly SubagentInfo[]>>
+  runs: Readonly<Record<SessionId, readonly WorkflowRun[]>>
+  teams: Readonly<Record<SessionId, TeamState>>
+  folded?: ReadonlySet<string>
+}): Record<SessionId, SideItem[]> {
+  const { sessions, subagents, runs, teams, folded = new Set<string>() } = input
+  const out: Record<SessionId, SideItem[]> = {}
+  for (const [id, list] of Object.entries(subagents)) out[id] = [...list]
+  for (const [id, list] of Object.entries(runs)) {
+    const unread = sessions.find((s) => s.id === id)?.status === 'done_unread'
+    const lines = workflowItems(list, { unread, folded })
+    if (lines.length > 0) out[id] = [...lines, ...(subagents[id] ?? [])]
+  }
+  for (const [id, team] of Object.entries(teams)) {
+    const lines = teamItems(team)
+    if (lines.length > 0) out[id] = [...lines, ...(out[id] ?? [])]
+  }
+  return out
+}
+
+/** The collaboration group of every session that has members (PRD v1.243), as the sidebar counts it. */
+export function groupsOf(sessions: readonly Session[], items: Readonly<Record<SessionId, readonly SideItem[]>>): Record<SessionId, SessionGroup> {
+  return buildGroups(
+    sessions.map((s) => ({ id: s.id, status: glyphStatus(s), ...(s.dispatchedBy ? { dispatchedBy: s.dispatchedBy } : {}) })),
+    Object.fromEntries(sessions.map((s) => [s.id, memberItems(s, items[s.id] ?? [])]))
+  )
+}
 
 /**
  * Store order, except that a dispatched session follows the session that started it (PRD F21), after that session's
@@ -371,10 +406,7 @@ export function withChildrenNested(sessions: readonly Session[], allOf: Subagent
   const listed = new Set(sessions.map((s) => s.id))
   const nested = (s: Session): boolean => s.dispatchedBy !== undefined && listed.has(s.dispatchedBy)
   const childrenOf = (id: SessionId): Session[] => sessions.filter((child) => child.dispatchedBy === id && nested(child))
-  const groups = buildGroups(
-    sessions.map((s) => ({ id: s.id, status: glyphStatus(s), ...(s.dispatchedBy ? { dispatchedBy: s.dispatchedBy } : {}) })),
-    Object.fromEntries(sessions.map((s) => [s.id, memberItems(s, allOf(s.id))]))
-  )
+  const groups = groupsOf(sessions, Object.fromEntries(sessions.map((s) => [s.id, allOf(s.id)])))
   const foldOf = (id: SessionId, depth: 1 | 2, open: boolean, line: boolean, pass: boolean): FoldRowModel | undefined => {
     const g = groups[id]
     return g ? { ownerId: id, expanded: open, total: g.total, counts: g.counts, depth, line, pass } : undefined
