@@ -6,7 +6,7 @@
 // and a conversation read back from Pi's session file. Pure: pi-driver.ts owns the process.
 
 import { effortLabel, permissionOption, type GuiAnswer, type GuiCommand, type GuiConfigOption, type GuiEvent, type GuiPermission, type GuiPermissionOption, type GuiPrompt } from '@shared/gui-chat'
-import { addedFile, CHAT_LIMITS, fileDiffs, hunksOfUnifiedDiff, keptImages, lineDiff, rel, toolArg, type ChatItem, type FileDiff, type KeepImage } from '@shared/transcript-chat'
+import { addedFile, CHAT_LIMITS, fileDiffs, hunksOfUnifiedDiff, keptImages, keptImagesOfContent, lineDiff, rel, toolArg, type ChatItem, type FileDiff, type KeepImage } from '@shared/transcript-chat'
 import { clip, isRec, str, tail, type Rec } from './driver'
 import { defineMessages, pick } from '@shared/i18n'
 import { guiPermissionLevels } from '@shared/gui-agents'
@@ -165,10 +165,12 @@ function toolItem(id: string, at: number, tool: string, args: unknown, cwd: stri
   return { kind: 'tool', id, at, name, arg: toolArg(name, args, cwd), state: 'running', ...(command ? { input: clip(command, CHAT_LIMITS.input) } : {}), ...(diff ? { diff } : {}) }
 }
 
-function withResult(item: ToolItem, tool: string, args: unknown, result: unknown, isError: boolean, cwd: string): ToolItem {
+function withResult(item: ToolItem, tool: string, args: unknown, result: unknown, isError: boolean, cwd: string, keep: KeepImage | undefined): ToolItem {
   const output = textOf(isRec(result) ? result.content : result).trim()
   const diff = isError ? item.diff : diffOfResult(tool, args, result, cwd)
-  return { ...item, state: isError ? 'error' : 'ok', ...(output ? { output: tail(output, CHAT_LIMITS.output) } : {}), ...(diff ? { diff } : {}) }
+  // A result's pictures are `{ type: 'image', data, mimeType }` blocks (pi-ai ImageContent; the read tool returns one).
+  const images = keptImagesOfContent(isRec(result) ? result.content : undefined, keep)
+  return { ...item, state: isError ? 'error' : 'ok', ...(output ? { output: tail(output, CHAT_LIMITS.output) } : {}), ...(diff ? { diff } : {}), ...(images ? { images } : {}) }
 }
 
 function userItem(id: string, at: number, content: unknown, keep: KeepImage | undefined): ChatItem {
@@ -345,7 +347,7 @@ export function createPiNormalizer(cwd: string, now: () => number = Date.now, ke
         case 'tool_execution_end': {
           const known = tools.get(str(e.toolCallId) ?? '')
           if (!known) return []
-          known.item = withResult(known.item, known.tool, known.args, e.result, e.isError === true, cwd)
+          known.item = withResult(known.item, known.tool, known.args, e.result, e.isError === true, cwd, keep)
           return [put(known.item.id, known.item)]
         }
         case 'auto_retry_start':
@@ -463,7 +465,7 @@ export function piHistoryItems(messages: readonly Rec[], cwd: string, keep?: Kee
     } else if (m.role === 'toolResult') {
       const call = calls.get(str(m.toolCallId) ?? '')
       const item = call ? items[call.index] : undefined
-      if (call && item?.kind === 'tool') items[call.index] = withResult(item, call.tool, call.args, m, m.isError === true, cwd)
+      if (call && item?.kind === 'tool') items[call.index] = withResult(item, call.tool, call.args, m, m.isError === true, cwd, keep)
     } else if (m.role === 'bashExecution' && str(m.command)) {
       const command = str(m.command)!
       const output = str(m.output)?.trim()

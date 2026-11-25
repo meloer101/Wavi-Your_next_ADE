@@ -19,11 +19,19 @@ const CHUNK_BYTES = 4 * 1024 * 1024
 /** fs.watch fires per write; one read per burst. */
 const SETTLE_MS = 120
 
-/** Items as the phone gets them: a tool's full command (`input`, up to 2000 characters) stays here, the phone shows `arg`. */
-function forPhone(items: readonly ChatItem[]): ChatItem[] {
+/**
+ * Items as the phone gets them: a tool's full command (`input`, up to 2000 characters) stays here, the phone shows `arg`;
+ * the pictures an agent returned (`images`, local files of this Mac, Figma 112F) are not sent.
+ */
+export function forPhone(items: readonly ChatItem[]): ChatItem[] {
   return items.map((item) => {
-    if (item.kind !== 'tool' || item.input === undefined) return item
-    const { input: _input, ...rest } = item
+    if (item.kind === 'text') {
+      if (item.images === undefined) return item
+      const { images: _images, ...rest } = item
+      return rest
+    }
+    if (item.kind !== 'tool' || (item.input === undefined && item.images === undefined)) return item
+    const { input: _input, images: _images, ...rest } = item
     return rest
   })
 }

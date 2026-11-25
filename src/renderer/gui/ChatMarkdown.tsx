@@ -3,8 +3,8 @@
 // schema drops what would run); a link opens in the built-in browser, ⌘-click in the system one. A code block has a
 // copy button in its corner on hover (Figma 54B).
 import { Fragment, memo, useMemo } from 'react'
-import Markdown, { type Components } from 'react-markdown'
-import rehypeSanitize from 'rehype-sanitize'
+import Markdown, { defaultUrlTransform, type Components, type Options } from 'react-markdown'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import { defineMessages } from '@shared/i18n'
 import type { SessionId } from '@shared/types'
@@ -12,6 +12,9 @@ import { CopyButton } from './CopyButton'
 import { codeRef, hrefRef, rehypeFileRefs, spanRef } from './file-refs'
 import { FileRef, RefSession } from './FileRef'
 import { highlightLines } from './highlight'
+import { ImageThumb } from './ImageThumb'
+import { markdownImageKey, markdownImagePath } from './model'
+import { worktreeOf } from '../state/link-actions'
 import { rehypeShortCells } from './table-cells'
 import { Tokens } from './Highlighted'
 import { WebLink } from './WebLink'
@@ -26,7 +29,13 @@ const M = defineMessages({
 const REMARK = [remarkGfm]
 // Paths in prose become file links after sanitizing (the plugin's spans are Wavi's, not the text's); short table cells
 // are marked to stay on one line (table-cells.ts).
-const REHYPE = [rehypeSanitize, rehypeFileRefs, rehypeShortCells]
+// A picture may be a `file:` URL (Figma 112F): the one scheme added, and only for `src`; the `img` component below draws
+// a local picture of a type the chat shows and anything else as its alt text, so nothing is loaded from the network.
+const SANITIZE = { ...defaultSchema, protocols: { ...defaultSchema.protocols, src: [...(defaultSchema.protocols?.src ?? []), 'file'] } }
+const REHYPE: NonNullable<Options['rehypePlugins']> = [[rehypeSanitize, SANITIZE], rehypeFileRefs, rehypeShortCells]
+
+/** The URL a node keeps: the default (no `javascript:` link), and a picture's `src` as written (read by `markdownImagePath`). */
+const urlTransform = (url: string, key: string, node: { tagName?: string }): string => (key === 'src' && node.tagName === 'img' ? url : defaultUrlTransform(url))
 
 /** A Markdown (hast) node's text: a code block's source. */
 function hastText(node: unknown): string {
@@ -69,7 +78,8 @@ function CodeBlock({ node }: { node: unknown }) {
   )
 }
 
-export const ChatMarkdown = memo(function ChatMarkdown({ sessionId, text, className }: { sessionId: SessionId; text: string; className?: string }) {
+/** `itemId`: the chat item whose words these are, so its pictures open the preview at themselves; none for the streamed block. */
+export const ChatMarkdown = memo(function ChatMarkdown({ sessionId, text, className, itemId }: { sessionId: SessionId; text: string; className?: string; itemId?: string }) {
   const m = useMessages(M)
   // One set per session and language: new component types on every render (each streamed delta) would remount the
   // tree, re-highlighting code blocks and dropping file links' state and open cards.
@@ -92,17 +102,23 @@ export const ChatMarkdown = memo(function ChatMarkdown({ sessionId, text, classN
       const file = spanRef(props)
       return file ? <FileRef target={file}>{children}</FileRef> : <span {...props}>{children}</span>
     },
+    // Figma 112F: a local picture is a 120 thumbnail; any other (remote, another type) shows its alt text.
+    img: ({ src, alt }) => {
+      const path = typeof src === 'string' ? markdownImagePath(src, worktreeOf(sessionId)) : null
+      if (!path) return alt ? <span>{alt}</span> : null
+      return <ImageThumb path={path} {...(itemId ? { galleryKey: markdownImageKey(itemId, path) } : {})} />
+    },
     pre: ({ node }) => (
       <div className={styles.codeWrap}>
         <CodeBlock node={node} />
         <CopyButton text={() => hastText(node).replace(/\n$/, '')} label={m.copyCode} className={styles.cornerCopy} />
       </div>
     )
-  }), [sessionId, m.copyCode])
+  }), [sessionId, itemId, m.copyCode])
   return (
     <RefSession.Provider value={sessionId}>
       <div className={[styles.markdown, className].filter(Boolean).join(' ')}>
-        <Markdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
+        <Markdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components} urlTransform={urlTransform}>
           {text}
         </Markdown>
       </div>

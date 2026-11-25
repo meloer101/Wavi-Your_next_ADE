@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-25：GUI 对话显示 agent 回传的图片、所有缩略图点开预览（PRD v1.246，Figma 112F–112H）已做完：Claude / Codex（app-server 与 rollout）/ Pi / ACP 的工具结果和消息里的图片存成 `sent-<哈希>` 文件，`tool` / `text` 条目多 `images`（`src/shared/transcript-chat.ts`，手机不发）；工具行下方 120 高缩略图（折叠时也显示）、正文 markdown 本地图片；预览层 `src/renderer/gui/ImagePreview.tsx`（本会话图片一组，缩放平移、在 Finder 中显示、复制图片 `ui.copyImage`，⎋ 只关预览）。已验证：单测、typecheck、lint、`e2e/gui-session.spec.ts` 新增用例；未验证：真机按 ⌘= 时 View 菜单的字号加速键是否抢先于预览。
 - 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
 - 2026-11-25：协作队伍默认折叠（PRD v1.243，Figma 111 / 111′）三步都做完：侧栏（`src/shared/session-group.ts`、`sidebar/FoldRow.tsx`，选中底色罩住整组，`expandedGroups`）、看板卡片的成员摘要（`overview/CardMembers.tsx`）、手机（`RemoteSession.parentId` / `group`，会话列表和看板）。手机端只在测试宿主里看过截图，没连着真 Mac 用过；`e2e/overview.spec.ts` 的 :78 / :175 在机器负载高时会失败（改动前后都一样），没有处理。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。

@@ -8,7 +8,7 @@
 // time. 编辑 turns your message into a text box in place and fades what came after it until it is sent or cancelled.
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Editor } from '@tiptap/react'
-import { ArrowDown, Bot, Brain, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, FilePlus, FileText, FolderSearch, Globe, ListTodo, ArrowRight, Pencil, Search, Sparkles, Square, Terminal, ToggleLeft, Trash2, Undo2, Wrench, type IconComponent } from '../ui/icons'
+import { ArrowDown, Bot, Brain, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, FilePlus, FileText, FolderSearch, Globe, Image as ImageMark, ListTodo, ArrowRight, Pencil, Search, Sparkles, Square, Terminal, ToggleLeft, Trash2, Undo2, Wrench, type IconComponent } from '../ui/icons'
 import type { GuiBranch, GuiLive } from '@shared/gui-chat'
 import { defineMessages } from '@shared/i18n'
 import { formatClock } from '@shared/session-meta'
@@ -20,7 +20,10 @@ import { StatusGlyph } from '../ui/StatusGlyph'
 import { ansiSpans } from './ansi'
 import { ChatMarkdown } from './ChatMarkdown'
 import { Attachment } from './Composer'
+import { worktreeOf } from '../state/link-actions'
 import { ComposerEditor, insertNewline, type CaretContext } from './ComposerEditor'
+import { ImageGalleryProvider } from './ImagePreview'
+import { ImageRow } from './ImageThumb'
 import { CopyButton } from './CopyButton'
 import { DispatchGraph, WaviMessageView } from './Dispatch'
 import { DiffBlock, diffText } from './DiffBlock'
@@ -44,7 +47,9 @@ import {
   flightOf,
   FOLD_ROWS,
   foldsMessage,
+  galleryOf,
   groupView,
+  imageKey,
   isSubagentTool,
   isWorkflowTool,
   liveStartsTurn,
@@ -130,6 +135,7 @@ const TOOL_ICONS: Readonly<Record<ToolIcon, IconComponent>> = {
   search: Search,
   'folder-search': FolderSearch,
   globe: Globe,
+  image: ImageMark,
   bot: Bot,
   'list-todo': ListTodo,
   sparkles: Sparkles,
@@ -237,6 +243,9 @@ export function Feed({ sessionId, agent, items: chatItems, live: liveBlock, run:
   const dispatch = useMemo(() => dispatchRows(items), [items])
   // Figma 90B: a fetched page or a link named by the title a search found.
   const titles = useMemo(() => pageTitles(items), [items])
+  // Figma 112G: every picture of the session in order, for the preview its thumbnails open.
+  const cwd = worktreeOf(sessionId)
+  const gallery = useMemo(() => galleryOf(all, cwd), [all, cwd])
   const [editingId, setEditingId] = useState<string | null>(null)
   // The message being edited, while it is still there (an edit sent replaces the conversation after it).
   const editingAt = editingId === null ? -1 : blocks.findIndex((b) => b.kind === 'item' && b.item.id === editingId)
@@ -324,6 +333,7 @@ export function Feed({ sessionId, agent, items: chatItems, live: liveBlock, run:
   return (
     <RefSession.Provider value={sessionId}>
     <PageTitles.Provider value={titles}>
+    <ImageGalleryProvider images={gallery}>
     <div className={styles.feedFrame}>
     <div ref={scrollerRef} className={styles.scroller} data-region="gui-feed">
       <div ref={contentRef} className={styles.feed}>
@@ -372,6 +382,7 @@ export function Feed({ sessionId, agent, items: chatItems, live: liveBlock, run:
     </div>
     {behind && <JumpToLatest onJump={jumpToLatest} />}
     </div>
+    </ImageGalleryProvider>
     </PageTitles.Provider>
     </RefSession.Provider>
   )
@@ -438,7 +449,12 @@ const Block = memo(
       case 'user':
         return null
       case 'text':
-        return <ChatMarkdown sessionId={sessionId} text={item.text} className={styles.block} />
+        return (
+          <>
+            {item.text.trim() !== '' && <ChatMarkdown sessionId={sessionId} text={item.text} className={styles.block} itemId={item.id} />}
+            {item.images && <ImageRow paths={item.images} itemId={item.id} />}
+          </>
+        )
       case 'system':
         return <p className={styles.system}>{item.text}</p>
       case 'unknown':
@@ -522,7 +538,7 @@ const UserMessage = memo(function UserMessage({ sessionId, item, faded, editable
             {pictures.length > 0 && (
               <ul className={`${styles.attachments} ${styles.sentPictures}`} aria-label={m.pictures} data-testid="gui-message-pictures">
                 {pictures.map((path, i) => (
-                  <Attachment key={`${i}:${path}`} path={path} />
+                  <Attachment key={`${i}:${path}`} path={path} galleryKey={imageKey(item.id, i)} />
                 ))}
               </ul>
             )}
@@ -860,6 +876,8 @@ function ToolGroup({ items, nested }: { items: readonly StepItem[]; nested: Read
         {view.removed !== undefined && <span className={styles.removed}>−{view.removed}</span>}
         {view.failed > 0 && <span className={styles.failed}>{m.failed(view.failed)}</span>}
       </button>
+      {/* Figma 112F: closed, the group still shows the pictures of its calls (open, each row shows its own). */}
+      {!open && items.map((item) => (item.kind === 'tool' && item.images ? <ImageRow key={item.id} paths={item.images} itemId={item.id} indent /> : null))}
       {open && (
         <div className={`${styles.subagentSteps} ${styles.groupSteps}`} data-testid="gui-tool-group-steps">
           {items.map((item) => (item.kind === 'thinking' ? <Thinking key={item.id} item={item} /> : <Tool key={item.id} item={item} nested={nested} waitingTool={null} />))}
@@ -937,6 +955,8 @@ function Tool({
         {subagent && <Elapsed item={item} />}
         {item.links && item.links.length > 0 && <span className={styles.toolMeta}>{m.results(item.links.length)}</span>}
       </button>
+      {/* Figma 112F: the pictures it returned, under the row, closed or open. */}
+      {item.images && <ImageRow paths={item.images} itemId={item.id} indent />}
       {hasChildren ? (
         open && (
           <div className={styles.subagentSteps} data-testid="gui-subagent-steps">

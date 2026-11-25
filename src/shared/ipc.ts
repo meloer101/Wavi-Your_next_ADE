@@ -132,6 +132,9 @@ export interface PtyApi {
   onHostRestarted(listener: (sessionIds: SessionId[]) => void): Unsubscribe
 }
 
+/** What a menu key asks of the open image preview (⌘+ / ⌘− / ⌘0). */
+export type ImageZoomAction = 'in' | 'out' | 'fit'
+
 export type ImageExtension = 'png' | 'jpg' | 'gif' | 'webp'
 
 export interface FilesApi {
@@ -177,6 +180,11 @@ export interface UiApi {
   onFullScreen(listener: (fullScreen: boolean) => void): Unsubscribe
   /** Reveals a file or folder in Finder. Absolute paths only. */
   revealInFinder(path: string): void
+  /** The chat's image preview opened or closed: while it is open, the View menu's font size items (⌘+ ⌘= ⌘− ⌘0) zoom the picture instead (`onImageZoom`). */
+  setImagePreviewOpen(open: boolean): void
+  onImageZoom(listener: (action: ImageZoomAction) => void): Unsubscribe
+  /** Puts a picture file (png, jpg, jpeg, gif, webp; absolute path of an existing file) on the clipboard as an image (the chat's image preview, Figma 112G). Resolves to whether it did. */
+  copyImage(path: string): Promise<boolean>
   /** Native confirmation sheet; resolves to true when the user picked the confirm button. */
   confirm(options: ConfirmOptions): Promise<boolean>
 }
@@ -553,6 +561,9 @@ export const IPC = {
   /** main → renderer, payload boolean: the main window is full screen */
   uiFullScreen: 'ui:full-screen',
   uiRevealInFinder: 'ui:reveal-in-finder',
+  uiCopyImage: 'ui:copy-image',
+  uiSetImagePreviewOpen: 'ui:set-image-preview-open',
+  uiImageZoom: 'ui:image-zoom',
   uiConfirm: 'ui:confirm',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',

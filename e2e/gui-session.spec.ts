@@ -722,6 +722,157 @@ test.describe('F23 GUI session (Claude)', () => {
     await page.evaluate(() => (globalThis as unknown as { tr: { settings: { update(p: unknown): Promise<unknown> } } }).tr.settings.update({ appearance: { theme: 'dark' } }))
   })
 
+  test('a tool’s picture sits under its collapsed row and opens a preview of every picture of the session: ← goes to yours, ⎋ closes it and never interrupts (Figma 112F / 112G)', async () => {
+    const mine = join(root, 'mine.png')
+    writeFileSync(mine, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'))
+    const saved = execFileSync('pbpaste', { encoding: 'utf8' })
+    try {
+      execFileSync('osascript', ['-e', `set the clipboard to (read (POSIX file "${mine}") as «class PNGf»)`])
+      await input().click()
+      await page.keyboard.press('Meta+V')
+    } finally {
+      execFileSync('pbcopy', { input: saved })
+    }
+    await expect(composer().getByRole('img', { name: /^paste-.*\.png$/ })).toBeVisible(WITHIN)
+    await send('shoot the login page')
+    const row = feed().getByRole('button', { name: /get_screenshot\s*1:2/ })
+    await expect(row).toBeVisible(WITHIN)
+    await expect(row).toHaveAttribute('aria-expanded', 'false')
+    const thumb = feed().getByTestId('gui-chat-images').getByRole('button', { name: /^预览图片 sent-/ }).last()
+    await expect(thumb).toBeVisible(WITHIN)
+    await settled()
+    // 120 high, under the row (collapsed), starting at the row's name (icon 16 + gap 8).
+    await expect.poll(() => thumb.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(1600)
+    const [box, rowBox] = await Promise.all([thumb.boundingBox(), row.boundingBox()])
+    expect(box!.height).toBe(120)
+    expect(box!.width).toBeCloseTo(118 * 1.6 + 2, 0)
+    expect(box!.y).toBeGreaterThanOrEqual(rowBox!.y + rowBox!.height)
+    expect(box!.x - rowBox!.x).toBeCloseTo(24, 0)
+    // Your own picture is a button too.
+    const own = feed().locator('[data-item]').filter({ hasText: 'shoot the login page' }).getByTestId('gui-message-pictures').getByRole('button', { name: /^预览图片 sent-/ })
+    await expect(own).toBeVisible(WITHIN)
+    expect(await thumb.evaluate((el) => getComputedStyle(el).cursor)).toBe('zoom-in')
+    await page.mouse.move(0, 0)
+    const border = await thumb.evaluate((el) => getComputedStyle(el).borderTopColor)
+    await thumb.hover()
+    expect(await thumb.evaluate((el) => getComputedStyle(el).borderTopColor)).not.toBe(border)
+
+    const screenshots = async (name: string): Promise<void> => {
+      for (const theme of ['dark', 'light'] as const) {
+        await page.evaluate((t) => (globalThis as unknown as { tr: { settings: { update(p: unknown): Promise<unknown> } } }).tr.settings.update({ appearance: { theme: t } }), theme)
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        await page.waitForTimeout(300)
+        await page.screenshot({ path: join(SHOTS, `${name}-${theme}.png`) })
+      }
+      await page.evaluate(() => (globalThis as unknown as { tr: { settings: { update(p: unknown): Promise<unknown> } } }).tr.settings.update({ appearance: { theme: 'dark' } }))
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    }
+    await page.mouse.move(0, 0)
+    await screenshots('chat-images')
+
+    // The preview: the tool's picture is the last of the session's, fitted (never above 100%).
+    await thumb.click()
+    const dialog = page.getByTestId('gui-image-preview')
+    await expect(dialog).toBeVisible(WITHIN)
+    const position = dialog.getByTestId('gui-image-position')
+    const [, at, total] = /^(\d+) \/ (\d+)$/.exec((await position.textContent()) ?? '')!.map(Number)
+    expect(at).toBe(total)
+    expect(total).toBeGreaterThanOrEqual(2)
+    await expect(dialog.getByText('get_screenshot · 1:2')).toBeVisible()
+    const ratio = dialog.getByTestId('gui-image-ratio')
+    const fit = dialog.getByTestId('gui-image-fit')
+    await expect.poll(async () => Number.parseInt((await ratio.textContent()) ?? '0')).toBeLessThan(100)
+    await expect(fit).toBeDisabled()
+    const fitted = Number.parseInt((await ratio.textContent()) ?? '0')
+    await page.waitForTimeout(250)
+    await screenshots('image-preview')
+    // The fitted picture keeps its margins (Figma 112G): 72 at the sides, 32 above and below; the layer is opaque.
+    const stageBox = (await dialog.locator('[class*="stage"]').boundingBox())!
+    const pictureBox = (await dialog.getByTestId('gui-image-preview-picture').boundingBox())!
+    expect(pictureBox.x - stageBox.x).toBeGreaterThanOrEqual(71.5)
+    expect(pictureBox.y - stageBox.y).toBeGreaterThanOrEqual(31.5)
+    expect(await dialog.evaluate((el) => getComputedStyle(el).backgroundColor)).toMatch(/^rgb\(/)
+    // ⌘+ / ⌘= / ⌘0 are the View menu's font size items: with the preview open they zoom it and leave the font alone.
+    const chatSize = (): Promise<number> => page.evaluate(async () => ((await (globalThis as unknown as { tr: { settings: { get(): Promise<{ appearance: { fontSize: number } }> } } }).tr.settings.get()).appearance.fontSize))
+    const fontBefore = await chatSize()
+    const menuKey = (accelerator: string): Promise<boolean> =>
+      app.evaluate(({ Menu }, accelerator) => {
+        const walk = (items: Electron.MenuItem[]): boolean => items.some((item) => (item.accelerator === accelerator ? (item.click(), true) : item.submenu ? walk(item.submenu.items) : false))
+        return walk(Menu.getApplicationMenu()!.items)
+      }, accelerator)
+    expect(await menuKey('CmdOrCtrl+=')).toBe(true)
+    await expect.poll(async () => Number.parseInt((await ratio.textContent()) ?? '0')).toBeGreaterThan(fitted)
+    await expect(fit).toBeEnabled()
+    expect(await menuKey('CmdOrCtrl+-')).toBe(true)
+    expect(await menuKey('CmdOrCtrl+=')).toBe(true)
+    expect(await menuKey('CmdOrCtrl+0')).toBe(true)
+    await expect(fit).toBeDisabled()
+    await dialog.getByTestId('gui-image-preview-picture').dblclick()
+    await expect(ratio).toHaveText('100%')
+    await page.waitForTimeout(250)
+    await screenshots('image-preview-zoomed')
+    await dialog.getByTestId('gui-image-preview-picture').dblclick()
+    await expect(ratio).toHaveText(`${fitted}%`)
+    expect(await chatSize()).toBe(fontBefore)
+    // ← goes to the picture you sent with that message (named by its file).
+    await page.keyboard.press('ArrowLeft')
+    await expect(position).toHaveText(`${total! - 1} / ${total}`)
+    await expect(dialog.getByText(/^sent-[0-9a-f]+\.png$/)).toBeVisible()
+    await page.keyboard.press('ArrowRight')
+    await expect(position).toHaveText(`${total} / ${total}`)
+    await expect(dialog.getByRole('button', { name: '下一张' })).toBeDisabled()
+    // 复制图片 puts a PNG on the clipboard.
+    const clipboardBefore = execFileSync('pbpaste', { encoding: 'utf8' })
+    await dialog.getByRole('button', { name: '复制图片' }).click()
+    await expect(dialog.getByRole('button', { name: '已复制' })).toBeVisible(WITHIN)
+    expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain('image/png')
+    execFileSync('pbcopy', { input: clipboardBefore })
+    // ⎋ closes the layer, the focus is back on the thumbnail.
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(thumb).toBeFocused()
+
+    // ⎋ never reaches the chat: with a turn running, it closes the preview and the turn goes on.
+    const interrupts = (): number =>
+      existsSync(controlLog)
+        ? readFileSync(controlLog, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line) as { subtype: string })
+            .filter((r) => r.subtype === 'interrupt').length
+        : 0
+    const before = interrupts()
+    await send('slow answer')
+    await expect(composer().getByRole('button', { name: '停止' })).toBeVisible(WITHIN)
+    await thumb.click()
+    await expect(dialog).toBeVisible(WITHIN)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await page.waitForTimeout(500)
+    await expect(composer().getByRole('button', { name: '停止' })).toBeVisible()
+    expect(interrupts()).toBe(before)
+    await composer().getByRole('button', { name: '停止' }).click()
+    await settled()
+
+    // The same screenshot again is the same file (named by its content): ← still loads it, and the menu's font keys
+    // leave the font alone once the preview is closed.
+    await send('shoot again')
+    await expect(feed().getByText('Hello: shoot again')).toBeVisible(WITHIN)
+    await settled()
+    await feed().getByTestId('gui-chat-images').getByRole('button', { name: /^预览图片 sent-/ }).last().click()
+    await expect(dialog).toBeVisible(WITHIN)
+    await page.keyboard.press('ArrowLeft')
+    await expect(position).toHaveText(new RegExp(`^${total} / ${total! + 1}$`))
+    await expect(dialog.getByTestId('gui-image-preview-picture')).toHaveCSS('opacity', '1')
+    await expect(dialog.getByText('get_screenshot · 1:2')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    expect(await menuKey('CmdOrCtrl+=')).toBe(true)
+    await expect.poll(chatSize).not.toBe(fontBefore)
+    expect(await menuKey('CmdOrCtrl+0')).toBe(true)
+    await expect.poll(chatSize).toBe(fontBefore)
+  })
+
   /**
    * ProseMirror takes a selection made with the keyboard from the next `selectionchange`: a shortcut pressed in the
    * same instant would apply to the old one. Two frames are enough.
