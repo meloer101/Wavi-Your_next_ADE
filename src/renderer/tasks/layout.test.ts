@@ -141,9 +141,10 @@ describe('layoutBoard · dragged cards', () => {
     expect(card(l, 'a')).toMatchObject({ x: 400, y: 110 })
   })
 
-  it('does not reserve the root slot of a moved root: the next root takes its place', () => {
+  it('keeps the slot of a moved root: the next root does not move up', () => {
     const l = board([task('r1', 'p', undefined, { x: 900, y: 900 }), task('r2', 'p')])
-    expect(card(l, 'r2')).toMatchObject({ x: 0, y: 0 })
+    const auto = board([task('r1', 'p'), task('r2', 'p')])
+    expect(card(l, 'r2')).toMatchObject({ x: card(auto, 'r2').x, y: card(auto, 'r2').y })
   })
 
   it('draws the links between the placed rects and includes moved cards in the bounds', () => {

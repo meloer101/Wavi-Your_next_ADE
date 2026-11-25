@@ -277,3 +277,48 @@ test('removing a parent through main removes its children and their notes disapp
   await expect(note(kept)).toBeVisible()
   expect(await listTasks()).toHaveLength(1)
 })
+
+test('dragging a card moves it and its children, a reload keeps the place, and a click without movement only selects', async () => {
+  const root = await make('p-acme', '拖动的根卡')
+  const child = await make('p-acme', '跟着走的子卡', { parent: root })
+  const other = await make('p-acme', '没动的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  for (const card of [root, child, other]) await expect(note(card)).toBeVisible(WITHIN)
+  const box = async (card: Made) => (await note(card).boundingBox())!
+
+  // A click that never moves selects and leaves the card where it is.
+  const rootAt = await box(root)
+  await note(root).click()
+  await expect(note(root)).toHaveAttribute('data-selected', 'true')
+  expect(await box(root)).toEqual(rootAt)
+
+  const before = { root: await box(root), child: await box(child), other: await box(other) }
+  const from = { x: before.root.x + before.root.width / 2, y: before.root.y + 60 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 40, from.y + 40, { steps: 4 })
+  await page.mouse.move(from.x + 120, from.y + 90, { steps: 6 })
+  await expect(board()).toHaveAttribute('data-dragging', 'true')
+  await expect(note(root)).toHaveAttribute('data-dragging', 'true')
+  await shoot('drag-mid')
+  await page.mouse.up()
+  await expect(board()).toHaveAttribute('data-dragging', 'false', WITHIN)
+
+  const after = { root: await box(root), child: await box(child), other: await box(other) }
+  expect(after.root.x - before.root.x).toBeCloseTo(120, 0)
+  expect(after.root.y - before.root.y).toBeCloseTo(90, 0)
+  expect(after.child.x - before.child.x).toBeCloseTo(120, 0)
+  expect(after.child.y - before.child.y).toBeCloseTo(90, 0)
+  expect(after.other).toEqual(before.other)
+  const saved = (await listTasks()) as Array<{ id: string; pos?: { x: number; y: number } }>
+  expect(saved.find((t) => t.id === root.id)?.pos).toBeDefined()
+  expect(saved.find((t) => t.id === child.id)?.pos).toBeUndefined()
+
+  // The place is in tasks.json: a reload shows the card where it was left.
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(root)).toBeVisible(WITHIN)
+  const reloaded = await box(root)
+  expect(reloaded.x).toBeCloseTo(after.root.x, 0)
+  expect(reloaded.y).toBeCloseTo(after.root.y, 0)
+  await shoot('board-moved')
+})

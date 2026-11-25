@@ -53,6 +53,8 @@ export interface NoteProps {
   drawing: Drawing
   info: NoteInfo
   selected: boolean
+  /** Held by the pointer: raised above the others. */
+  dragging: boolean
   dimmed: boolean
   now: number
   onSelect(id: string): void
@@ -71,7 +73,7 @@ function timeOf(card: Card<Session>, now: number): string {
   return ''
 }
 
-function NoteView({ card, placed, drawing, info, selected, dimmed, now, onSelect, onOpen }: NoteProps) {
+function NoteView({ card, placed, drawing, info, selected, dragging, dimmed, now, onSelect, onOpen }: NoteProps) {
   const m = useMessages(NOTE_M)
   const { task, state, session } = card
   const line = actionLine(card, { waitingBelow: info.waiting })
@@ -83,6 +85,7 @@ function NoteView({ card, placed, drawing, info, selected, dimmed, now, onSelect
     'data-state': state,
     'data-drawing': drawing,
     'data-selected': selected,
+    'data-dragging': dragging,
     'data-dimmed': dimmed,
     'data-task-id': task.id,
     'data-seq': task.seq,
@@ -149,6 +152,7 @@ const same = (a: NoteProps, b: NoteProps): boolean =>
   a.placed.parent === b.placed.parent &&
   a.drawing === b.drawing &&
   a.selected === b.selected &&
+  a.dragging === b.dragging &&
   a.dimmed === b.dimmed &&
   a.now === b.now &&
   a.info.waiting === b.info.waiting &&

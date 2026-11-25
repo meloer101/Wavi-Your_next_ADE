@@ -143,28 +143,22 @@ function nodesOf(node: TaskNode): TaskNode[] {
 
 interface Packed {
   cards: PlacedCard[]
-  /** Moved roots' trees: each laid out from (0, 0), put where the user dragged the root once the board is packed. */
-  floating: PlacedCard[][]
   w: number
   h: number
 }
 
-function layoutProject(trees: ProjectTrees, d: Dims, posOf: (id: TaskId) => TaskPos | undefined): Packed {
+/** A project's trees stacked in the automatic layout; a root the user dragged away keeps its slot, so the rest stay put. */
+function layoutProject(trees: ProjectTrees, d: Dims): Packed {
   const cards: PlacedCard[] = []
-  const floating: PlacedCard[][] = []
   let top = 0
   for (const root of trees.roots) {
-    if (posOf(root.task.id)) {
-      floating.push(placeTree(root, trees.projectId, 0, d).cards)
-      continue
-    }
     const placed = placeTree(root, trees.projectId, top, d)
     cards.push(...placed.cards)
     top = placed.bottom + d.rootGap
   }
   const bottom = cards.length > 0 ? Math.max(...cards.map((c) => c.y + c.h)) : 0
   const right = cards.length > 0 ? Math.max(...cards.map((c) => c.x + c.w)) : 0
-  return { cards, floating, w: right, h: bottom }
+  return { cards, w: right, h: bottom }
 }
 
 /**
@@ -216,14 +210,12 @@ export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode,
   for (const p of projects) for (const r of p.roots) for (const n of nodesOf(r)) nodes.set(n.task.id, n)
   const posOf = (id: TaskId): TaskPos | undefined => overrides?.get(id) ?? nodes.get(id)?.task.pos
   const cards: PlacedCard[] = []
-  const floating: PlacedCard[][] = []
   const clusters: Cluster[] = []
   let x = 0
   let y = 0
   let rowH = 0
   for (const project of projects) {
-    const one = layoutProject(project, d, posOf)
-    floating.push(...one.floating)
+    const one = layoutProject(project, d)
     if (one.cards.length === 0) continue
     if (x > 0 && x + one.w > d.rowWidth) {
       x = 0
@@ -239,10 +231,8 @@ export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode,
     x += one.w + d.clusterGap
     rowH = Math.max(rowH, one.h)
   }
-  // Packed trees first, then the dragged-away roots with their trees, each in parents-first order.
-  const all = [...cards, ...floating.flat()]
-  applyPositions(all, posOf, scale)
-  return { cards: all, links: linksOf(all), clusters, bounds: boundsOf(all) }
+  applyPositions(cards, posOf, scale)
+  return { cards, links: linksOf(cards), clusters, bounds: boundsOf(cards) }
 }
 
 export function boundsOf(rects: readonly Rect[]): Rect {

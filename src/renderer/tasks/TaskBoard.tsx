@@ -2,7 +2,7 @@
 // and drag), or scroll with two fingers, to pan; ⌘-scroll and pinch zoom around the pointer. Notes shrink to chips and
 // dots as it zooms out. Layout and viewport maths are in layout.ts, the dot grid in DotField.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { buildTaskTree, childSegments, taskProgress, waitingBelow, type TaskId, type TaskNode, type TaskState } from '@shared/task-board'
+import { buildTaskTree, childSegments, parseTaskPos, taskProgress, waitingBelow, TASK_POS_LIMIT, type TaskId, type TaskNode, type TaskPos, type TaskState } from '@shared/task-board'
 import { useShallow } from 'zustand/react/shallow'
 import { subscribeClock } from '../sidebar/clock'
 import { useOverviewStore } from '../overview/store'
@@ -10,7 +10,7 @@ import { useWorkspace } from '../state/workspace'
 import { Compose } from './Compose'
 import { Detail } from './Detail'
 import { DotField } from './DotField'
-import { drawingFor, fitView, groupByProject, layoutBoard, panBy, scaleFor, zoomAround, type LayoutMode, type Rect, type Size } from './layout'
+import { DIMS, drawingFor, fitView, groupByProject, layoutBoard, modeFor, panBy, scaleFor, zoomAround, type LayoutMode, type PosOverrides, type Rect, type Size } from './layout'
 import { diffActivity, matchesFilter, snapshotOf, type Snapshot } from './model'
 import { Note, type NoteInfo } from './Note'
 import { ActivityPanel, Toolbar, ZoomControl } from './Panes'
@@ -33,6 +33,8 @@ export function TaskBoard() {
   const [composing, setComposing] = useState(false)
   const [spaceDown, setSpaceDown] = useState(false)
   const [panning, setPanning] = useState(false)
+  // The card being dragged and where it is held (note coordinates, as `Task.pos`); saved once, when it is let go.
+  const [held, setHeld] = useState<{ id: TaskId; pos: TaskPos } | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   const { view, selectedId, detailId, events, activityPref, lastProjectId, loaded } = useTaskBoard(
@@ -83,7 +85,8 @@ export function TaskBoard() {
     return (id: TaskId): TaskState => byId.get(id) ?? 'idle'
   }, [cards])
   const trees = useMemo(() => groupByProject(tasks, projects.map((p) => p.id), buildTaskTree), [tasks, projects])
-  const layouts = useMemo(() => ({ note: layoutBoard(trees, 'note'), chip: layoutBoard(trees, 'chip') }), [trees])
+  const overrides = useMemo<PosOverrides | undefined>(() => (held ? new Map([[held.id, held.pos]]) : undefined), [held])
+  const layouts = useMemo(() => ({ note: layoutBoard(trees, 'note', overrides), chip: layoutBoard(trees, 'chip', overrides) }), [trees, overrides])
   const bounds = useMemo<Record<LayoutMode, Rect>>(() => ({ note: layouts.note.bounds, chip: layouts.chip.bounds }), [layouts])
   const drawing = drawingFor(view.zoom)
   const layout = drawing === 'note' ? layouts.note : layouts.chip
@@ -223,18 +226,42 @@ export function TaskBoard() {
     return () => body.removeEventListener('keydown', onKey)
   }, [fit, startCompose])
 
-  // ── Panning ──
+  // ── Panning, and dragging a card ──
   const spacePans = spaceDown && !composing && detailId === null
-  // `card`: the card the press started on (Space-drag over a note); pointer capture sends the pointerup to the board, so
-  // where it started, not where it ended, says whether it was a click on a note.
-  const drag = useRef<{ x: number; y: number; moved: boolean; card: string | null } | null>(null)
+  // `card`: the card the press started on. A press on a card (no Space) becomes a drag of that card once it passes
+  // DRAG_SLOP; a press on the canvas, or on a card with Space held, pans. Pointer capture starts with the drag, so a
+  // click that never moved still reaches the note (select, double-click opens it); a Space-drag has no such click and
+  // selects on release.
+  const drag = useRef<{
+    x: number
+    y: number
+    moved: boolean
+    card: string | null
+    /** Moving the card, not the canvas. */
+    mode: 'pan' | 'card'
+    /** Where the card's `pos` was at the press and the note-coordinate scale of a screen px. */
+    start?: TaskPos
+    perPx?: number
+    frame?: number
+    last?: TaskPos
+  } | null>(null)
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
     if (e.button !== 0) return
     const target = e.target as HTMLElement
     if (target.closest('[data-no-pan], button, input, select')) return
-    const onCard = target.closest('[data-task-id]') !== null
-    if (onCard && !spacePans) return
-    drag.current = { x: e.clientX, y: e.clientY, moved: false, card: target.closest<HTMLElement>('[data-task-id]')?.dataset.taskId ?? null }
+    const cardEl = target.closest<HTMLElement>('[data-task-id]')
+    const card = cardEl?.dataset.taskId ?? null
+    if (cardEl && !spacePans) {
+      // The dot drawing has no cards to take hold of.
+      if (drawing === 'dot') return
+      const placed = layouts.note.cards.find((c) => c.id === card)
+      if (!placed) return
+      const parent = placed.parentId !== undefined ? layouts.note.cards.find((c) => c.id === placed.parentId) : undefined
+      const ratio = modeFor(view.zoom) === 'chip' ? DIMS.chip.pitch / DIMS.note.pitch : 1
+      drag.current = { x: e.clientX, y: e.clientY, moved: false, card, mode: 'card', start: { x: placed.x - (parent?.x ?? 0), y: placed.y - (parent?.y ?? 0) }, perPx: 1 / (scale * ratio) }
+      return
+    }
+    drag.current = { x: e.clientX, y: e.clientY, moved: false, card, mode: 'pan' }
     e.currentTarget.setPointerCapture(e.pointerId)
     host.current?.parentElement?.focus()
   }
@@ -243,6 +270,25 @@ export function TaskBoard() {
     if (!d) return
     const dx = e.clientX - d.x
     const dy = e.clientY - d.y
+    if (d.mode === 'card') {
+      if (!d.moved && Math.hypot(dx, dy) < DRAG_SLOP) return
+      if (!d.moved) {
+        d.moved = true
+        e.currentTarget.setPointerCapture(e.pointerId)
+        host.current?.parentElement?.focus()
+        if (d.card) useTaskBoard.getState().select(d.card)
+      }
+      const clamp = (n: number): number => Math.max(-TASK_POS_LIMIT, Math.min(TASK_POS_LIMIT, n))
+      d.last = { x: clamp(d.start!.x + dx * d.perPx!), y: clamp(d.start!.y + dy * d.perPx!) }
+      // Many pointer events arrive per frame: the layout is redone once per frame.
+      if (d.frame === undefined) {
+        d.frame = requestAnimationFrame(() => {
+          d.frame = undefined
+          if (drag.current === d && d.last && d.card) setHeld({ id: d.card, pos: d.last })
+        })
+      }
+      return
+    }
     if (!d.moved && Math.hypot(dx, dy) < DRAG_SLOP) return
     if (!d.moved) setPanning(true)
     d.moved = true
@@ -251,15 +297,36 @@ export function TaskBoard() {
     const state = useTaskBoard.getState()
     state.setView(panBy(state.view, dx, dy))
   }
+  const endCardDrag = (d: NonNullable<typeof drag.current>, save: boolean): void => {
+    if (d.frame !== undefined) cancelAnimationFrame(d.frame)
+    const pos = d.last ? parseTaskPos(d.last) : null
+    if (!save || !pos || !d.card) {
+      setHeld(null)
+      return
+    }
+    setHeld({ id: d.card, pos })
+    // Held until main has it, so the card does not jump back to its old place in between.
+    void window.tr.tasks
+      .update(d.card, { pos })
+      .catch(() => {})
+      .finally(() => setHeld(null))
+  }
   const onPointerUp = (): void => {
     const d = drag.current
     drag.current = null
     setPanning(false)
-    if (d && !d.moved) useTaskBoard.getState().select(d.card)
+    if (!d) return
+    if (d.mode === 'card') {
+      if (d.moved) endCardDrag(d, true)
+      return
+    }
+    if (!d.moved) useTaskBoard.getState().select(d.card)
   }
   const onPointerCancel = (): void => {
+    const d = drag.current
     drag.current = null
     setPanning(false)
+    if (d?.mode === 'card' && d.moved) endCardDrag(d, false)
   }
 
   // ── Render ──
@@ -296,6 +363,7 @@ export function TaskBoard() {
               drawing={drawing}
               info={infos.get(placed.id) ?? EMPTY_INFO}
               selected={selectedId === placed.id}
+              dragging={held?.id === placed.id}
               dimmed={filter.trim() !== '' && !matchesFilter(card.task, projectName.get(card.task.projectId) ?? '', filter)}
               now={now}
               onSelect={onSelect}
@@ -305,7 +373,7 @@ export function TaskBoard() {
         })}
       </>
     ),
-    [layout, drawing, cardById, infos, selectedId, filter, projectName, now, onSelect, onOpen]
+    [layout, drawing, cardById, infos, selectedId, held?.id, filter, projectName, now, onSelect, onOpen]
   )
 
   return (
@@ -315,6 +383,7 @@ export function TaskBoard() {
       data-testid="task-board"
       data-drawing={drawing}
       data-panning={panning}
+      data-dragging={held !== null}
       data-space={spacePans}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
