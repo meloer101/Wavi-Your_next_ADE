@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Task } from '@shared/task-board'
-import type { Session } from '@shared/types'
 import type { NewSessionInfo } from '@shared/new-session'
 import { handCardToLeader, planLeaderWorktree, taskBoardMessage, type LeaderDeps } from './task-deliver'
 
 vi.mock('../state/workspace', () => ({ useWorkspace: { getState: () => ({ sessions: [] }) } }))
 vi.mock('../new-session/creation', () => ({ createWorktreeFor: async () => true, holdForWorktree: () => {}, startEagerly: () => {} }))
-vi.mock('../session-io', () => ({ whenAgentReady: async () => {} }))
-vi.mock('./reports', () => ({ deliverMessage: async () => 'delivered' }))
+vi.mock('./store', () => ({ setLaunch: () => {} }))
 
 const card = (seq: number, over: Partial<Task> = {}): Task => ({ id: `t${seq}`, seq, projectId: 'p1', title: `Card ${seq}`, body: '', createdBy: 'user', manual: 'todo', createdAt: seq, updatedAt: seq, ...over })
 
@@ -30,49 +28,37 @@ describe('taskBoardMessage', () => {
 })
 
 describe('handCardToLeader', () => {
-  const session = { id: 's1' } as Session
   const setup = (over: Partial<LeaderDeps> = {}) => {
     const calls: string[] = []
-    const sent: { text: string; key: string }[] = []
+    const launched: (string | null)[] = []
     const deps: LeaderDeps = {
-      start: async (t, agent) => (calls.push(`start ${t.id} ${agent}`), { ok: true, id: 's1' }),
+      start: async (t, agent) => (
+        calls.push(`start ${t.id} ${agent}`),
+        { ok: true, id: 's1', launch: (prompt) => void (calls.push('launch'), launched.push(prompt)) }
+      ),
       bind: async (t, id) => (calls.push(`bind ${t.id} ${id}`), true),
-      ready: async () => void calls.push('ready'),
-      session: (id) => (id === 's1' ? session : undefined),
-      send: async (_s, text, held) => void sent.push({ text, key: held.key }),
       ...over
     }
-    return { calls, sent, deps }
+    return { calls, launched, deps }
   }
 
-  it('starts one session, binds it to the card, waits for the agent and sends the card once', async () => {
+  it('adds one session, binds it to the card, then starts it once with the card as its first message', async () => {
     const t = setup()
     expect(await handCardToLeader(card(1), 'codex', t.deps)).toEqual({ ok: true })
-    expect(t.calls).toEqual(['start t1 codex', 'bind t1 s1', 'ready'])
-    expect(t.sent).toHaveLength(1)
-    expect(t.sent[0]?.key).toBe('taskboard:t1')
-    expect(t.sent[0]?.text).toContain('Card #1: Card 1')
+    expect(t.calls).toEqual(['start t1 codex', 'bind t1 s1', 'launch'])
+    expect(t.launched).toHaveLength(1)
+    expect(t.launched[0]).toBe(taskBoardMessage(card(1)))
   })
-  it.each(['no-project', 'not-git', 'no-plan', 'no-session', 'failed'] as const)('says %s when no session could be started, and binds and sends nothing', async (reason) => {
+  it.each(['no-project', 'not-git', 'no-plan', 'no-session', 'failed'] as const)('says %s when no session could be added, and binds and starts nothing', async (reason) => {
     const t = setup({ start: async () => ({ ok: false, reason }) })
     expect(await handCardToLeader(card(1), 'claude', t.deps)).toEqual({ ok: false, reason })
     expect(t.calls).toEqual([])
-    expect(t.sent).toEqual([])
+    expect(t.launched).toEqual([])
   })
-  it('does not send the card to a session that could not be bound to it', async () => {
+  it('starts a session that could not be bound without the card', async () => {
     const t = setup({ bind: async () => false })
     expect(await handCardToLeader(card(1), 'claude', t.deps)).toEqual({ ok: false, reason: 'unbound' })
-    expect(t.sent).toEqual([])
-  })
-  it('still sends when the agent never reports ready (the message is then held under its terminal)', async () => {
-    const t = setup({ ready: async () => Promise.reject(new Error('not started')) })
-    expect(await handCardToLeader(card(1), 'claude', t.deps)).toEqual({ ok: true })
-    expect(t.sent).toHaveLength(1)
-  })
-  it('sends nothing when the session is already gone', async () => {
-    const t = setup({ session: () => undefined })
-    expect(await handCardToLeader(card(1), 'claude', t.deps)).toEqual({ ok: true })
-    expect(t.sent).toEqual([])
+    expect(t.launched).toEqual([null])
   })
 })
 
