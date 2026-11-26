@@ -30,8 +30,9 @@
   /* The agent's mark and the user's picture, outside the column: as tall as a one-line bubble (8 + line + 8), so the
      picture's top and bottom are the bubble's and its middle is the first line's (38 at 14 / 22). */
   --avatar: calc(var(--chat-line) + 2 * var(--space-8));
-  /* Each side of the column: room for a picture and its gap (38 + 12), at least 40. The scroller clips anything wider. */
-  --gutter: max(var(--space-40), var(--avatar) + var(--space-12));
+  /* Each side of the column: room for a picture, its gap and 12 to the card's edge (38 + 12 + 12), at least 40, so in a
+     narrow card the pictures keep clear of the edge and its corners. The scroller clips anything wider. */
+  --gutter: max(var(--space-40), var(--avatar) + 2 * var(--space-12));
   /* Figma 65H: the empty session's welcome — the agent's mark and the line. */
   --avatar-welcome: 36px;
   --type-welcome: 500 calc(var(--chat-px) * 24 / 14) / calc(var(--chat-px) * 32 / 14) var(--chat-family);

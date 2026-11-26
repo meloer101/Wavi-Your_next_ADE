@@ -1216,9 +1216,9 @@ test.describe('F23 GUI session (Claude)', () => {
     const bubble = feed().locator('[data-item]').last()
     await expect.poll(() => bubble.evaluate((el) => getComputedStyle(el.querySelector('p, li')!).fontSize)).toBe('16px')
     expect(await bubble.evaluate((el) => getComputedStyle(el.querySelector('p, li')!).fontWeight)).toBe('500')
-    // The column is the composer's (960 for 中) with room each side for a picture and its gap: at 16 / 25 the picture is
-    // a one-line bubble's height, 8 + 25 + 8 = 41, and 41 + 12 = 53 each side.
-    expect(await feed().locator('> div').first().evaluate((el) => getComputedStyle(el).maxWidth)).toBe('1066px')
+    // The column is the composer's (960 for 中) with room each side for a picture, its gap and 12 to the card's edge: at
+    // 16 / 25 the picture is a one-line bubble's height, 8 + 25 + 8 = 41, and 41 + 12 + 12 = 65 each side.
+    expect(await feed().locator('> div').first().evaluate((el) => getComputedStyle(el).maxWidth)).toBe('1090px')
     // The agent's words start at the composer's left edge, its mark 12 outside; the bubble ends at its right edge, the
     // picture 8 outside.
     await feed().evaluate((el) => el.scrollTo(0, 0))
@@ -1242,6 +1242,22 @@ test.describe('F23 GUI session (Claude)', () => {
     expect(await chat().evaluate((el) => getComputedStyle(el.parentElement!).backgroundColor)).toMatch(/0\.85\)$|color\(srgb .* \/ 0\.85\)$/)
     await feed().evaluate((el) => el.scrollTo(0, 0))
     await page.screenshot({ path: join(SHOTS, 'chat-avatars.png') })
+    // Issue #8: a column wider than the card (全宽) leaves no room around the gutters; the pictures still keep 12 (the
+    // agent's) and 12 + 4 (the user's, 8 from its bubble) from the card's edges.
+    await page.evaluate(
+      (chat) => (globalThis as unknown as { tr: { settings: { update(p: unknown): Promise<unknown> } } }).tr.settings.update({ appearance: { chat } }),
+      { width: 'full', avatar }
+    )
+    await expect.poll(() => feed().locator('> div').first().evaluate((el) => getComputedStyle(el).maxWidth)).not.toBe('1090px')
+    await feed().evaluate((el) => el.scrollTo(0, 0))
+    const [edge, narrowMark, narrowPicture] = await Promise.all([
+      feed().boundingBox(),
+      feed().locator('[data-agent-mark]').first().boundingBox(),
+      userAvatar.boundingBox()
+    ])
+    expect(Math.round(narrowMark!.x - edge!.x)).toBe(12)
+    expect(Math.round(edge!.x + edge!.width - (narrowPicture!.x + narrowPicture!.width))).toBe(16)
+    await page.screenshot({ path: join(SHOTS, 'chat-avatars-narrow.png') })
     await page.evaluate(() =>
       (globalThis as unknown as { tr: { settings: { update(p: unknown): Promise<unknown> } } }).tr.settings.update({
         appearance: { chat: { width: 'narrow', fontWeight: 400, fontSize: 14, opacity: 1, avatar: '' } }
