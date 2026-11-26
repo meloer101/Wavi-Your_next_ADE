@@ -514,10 +514,11 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
 - [x] `wavi task add | update | ls | show`、`wavi run --task`、`wavi --skill` 的「A card from the board」、卡片送给 leader（`src/shared/dispatch.ts`、`src/renderer/dispatch/task-commands.ts`、`task-deliver.ts`）；单测
 - [x] 画布和页签：`src/renderer/tasks/`（平移缩放、便利贴、曲线、点阵加微光（带过渡）、动态、工具条、缩放），`overview/` 加第三个页签；深浅色 100% / 50% 截图对过 115A4 / 115A4′ / 115A4b
 - [x] 卡片的「停止」「取消任务」「删除」（详情浮层，`src/renderer/tasks/Detail.tsx`）；项目标签的「设置…」接到已有的「新建 leader…」（设置里「leader 会话」关着时打开 设置 · 自动化）
-- [ ] 卡片「交给主理人」：待派发的根卡在 leader 设好之后手动送出（v1.249 第一版不补送，要给卡加持久的「已送达」字段）；设置 · 自动化 里「leader 会话」那一行的定位（现在 `openSettings` 只能到面板）
+- ~~卡片「交给主理人」：待派发的根卡在 leader 设好之后手动送出~~（v1.250 改为每张根卡贴上时自己选主理人、新开会话，不再送给项目 leader）
+- [x] v1.250（Figma Screens 2 第 116 节）：去掉项目标签；便利贴自由拖动（`Task.pos`，子树跟着走，重启还在）；新建框多行输入 + 主理人菜单（Claude Code / Codex / 暂不派发），贴上时新开会话绑定根卡并送去卡片消息（`src/renderer/dispatch/task-deliver.ts` 的 `startCardLeader`，不再送给项目 leader）；动效（贴上、派发、连线、拖动、状态变化、删除，减少动态效果时只淡入淡出；`motion.ts`、`dot-field.ts` 的涟漪）。主理人没能起来时（不是 git 仓库、项目没了、建不出 worktree、会话没加上、没绑到卡上）在「动态」写一行「#号 没有派发：原因」，卡停在待派发；记着的 agent 现在不可用时新建框回到「暂不派发」（不改记着的选择）。未做：贴上时新建框朝新卡的位置缩小（只原地缩小淡出，新卡的位置在贴上那一刻还不知道）
 - [ ] 主理人菜单（Figma 114C：换 agent 和模型、「打开主理人会话」、「不再由它派发」、派发依据一行）；详情浮层的「最近活动」多行和「派发依据」
-- [x] e2e：`e2e/tasks-board.spec.ts`（11 条，真实 handler）、`e2e/tasks-dispatch.spec.ts`（5 条：贴卡送给 leader、无 leader 不送、`wavi task add`、`wavi run --task` 绑定、`--done` / `--note`）；点阵帧率：执行者实测 e2e 构建下约 60 fps（约 9,968 个点，100%，持续移动鼠标），我没有复测
-- 已验证（2026-11-25，集成分支）：`npm run check` 313 个测试文件、4238 个用例通过（改动前 304 / 4089）；两个任务 e2e 共 16 条通过。未验证：真实 Wavi 里让真 agent 走一遍整条链（贴卡 → leader 拆分 → `wavi run --task`）；触控板双指平移和捏合缩放（只测了 ⌘ 滚轮）；点阵在真机上的帧率
+- [x] e2e：`e2e/tasks-board.spec.ts`（16 条，真实 handler：含拖动、新建框、动效）、`e2e/tasks-dispatch.spec.ts`（5 条：贴卡带 agent 新开会话并只送一次、暂不派发不开会话、`wavi task add`、`wavi run --task` 绑定、`--done` / `--note`）；点阵帧率：执行者实测 e2e 构建下约 60 fps（约 9,968 个点，100%，持续移动鼠标），我没有复测
+- 已验证（2026-11-25，v1.250 分支）：`npm run check` 通过；两个任务 e2e 共 23 条通过（假 `claude`，只验证了 Claude Code 的主理人会话；e2e 里 Codex 没装，菜单里是灰的「没装」）。未验证：真实 Wavi 里让真 agent 走一遍整条链（贴卡 → 主理人拆分 → `wavi run --task`）；Codex 当主理人；动效的观感只看了截图、没有录屏对过；触控板双指平移和捏合缩放（只测了 ⌘ 滚轮）；点阵在真机上的帧率
 
 ## 进行中：F26 自动领取 GitHub issue（2026-11-20 定）
 

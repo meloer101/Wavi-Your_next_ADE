@@ -3,7 +3,7 @@
 // fake clock and ids.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { checkDraft, parseTasksFile, taskDepth, TASK_LIMITS, withDescendants, type Task, type TaskDraft, type TaskId, type TaskPatch, type TasksFileData } from '@shared/task-board'
+import { checkDraft, parseTaskPos, parseTasksFile, taskDepth, TASK_LIMITS, withDescendants, type Task, type TaskDraft, type TaskId, type TaskPatch, type TasksFileData } from '@shared/task-board'
 
 export class TasksFile {
   /** The file exists but could not be read: it is never written over (the board then lives in memory only). */
@@ -149,6 +149,12 @@ export class TaskBoard {
       if (tasks.some((t) => t.id !== id && t.sessionId === patch.sessionId)) return null
       next.sessionId = patch.sessionId
     }
+    if (patch.pos === null) delete next.pos
+    else if (patch.pos !== undefined) {
+      const pos = parseTaskPos(patch.pos)
+      if (!pos) return null
+      next.pos = pos
+    }
     if (patch.parentId !== undefined && patch.parentId !== old.parentId) {
       if (patch.parentId === null) delete next.parentId
       else {
@@ -160,6 +166,8 @@ export class TaskBoard {
         if (taskDepth(tasks, parent.id) + 1 + heightBelow(tasks, id) > TASK_LIMITS.maxDepth) return null
         next.parentId = parent.id
       }
+      // A child's `pos` is an offset from its old parent; a position set in this same patch is the new one.
+      if (patch.pos === undefined) delete next.pos
     }
     next.updatedAt = this.deps.now()
     return this.commit({ ...this.data, tasks: tasks.map((t, i) => (i === at ? next : t)) }) ? { ...next } : null

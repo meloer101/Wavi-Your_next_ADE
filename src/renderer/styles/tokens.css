@@ -91,6 +91,17 @@
   /* Slide (segmented thumb): a damped spring (ζ 0.7) — pulled off fast, ~4.5% overshoot, settled by the end. */
   --motion-duration-slide: 380ms;
   --motion-spring: linear(0, 0.06, 0.2, 0.37, 0.54, 0.691, 0.813, 0.906, 0.971, 1.012, 1.035, 1.045, 1.045, 1.041, 1.034, 1.026, 1.018, 1.012, 1.007, 1.003, 1);
+  /* 任务看板 motion (PRD F9 v1.250 · 动效): a note pasted on, a note leaving, a connector drawn, its end dot, the pin's press,
+     a note lifted, a state's colour changing, the view panning to a new note; reduced motion shortens them all. */
+  --motion-note-out: 200ms;
+  --motion-edge-draw: 320ms;
+  --motion-dot-pop: 150ms;
+  --motion-press-card: 160ms;
+  --motion-lift: 150ms;
+  --motion-status: 220ms;
+  --motion-pan: 300ms;
+  --motion-reduced: 120ms;
+  --motion-stagger: 60ms;
   /* Sidebar and right panel opening / closing (AppShell): the same spring, a little longer. Keep DRAWER_MS in step. */
   --motion-duration-drawer: 460ms;
   /* 全屏背景 (PRD v1.97, Figma 38): the light field behind the glass in full screen — sky, a glow on the horizon,

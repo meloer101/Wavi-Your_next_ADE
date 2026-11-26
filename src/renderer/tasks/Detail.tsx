@@ -58,13 +58,12 @@ interface Props {
   parentTitle: string | undefined
   worktree: Worktree | undefined
   dispatcher: Session | undefined
-  hasLeader: boolean
   now: number
   onClose(): void
 }
 
-function SubtaskRow({ card, now, hasLeader }: { card: Card<Session>; now: number; hasLeader: boolean }) {
-  const line = actionLine(card, { waitingBelow: 0, isRoot: false, hasLeader })
+function SubtaskRow({ card, now }: { card: Card<Session>; now: number }) {
+  const line = actionLine(card, { waitingBelow: 0 })
   const text = useActionText(line)
   const time = card.session ? sessionTime(card.session, card.session.status, now).text : ''
   return (
@@ -79,7 +78,7 @@ function SubtaskRow({ card, now, hasLeader }: { card: Card<Session>; now: number
   )
 }
 
-export function Detail({ card, children, descendants, projectName, parentTitle, worktree, dispatcher, hasLeader, now, onClose }: Props) {
+export function Detail({ card, children, descendants, projectName, parentTitle, worktree, dispatcher, now, onClose }: Props) {
   const m = useMessages(M)
   const n = useMessages(NOTE_M)
   const dialog = useRef<HTMLDivElement>(null)
@@ -162,7 +161,7 @@ export function Detail({ card, children, descendants, projectName, parentTitle, 
               </h3>
               <ul className={styles.list}>
                 {children.map((c) => (
-                  <SubtaskRow key={c.task.id} card={c} now={now} hasLeader={hasLeader} />
+                  <SubtaskRow key={c.task.id} card={c} now={now} />
                 ))}
               </ul>
             </section>

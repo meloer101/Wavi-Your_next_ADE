@@ -1,8 +1,10 @@
 // The board's floating panes (Figma 115A4): 「动态」 top right, the toolbar at the bottom, the zoom control bottom right.
 // All three are the thickest solid-glass finish, so they read above notes and dots alike.
+import { useState } from 'react'
 import { defineMessages } from '@shared/i18n'
 import { Minus, Plus } from '../ui/icons'
 import { useMessages } from '../ui/i18n'
+import type { LeaderFailure } from '../dispatch/task-deliver'
 import type { ActivityEvent, ActivityKind } from './model'
 import styles from './Panes.module.css'
 
@@ -26,7 +28,16 @@ const M = defineMessages({
     attention: (seq: number, title: string) => `#${seq} ${title} 等你处理`,
     error: (seq: number, title: string) => `#${seq} ${title} 出错`,
     canceled: (seq: number, title: string) => `#${seq} ${title} 已取消`,
-    split: (parent: number, from: number, to?: number) => `#${parent} 拆出 #${from}${to !== undefined ? ` – #${to}` : ''}`
+    split: (parent: number, from: number, to?: number) => `#${parent} 拆出 #${from}${to !== undefined ? ` – #${to}` : ''}`,
+    notDispatched: (seq: number, reason: string) => `#${seq} 没有派发：${reason}`,
+    reasons: {
+      'no-project': '项目已经不在了',
+      'not-git': '不是 git 仓库',
+      'no-plan': '建不出新的 worktree',
+      'no-session': '会话没能创建',
+      unbound: '会话没能绑定到这张卡，卡片消息没有送出',
+      failed: '启动时出错'
+    } satisfies Record<LeaderFailure, string>
   },
   en: {
     activity: 'Activity',
@@ -44,7 +55,16 @@ const M = defineMessages({
     attention: (seq: number, title: string) => `#${seq} ${title} needs you`,
     error: (seq: number, title: string) => `#${seq} ${title} failed`,
     canceled: (seq: number, title: string) => `#${seq} ${title} canceled`,
-    split: (parent: number, from: number, to?: number) => `#${parent} split #${from}${to !== undefined ? ` – #${to}` : ''}`
+    split: (parent: number, from: number, to?: number) => `#${parent} split #${from}${to !== undefined ? ` – #${to}` : ''}`,
+    notDispatched: (seq: number, reason: string) => `#${seq} not dispatched: ${reason}`,
+    reasons: {
+      'no-project': 'the project is gone',
+      'not-git': 'not a git repository',
+      'no-plan': 'no new worktree could be planned',
+      'no-session': 'the session could not be added',
+      unbound: 'the session could not be bound to this card, so the card was not sent',
+      failed: 'starting failed'
+    } satisfies Record<LeaderFailure, string>
   }
 })
 
@@ -56,13 +76,21 @@ const DOT_OF: Record<ActivityKind, 'working' | 'attention' | 'done' | 'error' | 
   done: 'done',
   attention: 'attention',
   error: 'error',
-  canceled: 'idle'
+  canceled: 'idle',
+  notDispatched: 'error'
 }
 
 const clock = (at: number): string => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
 
 export function ActivityPanel({ events, open, onToggle }: { events: readonly ActivityEvent[]; open: boolean; onToggle(): void }) {
   const m = useMessages(M)
+  const eventText = (e: ActivityEvent): string => {
+    if (e.kind === 'split') return m.split(e.parentSeq ?? 0, e.seq, e.toSeq)
+    if (e.kind === 'notDispatched') return m.notDispatched(e.seq, m.reasons[e.reason ?? 'failed'])
+    return m[e.kind](e.seq, e.title)
+  }
+  // Rows newer than the ones here when the panel mounted slide in; coming back to the tab shows the old ones still.
+  const [seenAtMount] = useState(() => events[0]?.id ?? 0)
   if (events.length === 0) return null
   return (
     <section className={styles.activity} data-testid="task-activity" data-open={open} data-no-pan="" aria-label={m.activity}>
@@ -73,11 +101,11 @@ export function ActivityPanel({ events, open, onToggle }: { events: readonly Act
       {open && (
         <ol className={styles.events}>
           {events.slice(0, SHOWN_EVENTS).map((e) => (
-            <li key={e.id} className={styles.event}>
+            <li key={e.id} className={styles.event} data-new={e.id > seenAtMount}>
               <span className={styles.eventDot} data-tone={DOT_OF[e.kind]} aria-hidden />
               <span className={styles.eventBody}>
                 <span className={styles.key}>{clock(e.at)}</span>
-                <span className={styles.eventText}>{e.kind === 'split' ? m.split(e.parentSeq ?? 0, e.seq, e.toSeq) : m[e.kind](e.seq, e.title)}</span>
+                <span className={styles.eventText}>{eventText(e)}</span>
               </span>
             </li>
           ))}

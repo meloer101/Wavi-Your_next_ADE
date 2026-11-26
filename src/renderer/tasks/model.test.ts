@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Task } from '@shared/task-board'
-import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, type CardSession } from './model'
+import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, splitCard, usableLeader, type CardSession } from './model'
 
 let n = 0
 function task(over: Partial<Task> = {}): Task {
@@ -124,7 +124,7 @@ describe('appendEvents', () => {
 describe('actionLine', () => {
   type S = { id: string; status: CardSession['status']; currentAction?: string; lastReply?: string }
   const cardOf = (t: Task, s?: S) => joinCards([t], s ? [s] : [])[0]!
-  const root = { waitingBelow: 0, isRoot: true, hasLeader: true }
+  const root = { waitingBelow: 0 }
 
   it('puts a parent’s waiting descendants first', () => {
     expect(actionLine(cardOf(task()), { ...root, waitingBelow: 2 })).toEqual({ kind: 'waiting', count: 2 })
@@ -141,10 +141,8 @@ describe('actionLine', () => {
     expect(actionLine(cardOf(task({ note: '等 #3' })), root)).toEqual({ kind: 'text', text: '等 #3' })
   })
 
-  it('says who a card without a session waits for', () => {
-    expect(actionLine(cardOf(task()), root)).toEqual({ kind: 'key', key: 'waitLeader' })
-    expect(actionLine(cardOf(task()), { ...root, hasLeader: false })).toEqual({ kind: 'key', key: 'noLeader' })
-    expect(actionLine(cardOf(task()), { ...root, isRoot: false })).toEqual({ kind: 'key', key: 'unassigned' })
+  it('says a card without a session waits to be dispatched', () => {
+    expect(actionLine(cardOf(task()), root)).toEqual({ kind: 'key', key: 'unassigned' })
   })
 
   it('names done, done and unread, and canceled', () => {
@@ -157,5 +155,57 @@ describe('actionLine', () => {
     const t = task({ sessionId: 's' })
     expect(actionLine(cardOf(t, { id: 's', status: 'running' }), root)).toEqual({ kind: 'key', key: 'working' })
     expect(actionLine(cardOf(t, { id: 's', status: 'idle' }), root)).toEqual({ kind: 'key', key: 'idle' })
+  })
+})
+
+describe('splitCard', () => {
+  it('takes the first line as the title and the rest as the body', () => {
+    expect(splitCard('改登录\n第二行\n第三行')).toEqual({ title: '改登录', body: '第二行\n第三行' })
+    expect(splitCard('  只有标题  ')).toEqual({ title: '只有标题', body: '' })
+  })
+  it('drops blank lines before the text and after it', () => {
+    expect(splitCard('\n\n标题\n\n正文\n\n')).toEqual({ title: '标题', body: '正文' })
+  })
+  it('lets what is over 120 characters in the first line start the body', () => {
+    const out = splitCard(`${'a'.repeat(120)}bcd\nnext`)!
+    expect(out.title).toBe('a'.repeat(120))
+    expect(out.body).toBe('bcd\nnext')
+  })
+  it('is null without text', () => {
+    expect(splitCard('')).toBeNull()
+    expect(splitCard(' \n \n')).toBeNull()
+  })
+})
+
+describe('splitCard · code points', () => {
+  it('never cuts a surrogate pair at the 120-unit boundary: the emoji starts the body', () => {
+    const out = splitCard(`${'a'.repeat(119)}😀tail\nnext`)!
+    expect(out.title).toBe('a'.repeat(119))
+    expect(out.body).toBe('😀tail\nnext')
+    expect(out.title).toHaveLength(119)
+  })
+  it('keeps a pair that fits, and the title never goes over 120 UTF-16 units (main counts them so)', () => {
+    const out = splitCard(`${'a'.repeat(118)}😀z`)!
+    expect(out.title).toBe(`${'a'.repeat(118)}😀`)
+    expect(out.title.length).toBe(120)
+    expect(out.body).toBe('z')
+    expect(Array.from(splitCard('😀'.repeat(70))!.title)).toHaveLength(60)
+  })
+})
+
+describe('usableLeader', () => {
+  const check = { codexSandboxMode: false }
+  it('keeps 暂不派发 and an agent that is installed and may lead', () => {
+    expect(usableLeader('none', {}, check)).toBe('none')
+    expect(usableLeader('claude', { claude: true }, check)).toBe('claude')
+  })
+  it('falls back to 暂不派发 for an agent that is not installed or may not lead here', () => {
+    expect(usableLeader('codex', { claude: true, codex: false }, check)).toBe('none')
+    expect(usableLeader('codex', { claude: true }, check)).toBe('none')
+    expect(usableLeader('codex', { codex: true }, { codexSandboxMode: true })).toBe('none')
+  })
+  it('keeps the choice while detection is not back', () => {
+    expect(usableLeader('claude', null, check)).toBe('claude')
+    expect(usableLeader('claude', { claude: true }, null)).toBe('claude')
   })
 })

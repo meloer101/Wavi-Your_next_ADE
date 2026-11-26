@@ -15,8 +15,6 @@ import styles from './Note.module.css'
 
 export const NOTE_M = defineMessages({
   zh: {
-    waitLeader: '等主理人',
-    noLeader: '没有主理人，不会派发',
     unassigned: '待派发',
     done: '已完成',
     doneReview: '已完成 · 等你审阅',
@@ -27,8 +25,6 @@ export const NOTE_M = defineMessages({
     states: { idle: '待派发', working: '运行中', attention: '等你处理', done: '已完成', error: '出错', canceled: '已取消' } satisfies Record<TaskState, string>
   },
   en: {
-    waitLeader: 'Waiting for the leader',
-    noLeader: 'No leader, will not be dispatched',
     unassigned: 'To dispatch',
     done: 'Done',
     doneReview: 'Done · awaiting review',
@@ -49,8 +45,6 @@ export interface NoteInfo {
   progress: { done: number; total: number }
   /** Descendants waiting on the user. */
   waiting: number
-  isRoot: boolean
-  hasLeader: boolean
 }
 
 export interface NoteProps {
@@ -59,6 +53,14 @@ export interface NoteProps {
   drawing: Drawing
   info: NoteInfo
   selected: boolean
+  /** Held by the pointer: raised above the others. */
+  dragging: boolean
+  /** Degrees of tilt while it is dragged along (0 at rest); the board computes it from the pointer's speed. */
+  tilt: number
+  /** What just happened to it, for its motion (`data-fx`: land slide pin done cancel leave, space separated). */
+  fx: string
+  /** Its place in a batch of new cards (the stagger). */
+  order: number
   dimmed: boolean
   now: number
   onSelect(id: string): void
@@ -77,18 +79,21 @@ function timeOf(card: Card<Session>, now: number): string {
   return ''
 }
 
-function NoteView({ card, placed, drawing, info, selected, dimmed, now, onSelect, onOpen }: NoteProps) {
+function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, order, dimmed, now, onSelect, onOpen }: NoteProps) {
   const m = useMessages(NOTE_M)
   const { task, state, session } = card
-  const line = actionLine(card, { waitingBelow: info.waiting, isRoot: info.isRoot, hasLeader: info.hasLeader })
+  const line = actionLine(card, { waitingBelow: info.waiting })
   const action = useActionText(line)
-  const style: CSSProperties = { left: placed.x, top: placed.y, width: placed.w, height: placed.h }
+  const style = { left: placed.x, top: placed.y, width: placed.w, height: placed.h, '--tilt': `${tilt}deg`, '--fx-order': order } as CSSProperties
   const common = {
     className: styles.card,
     style,
     'data-state': state,
     'data-drawing': drawing,
     'data-selected': selected,
+    'data-dragging': dragging,
+    'data-tilt': tilt !== 0 ? tilt.toFixed(1) : undefined,
+    'data-fx': fx !== '' ? fx : undefined,
     'data-dimmed': dimmed,
     'data-task-id': task.id,
     'data-seq': task.seq,
@@ -155,11 +160,13 @@ const same = (a: NoteProps, b: NoteProps): boolean =>
   a.placed.parent === b.placed.parent &&
   a.drawing === b.drawing &&
   a.selected === b.selected &&
+  a.dragging === b.dragging &&
+  a.tilt === b.tilt &&
+  a.fx === b.fx &&
+  a.order === b.order &&
   a.dimmed === b.dimmed &&
   a.now === b.now &&
   a.info.waiting === b.info.waiting &&
-  a.info.isRoot === b.info.isRoot &&
-  a.info.hasLeader === b.info.hasLeader &&
   a.info.progress.done === b.info.progress.done &&
   a.info.progress.total === b.info.progress.total &&
   a.info.segments.join() === b.info.segments.join() &&

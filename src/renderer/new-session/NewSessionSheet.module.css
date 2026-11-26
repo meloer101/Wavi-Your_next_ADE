@@ -493,3 +493,10 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+/* A hairline between untitled sections of a menu (the task board's 主理人 menu: agents, then 暂不派发). */
+.menuSeparator {
+  height: 1px;
+  margin: var(--space-4) var(--space-8);
+  background: var(--border-subtle);
+}

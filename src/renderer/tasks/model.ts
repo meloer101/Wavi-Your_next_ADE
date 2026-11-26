@@ -1,7 +1,9 @@
 // 任务 board's pure model (PRD F9 v1.249): a card is a task joined with the session it is bound to, and the 「动态」
 // panel's events are what changed between two looks at the board.
-import { taskState, type Task, type TaskId, type TaskState } from '@shared/task-board'
+import { leaderBlock, type DispatchAgent, type LeaderCheck } from '@shared/dispatch'
+import { taskState, TASK_LIMITS, type Task, type TaskId, type TaskState } from '@shared/task-board'
 import type { Session } from '@shared/types'
+import type { LeaderFailure } from '../dispatch/task-deliver'
 
 export type CardSession = Pick<Session, 'id' | 'status'>
 
@@ -39,7 +41,7 @@ export function boardCounts(cards: readonly Card[], projectCount: number): { pro
 
 // ── 动态 ──────────────────────────────────────────────────────────────────────
 
-export type ActivityKind = 'added' | 'split' | 'dispatched' | 'started' | 'done' | 'attention' | 'error' | 'canceled'
+export type ActivityKind = 'added' | 'split' | 'dispatched' | 'started' | 'done' | 'attention' | 'error' | 'canceled' | 'notDispatched'
 
 export interface ActivityEvent {
   /** Unique, increasing: the list's key. */
@@ -51,6 +53,8 @@ export interface ActivityEvent {
   /** `split`: the parent, and the last of the children when several came at once (「#22 – #27」). */
   parentSeq?: number
   toSeq?: number
+  /** `notDispatched`: why the card's leader did not start; the card stays 待派发. */
+  reason?: LeaderFailure
 }
 
 interface Seen {
@@ -134,16 +138,15 @@ export type ActionLine =
   /** A parent whose descendants wait on the user: drawn in the attention colour. */
   | { kind: 'waiting'; count: number }
   | { kind: 'text'; text: string }
-  | { kind: 'key'; key: 'waitLeader' | 'noLeader' | 'unassigned' | 'done' | 'doneReview' | 'canceled' | 'working' | 'idle' }
+  | { kind: 'key'; key: 'unassigned' | 'done' | 'doneReview' | 'canceled' | 'working' | 'idle' }
 
 /**
  * The one line under a card's title: what its agent is doing (the session's current action, else its last sentence,
- * else the note the agent left on the card), or why nothing is. A card nobody took says who should: a root waits for
- * the project's leader (or says there is none), a child waits to be dispatched.
+ * else the note the agent left on the card), or why nothing is: a card nobody took waits to be dispatched.
  */
 export function actionLine(
   card: Card<Pick<Session, 'id' | 'status' | 'currentAction' | 'lastReply'>>,
-  ctx: { waitingBelow: number; isRoot: boolean; hasLeader: boolean }
+  ctx: { waitingBelow: number }
 ): ActionLine {
   if (ctx.waitingBelow > 0) return { kind: 'waiting', count: ctx.waitingBelow }
   const { state, session, task } = card
@@ -152,6 +155,41 @@ export function actionLine(
   const said = session?.currentAction?.trim() || session?.lastReply?.trim() || task.note?.trim()
   if (said) return { kind: 'text', text: said }
   if (session) return { kind: 'key', key: state === 'working' ? 'working' : 'idle' }
-  if (!ctx.isRoot) return { kind: 'key', key: 'unassigned' }
-  return { kind: 'key', key: ctx.hasLeader ? 'waitLeader' : 'noLeader' }
+  return { kind: 'key', key: 'unassigned' }
+}
+
+// ── The new-card box's text ───────────────────────────────────────────────────
+
+/**
+ * What the box holds as a card: the first line is the title (trimmed, at most `TASK_LIMITS.title` characters; what is
+ * over starts the body), the other lines are the body. Blank lines before the text are dropped. `null` without text.
+ */
+export function splitCard(text: string): { title: string; body: string } | null {
+  const lines = text.replace(/^\s+/, '').replace(/\s+$/, '').split('\n')
+  const first = (lines[0] ?? '').trim()
+  if (first === '') return null
+  // Cut between code points: main counts the title in UTF-16 units (`checkDraft`), and a pair is never split.
+  let title = ''
+  let rest = ''
+  for (const ch of first) {
+    if (rest === '' && title.length + ch.length <= TASK_LIMITS.title) title += ch
+    else rest += ch
+  }
+  const body = [...(rest !== '' ? [rest.trim()] : []), ...lines.slice(1)].join('\n').replace(/^\n+/, '')
+  return { title: title.trimEnd(), body }
+}
+
+/** Who leads a pasted root card (PRD F9 v1.250): an agent, or `none` (暂不派发). */
+export type LeaderChoice = DispatchAgent | 'none'
+
+/**
+ * The leader the new-card box really uses: the chosen agent when it can lead here and is installed, else 暂不派发. A
+ * remembered agent that is gone is not started, and is not forgotten either (the stored choice stays). `found` /
+ * `check` are what detection returned; while either is null (not back yet) the choice stands, and the box looks again
+ * before it submits.
+ */
+export function usableLeader(choice: LeaderChoice, found: Readonly<Record<string, boolean>> | null, check: LeaderCheck | null): LeaderChoice {
+  if (choice === 'none') return 'none'
+  if (found === null || check === null) return choice
+  return found[choice] === true && leaderBlock(choice, 'cli', check) === null ? choice : 'none'
 }

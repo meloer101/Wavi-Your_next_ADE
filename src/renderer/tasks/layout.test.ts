@@ -23,13 +23,13 @@ import {
 } from './layout'
 
 let seq = 0
-function task(id: string, projectId: string, parentId?: string): Task {
+function task(id: string, projectId: string, parentId?: string, pos?: { x: number; y: number }): Task {
   seq++
-  return { id, seq, projectId, title: id, body: '', createdBy: 'user', manual: 'todo', createdAt: seq, updatedAt: seq, ...(parentId ? { parentId } : {}) }
+  return { id, seq, projectId, title: id, body: '', createdBy: 'user', manual: 'todo', createdAt: seq, updatedAt: seq, ...(parentId ? { parentId } : {}), ...(pos ? { pos } : {}) }
 }
 
-function board(tasks: Task[], mode: 'note' | 'chip' = 'note', order: string[] = ['p']): BoardLayout {
-  return layoutBoard(groupByProject(tasks, order, buildTaskTree), mode)
+function board(tasks: Task[], mode: 'note' | 'chip' = 'note', order: string[] = ['p'], overrides?: Map<string, { x: number; y: number }>): BoardLayout {
+  return layoutBoard(groupByProject(tasks, order, buildTaskTree), mode, overrides)
 }
 const card = (l: BoardLayout, id: string): PlacedCard => l.cards.find((c) => c.id === id)!
 const mid = (c: PlacedCard): number => c.y + c.h / 2
@@ -71,10 +71,9 @@ describe('layoutBoard · note mode', () => {
     expect(link.y2 - link.y1).toBe(30)
   })
 
-  it('keeps the whole tree below the cluster top when the shift would lift a parent', () => {
+  it('keeps the whole tree at or below the top when the shift would lift a parent', () => {
     const l = board([task('r', 'p'), task('a', 'p', 'r'), task('a1', 'p', 'a')])
-    const top = Math.min(...l.cards.map((c) => c.y))
-    expect(top).toBe(DIMS.note.labelH + DIMS.note.labelGap)
+    expect(Math.min(...l.cards.map((c) => c.y))).toBe(0)
   })
 
   it('draws a link from the parent right-middle to the child left-middle', () => {
@@ -91,36 +90,82 @@ describe('layoutBoard · note mode', () => {
     expect(card(l, 'r2').y).toBeGreaterThanOrEqual(card(l, 'r1').y + card(l, 'r1').h + DIMS.note.rootGap)
   })
 
-  it('places a label above the cluster and leaves room for it', () => {
-    const l = board(tree())
-    const cluster = l.clusters[0]!
-    expect(cluster.label).toEqual({ x: cluster.x, y: cluster.y })
-    expect(Math.min(...l.cards.map((c) => c.y))).toBeGreaterThanOrEqual(cluster.y + DIMS.note.labelH)
-  })
-
-  it('never overlaps two cards, and never overlaps two clusters', () => {
+  it('never overlaps two cards, also across projects', () => {
     const tasks = [...tree(), ...['q1', 'q2', 'q3'].map((id) => task(id, 'q')), task('z', 'z'), task('z1', 'z', 'z'), task('z2', 'z', 'z')]
     const l = board(tasks, 'note', ['p', 'q', 'z'])
     for (let i = 0; i < l.cards.length; i++) for (let j = i + 1; j < l.cards.length; j++) expect(overlaps(l.cards[i]!, l.cards[j]!)).toBe(false)
-    for (let i = 0; i < l.clusters.length; i++) for (let j = i + 1; j < l.clusters.length; j++) expect(overlaps(l.clusters[i]!, l.clusters[j]!)).toBe(false)
   })
 
-  it('wraps clusters into a new row once the row is full', () => {
+  it('wraps projects into a new row once the row is full', () => {
     const wide = (p: string): Task[] => [task(`${p}0`, p), task(`${p}1`, p, `${p}0`), task(`${p}2`, p, `${p}1`), task(`${p}3`, p, `${p}2`)]
     const l = layoutBoard(groupByProject(['a', 'b', 'c'].flatMap(wide), ['a', 'b', 'c'], buildTaskTree), 'note')
-    const rows = new Set(l.clusters.map((c) => c.y))
+    const rows = new Set(['a0', 'b0', 'c0'].map((id) => card(l, id).y))
     expect(rows.size).toBeGreaterThan(1)
   })
 
-  it('gives a project without cards a cluster (its label holds 设置主理人)', () => {
-    const l = board([], 'note', ['empty'])
-    expect(l.clusters).toHaveLength(1)
-    expect(l.cards).toHaveLength(0)
+  it('gives a project without cards no room', () => {
+    const l = board([task('x', 'later')], 'note', ['empty', 'later'])
+    expect(l.cards).toHaveLength(1)
+    expect(card(l, 'x')).toMatchObject({ x: 0, y: 0 })
+    expect(board([], 'note', ['empty']).cards).toHaveLength(0)
   })
 
   it('orders projects as given and appends projects it was not told about', () => {
     const l = board([task('x', 'later'), task('y', 'first')], 'note', ['first'])
-    expect(l.clusters.map((c) => c.projectId)).toEqual(['first', 'later'])
+    expect(l.cards.map((c) => c.projectId)).toEqual(['first', 'later'])
+  })
+})
+
+describe('layoutBoard · dragged cards', () => {
+  it('puts a moved root at its position, and its subtree follows', () => {
+    const auto = board([task('r', 'p'), task('a', 'p', 'r'), task('a1', 'p', 'a')])
+    const l = board([task('r', 'p', undefined, { x: 500, y: 400 }), task('a', 'p', 'r'), task('a1', 'p', 'a')])
+    expect(card(l, 'r')).toMatchObject({ x: 500, y: 400 })
+    expect(card(l, 'a').x - card(l, 'r').x).toBe(card(auto, 'a').x - card(auto, 'r').x)
+    expect(card(l, 'a1').y - card(l, 'r').y).toBe(card(auto, 'a1').y - card(auto, 'r').y)
+  })
+
+  it('puts a moved child at its parent plus its position, and leaves its siblings where the tree put them', () => {
+    const auto = board(tree())
+    const tasks = tree().map((t) => (t.id === 'b' ? { ...t, pos: { x: 40, y: 300 } } : t))
+    const l = board(tasks)
+    expect(card(l, 'b')).toMatchObject({ x: card(l, 'r').x + 40, y: card(l, 'r').y + 300 })
+    expect(card(l, 'b1').x - card(l, 'b').x).toBe(DIMS.note.pitch)
+    expect(card(l, 'b1').y - card(l, 'b').y).toBe(card(auto, 'b1').y - card(auto, 'b').y)
+    expect(card(l, 'a')).toMatchObject({ x: card(auto, 'a').x, y: card(auto, 'a').y })
+  })
+
+  it('moves a child with a moved parent: its position stays relative to the parent', () => {
+    const tasks = tree().map((t) => (t.id === 'r' ? { ...t, pos: { x: 100, y: 100 } } : t.id === 'a' ? { ...t, pos: { x: 300, y: 10 } } : t))
+    const l = board(tasks)
+    expect(card(l, 'a')).toMatchObject({ x: 400, y: 110 })
+  })
+
+  it('keeps the slot of a moved root: the next root does not move up', () => {
+    const l = board([task('r1', 'p', undefined, { x: 900, y: 900 }), task('r2', 'p')])
+    const auto = board([task('r1', 'p'), task('r2', 'p')])
+    expect(card(l, 'r2')).toMatchObject({ x: card(auto, 'r2').x, y: card(auto, 'r2').y })
+  })
+
+  it('draws the links between the placed rects and includes moved cards in the bounds', () => {
+    const l = board([task('r', 'p'), task('a', 'p', 'r', { x: 700, y: 900 })])
+    const r = card(l, 'r')
+    const a = card(l, 'a')
+    expect(l.links[0]).toMatchObject({ fromId: 'r', toId: 'a', x1: r.x + r.w, y1: mid(r), x2: a.x, y2: mid(a) })
+    expect(l.bounds.x + l.bounds.w).toBe(a.x + a.w)
+    expect(l.bounds.y + l.bounds.h).toBe(a.y + a.h)
+  })
+
+  it('takes a drag in progress over the saved position', () => {
+    const l = board([task('r', 'p', undefined, { x: 10, y: 10 })], 'note', ['p'], new Map([['r', { x: 33, y: 44 }]]))
+    expect(card(l, 'r')).toMatchObject({ x: 33, y: 44 })
+  })
+
+  it('scales positions with the chip pitch in chip mode', () => {
+    const l = board([task('r', 'p'), task('a', 'p', 'r', { x: 290, y: 100 })], 'chip')
+    const ratio = DIMS.chip.pitch / DIMS.note.pitch
+    expect(card(l, 'a').x - card(l, 'r').x).toBeCloseTo(290 * ratio)
+    expect(card(l, 'a').y - card(l, 'r').y).toBeCloseTo(100 * ratio)
   })
 })
 

@@ -9,7 +9,8 @@
 }
 
 .board[data-space='true'],
-.board[data-panning='true'] {
+.board[data-panning='true'],
+.board[data-dragging='true'] {
   cursor: grabbing;
 }
 
@@ -44,4 +45,85 @@
 
 .board[data-space='true'] .world * {
   cursor: grabbing;
+}
+
+/* ③ A connector drawn from its parent (pathLength 1 + dasharray), its end dot popping last; ⑥ drawn back when it goes. The
+   stroke is unscaled by the world while a dash animates (non-scaling-stroke would take the dashes in screen px), so it is
+   2 px on screen either way. */
+.link[data-fx] path {
+  vector-effect: none;
+  stroke-width: calc(2px / var(--world-scale, 1));
+  stroke-dasharray: 1;
+}
+
+.link[data-fx='draw'] path {
+  stroke-dashoffset: 1;
+  animation: draw var(--motion-edge-draw) var(--ease-out) calc(var(--fx-order, 0) * var(--motion-stagger)) forwards;
+}
+
+.link[data-fx='draw'] .end {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dot-pop var(--motion-dot-pop) var(--ease-out) calc(var(--motion-edge-draw) + var(--fx-order, 0) * var(--motion-stagger)) both;
+}
+
+.link[data-fx='retract'] path {
+  animation: retract var(--motion-note-out) var(--ease-out) forwards;
+}
+
+.link[data-fx='retract'] circle {
+  animation: fade-out var(--motion-note-out) var(--ease-out) forwards;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes retract {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes dot-pop {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link[data-fx='draw'] path {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation: fade-in var(--motion-reduced) linear both;
+  }
+
+  .link[data-fx='draw'] .end {
+    animation: none;
+  }
+
+  .link[data-fx='retract'] path {
+    stroke-dasharray: none;
+    animation: fade-out var(--motion-reduced) linear forwards;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }

@@ -134,7 +134,7 @@ test('⌘-scroll zooms around the pointer, and the zoom label follows', async ()
   expect(parseInt((await zoom().textContent()) ?? '0', 10)).toBeGreaterThan(parseInt(before ?? '0', 10))
 })
 
-test('a seeded board: notes, links, leader label, both themes at 100 % and 50 %', async () => {
+test('a seeded board: notes, links, no project labels, both themes at 100 % and 50 %', async () => {
   const root = await make('p-acme', 'Cookie 会话迁移', { sessionId: 's-cookie' })
   const login = await make('p-acme', '登录接口测试', { parent: root, sessionId: 's-nav' })
   const refresh = await make('p-acme', '会话过期自动刷新', { parent: root, sessionId: 's-perf' })
@@ -149,7 +149,7 @@ test('a seeded board: notes, links, leader label, both themes at 100 % and 50 %'
   const setUp = async () => {
     await page.evaluate(() => {
       const ws = (globalThis as unknown as { __trWorkspace: { setState(p: unknown): void; getState(): { sessions: Array<{ id: string; status: string }> } } }).__trWorkspace
-      ws.setState({ leaderSessions: { 'p-acme': 's-cookie' }, sessions: ws.getState().sessions.map((x) => (x.id === 's-graph' ? { ...x, status: 'needs_you' } : x)) })
+      ws.setState({ sessions: ws.getState().sessions.map((x) => (x.id === 's-graph' ? { ...x, status: 'needs_you' } : x)) })
     })
   }
 
@@ -159,7 +159,7 @@ test('a seeded board: notes, links, leader label, both themes at 100 % and 50 %'
   await expect(note(remove)).toHaveAttribute('data-state', 'attention')
   await expect(note(root)).toContainText('1 个子任务等你处理')
   await expect(note(login)).toHaveAttribute('data-state', 'done')
-  await expect(board().getByTestId('task-project-label')).toHaveCount(2)
+  await expect(board().getByTestId('task-project-label')).toHaveCount(0)
   await expect(page.getByTestId('task-activity')).toBeVisible()
   await page.mouse.move(520, 470)
   await page.waitForTimeout(500)
@@ -276,4 +276,190 @@ test('removing a parent through main removes its children and their notes disapp
   for (const card of [parent, child, grandchild]) await expect(note(card)).toHaveCount(0, WITHIN)
   await expect(note(kept)).toBeVisible()
   expect(await listTasks()).toHaveLength(1)
+})
+
+test('dragging a card moves it and its children, a reload keeps the place, and a click without movement only selects', async () => {
+  const root = await make('p-acme', '拖动的根卡')
+  const child = await make('p-acme', '跟着走的子卡', { parent: root })
+  const other = await make('p-acme', '没动的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  for (const card of [root, child, other]) await expect(note(card)).toBeVisible(WITHIN)
+  const box = async (card: Made) => (await note(card).boundingBox())!
+
+  // A click that never moves selects and leaves the card where it is.
+  const rootAt = await box(root)
+  await note(root).click()
+  await expect(note(root)).toHaveAttribute('data-selected', 'true')
+  expect(await box(root)).toEqual(rootAt)
+
+  const before = { root: await box(root), child: await box(child), other: await box(other) }
+  const from = { x: before.root.x + before.root.width / 2, y: before.root.y + 60 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 40, from.y + 40, { steps: 4 })
+  await page.mouse.move(from.x + 120, from.y + 90, { steps: 6 })
+  await expect(board()).toHaveAttribute('data-dragging', 'true')
+  await expect(note(root)).toHaveAttribute('data-dragging', 'true')
+  await shoot('drag-mid')
+  await page.mouse.up()
+  await expect(board()).toHaveAttribute('data-dragging', 'false', WITHIN)
+  // The card springs from 1.02 × back to 1 ×: measure it once it has settled.
+  await page.waitForTimeout(700)
+
+  const after = { root: await box(root), child: await box(child), other: await box(other) }
+  expect(after.root.x - before.root.x).toBeCloseTo(120, 0)
+  expect(after.root.y - before.root.y).toBeCloseTo(90, 0)
+  expect(after.child.x - before.child.x).toBeCloseTo(120, 0)
+  expect(after.child.y - before.child.y).toBeCloseTo(90, 0)
+  expect(after.other).toEqual(before.other)
+  const saved = (await listTasks()) as Array<{ id: string; pos?: { x: number; y: number } }>
+  expect(saved.find((t) => t.id === root.id)?.pos).toBeDefined()
+  expect(saved.find((t) => t.id === child.id)?.pos).toBeUndefined()
+
+  // The place is in tasks.json: a reload shows the card where it was left.
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(root)).toBeVisible(WITHIN)
+  const reloaded = await box(root)
+  expect(reloaded.x).toBeCloseTo(after.root.x, 0)
+  expect(reloaded.y).toBeCloseTo(after.root.y, 0)
+  await shoot('board-moved')
+})
+
+test('the new-card box: ⇧Enter is a new line, Enter pastes, the first line is the title and the rest the body; the leader menu lists the agents and 暂不派发', async () => {
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await board().click({ position: { x: 300, y: 300 } })
+  await page.keyboard.press('n')
+  const input = page.getByTestId('task-compose-input')
+  await expect(page.getByTestId('task-compose')).toBeVisible()
+  await expect(page.getByTestId('task-compose')).toHaveCSS('width', '320px')
+  await input.fill('梳理 auth 中间件的依赖')
+  await input.press('Shift+Enter')
+  await input.pressSequentially('先列出所有调用点，再按风险排序。')
+  await input.press('Shift+Enter')
+  await input.pressSequentially('只读，不改代码。')
+  await expect(page.getByTestId('task-compose')).toBeVisible()
+  expect(await input.inputValue()).toBe('梳理 auth 中间件的依赖\n先列出所有调用点，再按风险排序。\n只读，不改代码。')
+
+  // The leader menu: the agents that can lead, then 暂不派发; the chosen one is ticked.
+  await page.getByTestId('task-compose-leader').click()
+  const options = page.getByRole('option')
+  await expect(options).toHaveText([/Claude Code/, /Codex/, /暂不派发/])
+  await expect(page.getByRole('option', { name: /Claude Code/ })).toHaveAttribute('aria-selected', 'true')
+  await shoot('compose-leader-menu')
+  await page.getByRole('option', { name: '暂不派发' }).click()
+  await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发')
+  expect(await page.evaluate(() => globalThis.localStorage?.getItem('tr.tasks.leader.v1'))).toBe('none')
+
+  await input.press('Enter')
+  await expect(page.getByTestId('task-compose')).toHaveCount(0)
+  await expect.poll(async () => ((await listTasks()) as Array<{ title: string; body: string }>)[0], WITHIN).toMatchObject({
+    title: '梳理 auth 中间件的依赖',
+    body: '先列出所有调用点，再按风险排序。\n只读，不改代码。'
+  })
+  // Esc drops the box; the leader choice is the last one made.
+  await page.keyboard.press('n')
+  await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发')
+  await page.getByTestId('task-compose-input').press('Escape')
+  await expect(page.getByTestId('task-compose')).toHaveCount(0)
+  await page.evaluate(() => globalThis.localStorage?.removeItem('tr.tasks.leader.v1'))
+})
+
+/** Records every `data-tilt` and `data-fx` value a note takes (they last 90 ms / 1.2 s: polling could miss them). */
+const watchNotes = () =>
+  page.evaluate(() => {
+    const g = globalThis as unknown as { __seen?: { tilt: string[]; fx: string[]; observer: MutationObserver } }
+    g.__seen?.observer.disconnect()
+    const seen = { tilt: [] as string[], fx: [] as string[], observer: null as unknown as MutationObserver }
+    seen.observer = new MutationObserver((records) => {
+      for (const r of records) {
+        // A ghost is inserted with its `data-fx` already set.
+        for (const added of Array.from(r.addedNodes)) {
+          if (added instanceof HTMLElement && added.dataset.fx) seen.fx.push(added.dataset.fx)
+        }
+        if (r.type !== 'attributes') continue
+        const el = r.target as HTMLElement
+        if (r.attributeName === 'data-tilt' && el.dataset.tilt) seen.tilt.push(el.dataset.tilt)
+        if (r.attributeName === 'data-fx' && el.dataset.fx) seen.fx.push(el.dataset.fx)
+      }
+    })
+    seen.observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-tilt', 'data-fx'] })
+    g.__seen = seen
+  })
+const seenNotes = () => page.evaluate(() => (globalThis as unknown as { __seen: { tilt: string[]; fx: string[] } }).__seen)
+const ripples = () => page.locator('canvas[data-ripples]').first().getAttribute('data-ripples')
+
+async function dragFast(card: Made): Promise<void> {
+  const box = (await note(card).boundingBox())!
+  const from = { x: box.x + box.width / 2, y: box.y + 60 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 20, from.y, { steps: 2 })
+  await page.mouse.move(from.x + 260, from.y + 30, { steps: 3 })
+  await page.waitForTimeout(40)
+  await page.mouse.move(from.x + 300, from.y + 30)
+  await page.waitForTimeout(160)
+  await page.mouse.up()
+}
+
+test('motion: a pasted card lands with a ripple, a held card tilts, and what is on the board at open does not animate', async () => {
+  const before = await make('p-acme', '开着就在的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(before)).toBeVisible(WITHIN)
+  await page.waitForTimeout(400)
+  await watchNotes()
+  // Nothing played for the card that was already there.
+  await expect(note(before)).not.toHaveAttribute('data-fx', /./)
+  expect(await ripples()).toBe('0')
+
+  const fresh = await make('p-acme', '新贴的卡')
+  await expect(note(fresh)).toHaveAttribute('data-fx', /land/, WITHIN)
+  await expect.poll(ripples, { timeout: 2000 }).not.toBe('0')
+  // The mark goes again after a moment (animations only on the event).
+  await expect(note(fresh)).not.toHaveAttribute('data-fx', /./, WITHIN)
+  await expect.poll(ripples, WITHIN).toBe('0')
+  await shoot('motion-landed')
+
+  await dragFast(before)
+  const seen = await seenNotes()
+  expect(seen.tilt.length).toBeGreaterThan(0)
+  expect(seen.tilt.every((t) => Math.abs(Number(t)) <= 3)).toBe(true)
+  await expect(note(before)).not.toHaveAttribute('data-tilt', /./, WITHIN)
+})
+
+test('motion: a child slides out along a line that draws in; a deleted card leaves as a ghost', async () => {
+  const parent = await make('p-acme', '会拆分的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(parent)).toBeVisible(WITHIN)
+  await page.waitForTimeout(300)
+  await watchNotes()
+  const kid = await make('p-acme', '拆出来的子卡', { parent })
+  await expect(note(kid)).toHaveAttribute('data-fx', /slide/, WITHIN)
+  await expect(board().locator('g[data-fx="draw"]')).toHaveCount(1)
+  await shoot('motion-split')
+  await expect(board().locator('g[data-fx="draw"]')).toHaveCount(0, WITHIN)
+
+  await page.evaluate((id) => (globalThis as unknown as { tr: { tasks: { remove(id: string): Promise<void> } } }).tr.tasks.remove(id), kid.id)
+  await expect(note(kid)).toHaveCount(0, WITHIN)
+  expect((await seenNotes()).fx.some((v) => v.includes('leave'))).toBe(true)
+})
+
+test('motion: with the system’s reduced motion there is no ripple, no tilt and no slide', async () => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  try {
+    const before = await make('p-acme', '安静的卡')
+    await openTasks({ x: 24, y: 24, zoom: 1 })
+    await expect(note(before)).toBeVisible(WITHIN)
+    await page.waitForTimeout(300)
+    await watchNotes()
+    const fresh = await make('p-acme', '安静地贴上')
+    await expect(note(fresh)).toBeVisible(WITHIN)
+    await page.waitForTimeout(700)
+    expect(await ripples()).toBe('0')
+    await dragFast(before)
+    const seen = await seenNotes()
+    expect(seen.tilt).toEqual([])
+    expect(await ripples()).toBe('0')
+  } finally {
+    await page.emulateMedia({ reducedMotion: null })
+  }
 })

@@ -1,4 +1,4 @@
-// 任务 board layout (PRD F9 v1.249 · Figma 115A4 / 115A4b): pure maths, no React, no DOM.
+// 任务 board layout (PRD F9 v1.249 / v1.250 · Figma 115A4 / 115A4b / 116): pure maths, no React, no DOM.
 //
 // Three things live here: where each card goes (a tidy tree per project, the projects packed on one canvas), how the
 // viewport (pan + zoom) moves, and which drawing a zoom level gets (note → chip → dot).
@@ -6,7 +6,7 @@
 // Two coordinate systems: `note` (the 100 % sizes of 115A4: 220 × 94 notes, 290 apart) and `chip` (115A4b: 156 × 28
 // one-line chips, 176 apart). A chip layout is drawn at `zoom × 2`, so a chip is exactly 156 px wide at 50 %.
 import type { ProjectId } from '@shared/types'
-import type { Task, TaskId, TaskNode } from '@shared/task-board'
+import type { Task, TaskId, TaskNode, TaskPos } from '@shared/task-board'
 
 export type LayoutMode = 'note' | 'chip'
 /** What a zoom level draws: full notes, one-line chips, or status-coloured dots. */
@@ -25,17 +25,14 @@ export interface Dims {
   leafShift: number
   /** Gap between the trees of one project's roots. */
   rootGap: number
-  /** Project label chip: its height and the gap to the tree below it. */
-  labelH: number
-  labelGap: number
   /** Gap between project clusters, and the width a row of clusters may reach before it wraps. */
   clusterGap: number
   rowWidth: number
 }
 
 export const DIMS: Record<LayoutMode, Dims> = {
-  note: { w: 220, h: 94, hParent: 118, pitch: 290, gap: 24, leafShift: 30, rootGap: 24, labelH: 28, labelGap: 24, clusterGap: 80, rowWidth: 2000 },
-  chip: { w: 156, h: 28, hParent: 28, pitch: 176, gap: 8, leafShift: 10, rootGap: 16, labelH: 28, labelGap: 16, clusterGap: 32, rowWidth: 1100 }
+  note: { w: 220, h: 94, hParent: 118, pitch: 290, gap: 24, leafShift: 30, rootGap: 24, clusterGap: 80, rowWidth: 2000 },
+  chip: { w: 156, h: 28, hParent: 28, pitch: 176, gap: 8, leafShift: 10, rootGap: 16, clusterGap: 32, rowWidth: 1100 }
 }
 
 export const MIN_ZOOM = 0.25
@@ -79,16 +76,9 @@ export interface Link {
   y2: number
 }
 
-export interface Cluster extends Rect {
-  projectId: ProjectId
-  /** The project label chip's top-left. */
-  label: { x: number; y: number }
-}
-
 export interface BoardLayout {
   cards: PlacedCard[]
   links: Link[]
-  clusters: Cluster[]
   bounds: Rect
 }
 
@@ -97,39 +87,35 @@ export interface ProjectTrees {
   roots: readonly TaskNode[]
 }
 
+/** Where cards are held while being dragged, over what `Task.pos` says (note coordinates). */
+export type PosOverrides = ReadonlyMap<TaskId, TaskPos>
+
 interface Placed {
   cards: PlacedCard[]
-  links: Link[]
   /** Centre line of the subtree's root and the bottom of everything in it. */
   centre: number
   bottom: number
 }
 
-function shift(items: { cards: PlacedCard[]; links: Link[] }, dy: number): void {
-  for (const c of items.cards) c.y += dy
-  for (const l of items.links) {
-    l.y1 += dy
-    l.y2 += dy
-  }
+function shift(cards: PlacedCard[], dy: number): void {
+  for (const c of cards) c.y += dy
 }
 
-/** One tree with its top at y = `top`, its root at x = 0. */
+/** One tree with its top at y = `top`, its root at x = 0. Parents come before their children in `cards`. */
 function placeTree(node: TaskNode, projectId: ProjectId, top: number, d: Dims, depth = 0, parentId?: TaskId): Placed {
   const parent = node.children.length > 0
   const h = parent ? d.hParent : d.h
   const x = depth * d.pitch
   const self: PlacedCard = { id: node.task.id, projectId, depth, parent, x, y: top, w: d.w, h, ...(parentId !== undefined ? { parentId } : {}) }
-  if (!parent) return { cards: [self], links: [], centre: top + h / 2, bottom: top + h }
+  if (!parent) return { cards: [self], centre: top + h / 2, bottom: top + h }
 
   const cards: PlacedCard[] = []
-  const links: Link[] = []
   const kids: Placed[] = []
   let at = top
   for (const child of node.children) {
     const placed = placeTree(child, projectId, at, d, depth + 1, node.task.id)
     kids.push(placed)
     cards.push(...placed.cards)
-    links.push(...placed.links)
     at = placed.bottom + d.gap
   }
   const first = kids[0]!.centre
@@ -138,47 +124,92 @@ function placeTree(node: TaskNode, projectId: ProjectId, top: number, d: Dims, d
   const centre = kids.length === 1 ? first - d.leafShift : (first + last) / 2
   // The parent would rise above this subtree's top: push the children down instead of drawing above the cluster.
   const lift = Math.max(0, top - (centre - h / 2))
-  if (lift > 0) shift({ cards, links }, lift)
+  if (lift > 0) shift(cards, lift)
   self.y = centre - h / 2 + lift
-  const midY = self.y + h / 2
-  for (const child of node.children) {
-    const c = cards.find((p) => p.id === child.task.id)!
-    links.push({ fromId: self.id, toId: c.id, x1: x + d.w, y1: midY, x2: c.x, y2: c.y + c.h / 2 })
-  }
   const bottom = Math.max(self.y + h, ...cards.map((c) => c.y + c.h))
-  return { cards: [self, ...cards], links, centre: midY, bottom }
+  return { cards: [self, ...cards], centre: self.y + h / 2, bottom }
 }
 
-function layoutProject(trees: ProjectTrees, d: Dims): { cards: PlacedCard[]; links: Link[]; w: number; h: number } {
+/** Every card of a tree, parents first (the order `placeTree` returns them in). */
+function nodesOf(node: TaskNode): TaskNode[] {
+  return [node, ...node.children.flatMap(nodesOf)]
+}
+
+interface Packed {
+  cards: PlacedCard[]
+  w: number
+  h: number
+}
+
+/** A project's trees stacked in the automatic layout; a root the user dragged away keeps its slot, so the rest stay put. */
+function layoutProject(trees: ProjectTrees, d: Dims): Packed {
   const cards: PlacedCard[] = []
-  const links: Link[] = []
-  let top = d.labelH + d.labelGap
+  let top = 0
   for (const root of trees.roots) {
     const placed = placeTree(root, trees.projectId, top, d)
     cards.push(...placed.cards)
-    links.push(...placed.links)
     top = placed.bottom + d.rootGap
   }
-  const bottom = cards.length > 0 ? Math.max(...cards.map((c) => c.y + c.h)) : d.labelH
-  const right = cards.length > 0 ? Math.max(...cards.map((c) => c.x + c.w)) : d.w
-  return { cards, links, w: right, h: bottom }
+  const bottom = cards.length > 0 ? Math.max(...cards.map((c) => c.y + c.h)) : 0
+  const right = cards.length > 0 ? Math.max(...cards.map((c) => c.x + c.w)) : 0
+  return { cards, w: right, h: bottom }
 }
 
 /**
- * Every project's trees on one canvas: each project is a cluster (label chip on top, its trees below), the clusters
- * packed left to right and wrapped into rows, so none overlaps. Projects without cards still get a cluster: the label
- * is where 「设置主理人」 lives.
+ * Moves the cards the user dragged: a moved root goes to its position, a moved child to its parent's top-left plus its
+ * position, and a card that was not moved keeps its automatic place relative to its parent, so a subtree follows the
+ * card it hangs from. `cards` has parents before children; `scale` turns note positions into this layout's units.
  */
-export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode): BoardLayout {
-  const d = DIMS[mode]
-  const cards: PlacedCard[] = []
+function applyPositions(cards: PlacedCard[], posOf: (id: TaskId) => TaskPos | undefined, scale: number): void {
+  const moved = new Map<TaskId, { dx: number; dy: number }>()
+  const byId = new Map(cards.map((c) => [c.id, c]))
+  for (const c of cards) {
+    const parent = c.parentId !== undefined ? byId.get(c.parentId) : undefined
+    const delta = parent ? (moved.get(parent.id) ?? { dx: 0, dy: 0 }) : { dx: 0, dy: 0 }
+    const pos = posOf(c.id)
+    const autoX = c.x
+    const autoY = c.y
+    if (pos) {
+      c.x = (parent?.x ?? 0) + pos.x * scale
+      c.y = (parent?.y ?? 0) + pos.y * scale
+      // The parent has moved already: a child's position is relative to where the parent is now.
+      moved.set(c.id, { dx: c.x - autoX, dy: c.y - autoY })
+    } else {
+      c.x += delta.dx
+      c.y += delta.dy
+      moved.set(c.id, delta)
+    }
+  }
+}
+
+function linksOf(cards: readonly PlacedCard[]): Link[] {
+  const byId = new Map(cards.map((c) => [c.id, c]))
   const links: Link[] = []
-  const clusters: Cluster[] = []
+  for (const c of cards) {
+    const p = c.parentId !== undefined ? byId.get(c.parentId) : undefined
+    if (p) links.push({ fromId: p.id, toId: c.id, x1: p.x + p.w, y1: p.y + p.h / 2, x2: c.x, y2: c.y + c.h / 2 })
+  }
+  return links
+}
+
+/**
+ * Every project's trees on one canvas: each project is a cluster of its trees, the clusters packed left to right and
+ * wrapped into rows, so none overlaps. A project without cards takes no room. Then the cards the user dragged are
+ * placed (`applyPositions`); `overrides` (a drag in progress) wins over the saved `Task.pos`.
+ */
+export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode, overrides?: PosOverrides): BoardLayout {
+  const d = DIMS[mode]
+  const scale = d.pitch / DIMS.note.pitch
+  const nodes = new Map<TaskId, TaskNode>()
+  for (const p of projects) for (const r of p.roots) for (const n of nodesOf(r)) nodes.set(n.task.id, n)
+  const posOf = (id: TaskId): TaskPos | undefined => overrides?.get(id) ?? nodes.get(id)?.task.pos
+  const cards: PlacedCard[] = []
   let x = 0
   let y = 0
   let rowH = 0
   for (const project of projects) {
     const one = layoutProject(project, d)
+    if (one.cards.length === 0) continue
     if (x > 0 && x + one.w > d.rowWidth) {
       x = 0
       y += rowH + d.clusterGap
@@ -188,19 +219,12 @@ export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode)
       c.x += x
       c.y += y
     }
-    for (const l of one.links) {
-      l.x1 += x
-      l.x2 += x
-      l.y1 += y
-      l.y2 += y
-    }
     cards.push(...one.cards)
-    links.push(...one.links)
-    clusters.push({ projectId: project.projectId, x, y, w: one.w, h: one.h, label: { x, y } })
     x += one.w + d.clusterGap
     rowH = Math.max(rowH, one.h)
   }
-  return { cards, links, clusters, bounds: boundsOf([...cards, ...clusters]) }
+  applyPositions(cards, posOf, scale)
+  return { cards, links: linksOf(cards), bounds: boundsOf(cards) }
 }
 
 export function boundsOf(rects: readonly Rect[]): Rect {

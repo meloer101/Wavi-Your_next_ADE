@@ -74,6 +74,34 @@ describe('TaskBoard', () => {
     expect(t.board.update('missing', { title: 'x' })).toBeNull()
   })
 
+  it('stores a position, clears it with null and refuses a bad one', () => {
+    const t = setup()
+    const a = t.board.create({ projectId: 'p1', title: 'a' })!
+    expect(t.board.update(a.id, { pos: { x: 10, y: -20 } })!.pos).toEqual({ x: 10, y: -20 })
+    expect(t.board.update(a.id, { pos: { x: 2e6, y: 0 } })).toBeNull()
+    expect(t.board.update(a.id, { pos: { x: Number.NaN, y: 0 } })).toBeNull()
+    expect(t.board.list()[0]!.pos).toEqual({ x: 10, y: -20 })
+    expect(t.board.update(a.id, { pos: null })!.pos).toBeUndefined()
+  })
+
+  it('drops the position when the parent changes (it was relative to the old parent), unless the patch sets one', () => {
+    const t = setup()
+    const a = t.board.create({ projectId: 'p1', title: 'a' })!
+    const b = t.board.create({ projectId: 'p1', title: 'b' })!
+    const c = t.board.create({ projectId: 'p1', title: 'c', parentId: a.id })!
+    t.board.update(c.id, { pos: { x: 40, y: 50 } })
+    expect(t.board.update(c.id, { pos: { x: 41, y: 51 } })!.pos).toEqual({ x: 41, y: 51 })
+    expect(t.board.update(c.id, { parentId: b.id })!.pos).toBeUndefined()
+    t.board.update(c.id, { pos: { x: 1, y: 2 } })
+    expect(t.board.update(c.id, { parentId: a.id, pos: { x: 7, y: 8 } })!.pos).toEqual({ x: 7, y: 8 })
+    // A root's position is absolute: becoming a root also drops it.
+    expect(t.board.update(c.id, { parentId: null })!.pos).toBeUndefined()
+    // A refused move changes nothing.
+    t.board.update(a.id, { pos: { x: 3, y: 4 } })
+    expect(t.board.update(a.id, { parentId: 'missing' })).toBeNull()
+    expect(t.board.list().find((x) => x.id === a.id)!.pos).toEqual({ x: 3, y: 4 })
+  })
+
   it('validates parent changes: project, cycle, depth with the moved subtree', () => {
     const t = setup()
     const a = t.board.create({ projectId: 'p1', title: 'a' })!
@@ -82,7 +110,7 @@ describe('TaskBoard', () => {
     const other = t.board.create({ projectId: 'p2', title: 'o' })!
     const x = t.board.create({ projectId: 'p1', title: 'x' })!
     const y = t.board.create({ projectId: 'p1', title: 'y', parentId: x.id })!
-    expect(t.board.update(a.id, { parentId: c.id })).toBeNull()
+    expect(t.board.update(a.id, { parentId: 'missing' })).toBeNull()
     expect(t.board.update(a.id, { parentId: a.id })).toBeNull()
     expect(t.board.update(c.id, { parentId: other.id })).toBeNull()
     // x has a child: moving it under b would put y at depth 3.
@@ -182,7 +210,9 @@ describe('parseTaskDraft / parseTaskPatch', () => {
     for (const bad of [null, 'x', [], {}, { projectId: 'p' }, { projectId: 'p', title: 3 }, { projectId: '', title: 't' }, { projectId: 'p', title: 't', parentId: 4 }]) {
       expect(parseTaskDraft(bad)).toBeNull()
     }
-    for (const bad of [null, 'x', { title: 3 }, { manual: 'finished' }, { sessionId: 3 }, { parentId: '' }, { note: 5 }]) {
+    expect(parseTaskPatch({ pos: { x: 1, y: 2, z: 3 } })).toEqual({ pos: { x: 1, y: 2 } })
+    expect(parseTaskPatch({ pos: null })).toEqual({ pos: null })
+    for (const bad of [null, 'x', { pos: { x: 1 } }, { pos: { x: 1e7, y: 0 } }, { pos: 'a' }, { title: 3 }, { manual: 'finished' }, { sessionId: 3 }, { parentId: '' }, { note: 5 }]) {
       expect(parseTaskPatch(bad)).toBeNull()
     }
   })

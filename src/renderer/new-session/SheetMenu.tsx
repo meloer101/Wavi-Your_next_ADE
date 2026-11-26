@@ -166,6 +166,7 @@ export function SheetMenu({
       <div ref={list} id={listId} className={styles.menuList} role="listbox" aria-label={label} tabIndex={-1}>
         {listed.map((section, s) => (
           <Fragment key={section.title ?? s}>
+            {s > 0 && !section.title && section.items.length > 0 && <div className={styles.menuSeparator} role="separator" />}
             {section.title && section.items.length > 0 && (
               <div className={styles.menuGroup} role="presentation">
                 {section.title}

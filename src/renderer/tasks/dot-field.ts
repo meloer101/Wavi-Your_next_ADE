@@ -137,7 +137,39 @@ export function gridStep(scale: number): number {
 export const dotSize = (scale: number): number => Math.min(2, Math.max(1, 1.3 * scale))
 
 /** Which of `levels` brightness buckets (1…levels) a light value falls in; 0 = not lit enough to bother. */
-export function lightBucket(light: number, levels: number): number {
+export function lightBucket(light: number, levels: number, peak: number = GLOW.peak): number {
   if (light < 0.02) return 0
-  return Math.min(levels, Math.ceil((light / GLOW.peak) * levels))
+  return Math.min(levels, Math.ceil((light / peak) * levels))
 }
+
+// ── Ripples (PRD F9 v1.250 · 动效 ① ⑤) ────────────────────────────────────────
+
+/** A ring that spreads from a card over the dots: it reaches `radius` (screen px) in `ms` and is gone. */
+export const RIPPLE = { radius: 160, ms: 600, width: 24, peak: 0.45 } as const
+
+export interface Ripple {
+  /** Centre in note (100 %) coordinates, whichever mode is drawn: it follows the board when it is panned or zoomed. */
+  x: number
+  y: number
+  /** Neutral: the text colour (a card pasted). Attention: a card now waits on the user. */
+  tone: 'neutral' | 'attention'
+  /** `performance.now()` when it started. */
+  born: number
+}
+
+/** How far the ring has spread (screen px) `ageMs` after it began: out fast, then easing, like the board's `--ease-out`. */
+export function rippleRadius(ageMs: number): number {
+  const t = Math.min(1, Math.max(0, ageMs / RIPPLE.ms))
+  return RIPPLE.radius * (1 - (1 - t) ** 3)
+}
+
+/** The opacity a ring adds to a dot `distance` px from its centre; 0 once it is over. The ring thins out as it spreads. */
+export function rippleIntensity(distance: number, ageMs: number): number {
+  if (ageMs < 0 || ageMs >= RIPPLE.ms) return 0
+  const fade = (1 - ageMs / RIPPLE.ms) ** 1.5
+  const off = (distance - rippleRadius(ageMs)) / RIPPLE.width
+  return RIPPLE.peak * fade * Math.exp(-off * off)
+}
+
+/** Whether a ripple still has something to draw at `now`. */
+export const rippleAlive = (r: Ripple, now: number): boolean => now - r.born < RIPPLE.ms
