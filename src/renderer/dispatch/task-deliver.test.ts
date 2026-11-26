@@ -6,6 +6,7 @@ import { handCardToLeader, planLeaderWorktree, taskBoardMessage, type LeaderDeps
 vi.mock('../state/workspace', () => ({ useWorkspace: { getState: () => ({ sessions: [] }) } }))
 vi.mock('../new-session/creation', () => ({ createWorktreeFor: async () => true, holdForWorktree: () => {}, startEagerly: () => {} }))
 vi.mock('./store', () => ({ setLaunch: () => {} }))
+vi.mock('../session-io', () => ({ submitPrompt: async () => {}, whenAgentReady: async () => {} }))
 
 const card = (seq: number, over: Partial<Task> = {}): Task => ({ id: `t${seq}`, seq, projectId: 'p1', title: `Card ${seq}`, body: '', createdBy: 'user', manual: 'todo', createdAt: seq, updatedAt: seq, ...over })
 
@@ -48,6 +49,12 @@ describe('handCardToLeader', () => {
     expect(t.calls).toEqual(['start t1 codex', 'bind t1 s1', 'launch'])
     expect(t.launched).toHaveLength(1)
     expect(t.launched[0]).toBe(taskBoardMessage(card(1)))
+  })
+  it('hands the picked model and effort to the new session', async () => {
+    const seen: unknown[] = []
+    const t = setup({ start: async (_t, _agent, options) => (seen.push(options), { ok: true, id: 's1', launch: () => {} }) })
+    await handCardToLeader(card(1), 'pi', t.deps, { model: 'm', effort: 'high' })
+    expect(seen).toEqual([{ model: 'm', effort: 'high' }])
   })
   it.each(['no-project', 'not-git', 'no-plan', 'no-session', 'failed'] as const)('says %s when no session could be added, and binds and starts nothing', async (reason) => {
     const t = setup({ start: async () => ({ ok: false, reason }) })

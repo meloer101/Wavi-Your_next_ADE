@@ -7,6 +7,7 @@ import {
   adoptBrief,
   adoptRefusal,
   canLead,
+  canLeadCard,
   leaderBlock,
   leaderLaunchArgs,
   tellLabel,
@@ -589,5 +590,14 @@ describe('wavi task and wavi run --task (PRD F21 v1.249)', () => {
     expect(WAVI_SKILL).toContain('## A card from the board')
     expect(WAVI_HELP).toContain('wavi task add')
     expect(WAVI_HELP).toContain('--task <card>')
+  })
+})
+
+describe('canLeadCard (PRD F9 v1.252)', () => {
+  it('lets every terminal agent lead one card, while a project leader stays Claude Code or Codex', () => {
+    expect(CLI_AGENTS.filter((kind) => canLeadCard(kind))).toEqual([...CLI_AGENTS])
+    expect(canLeadCard('shell')).toBe(false)
+    expect(canLeadCard('claude', 'gui')).toBe(false)
+    expect(CLI_AGENTS.filter((kind) => canLead(kind))).toEqual(['claude', 'codex'])
   })
 })

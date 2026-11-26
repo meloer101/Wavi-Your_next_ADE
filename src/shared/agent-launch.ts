@@ -158,6 +158,8 @@ export interface AgentLaunchOptions {
   pathPrefix?: string
   /** A model for this launch (`claude --model` / `codex -m`), e.g. what a dispatching agent asked for (PRD F21). */
   model?: string
+  /** Reasoning effort for this launch, for the CLIs with such a flag (agents.ts `effort`, PRD F9 v1.252); ignored otherwise and when resuming. */
+  effort?: string
   /**
    * A 定时任务's 权限 (PRD F24 v1.205): the CLI's flag or variable for it (CLI_PERMISSIONS); ignored for a level the
    * CLI does not have, when resuming, and when `extraArgs` name a mode of their own (a leader's, PRD F21 v1.198).
@@ -184,12 +186,24 @@ export interface AgentLaunchOptions {
 export const CONTINUE_LATEST = 'wavi-continue-latest'
 
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:@/[\]-]{0,79}$/
+const EFFORT = /^[a-z][a-z0-9-]{0,31}$/
+
+/** Whether a model id / an effort level can go on a command line (main refuses a spawn that names anything else). */
+export const isLaunchModel = (value: string): boolean => MODEL.test(value)
+export const isLaunchEffort = (value: string): boolean => EFFORT.test(value)
+
+/** The CLI's arguments for this effort, none for a CLI without the flag. */
+function effortArgs(kind: Exclude<AgentKind, 'shell'>, effort: string | undefined): string[] {
+  const spec = AGENT_SPECS[kind].effort
+  return effort !== undefined && spec ? spec.args.map((arg) => arg.replaceAll('{effort}', effort)) : []
+}
 
 export function agentArgv(kind: Exclude<AgentKind, 'shell'>, realCwd: string, options: AgentLaunchOptions = {}): string[] {
   const resumeId = isSafeAgentSessionId(options.resumeAgentSessionId) ? options.resumeAgentSessionId : undefined
   const model = options.model !== undefined && MODEL.test(options.model) ? options.model : undefined
+  const effort = !resumeId && options.effort !== undefined && isLaunchEffort(options.effort) ? options.effort : undefined
   const prompt = !resumeId && options.initialPrompt?.trim() ? ['--', options.initialPrompt] : []
-  if (!hasOwnAdapter(kind)) return otherAgentArgv(kind, resumeId, model, options)
+  if (!hasOwnAdapter(kind)) return otherAgentArgv(kind, resumeId, model, effort, options)
   if (kind === 'claude') {
     // A leader's own `--permission-mode auto` (dispatch.ts `leaderLaunchArgs`) wins over a 定时任务's 权限.
     const ownMode = options.extraArgs?.includes('--permission-mode') === true
@@ -199,6 +213,7 @@ export function agentArgv(kind: Exclude<AgentKind, 'shell'>, realCwd: string, op
       ...(options.claudeSettingsPath ? ['--settings', options.claudeSettingsPath] : []),
       ...(options.extraArgs ?? []),
       ...(model ? ['--model', model] : []),
+      ...effortArgs(kind, effort),
       ...(ownMode ? [] : (permissionLaunch(kind, options).args ?? [])),
       ...prompt
     ]
@@ -215,12 +230,13 @@ export function agentArgv(kind: Exclude<AgentKind, 'shell'>, realCwd: string, op
     // A leader's own permission profile (dispatch.ts `leaderLaunchArgs`) wins over a 定时任务's 权限.
     ...(options.extraArgs?.some((arg) => arg.startsWith('default_permissions=')) ? [] : (permissionLaunch(kind, options).args ?? [])),
     ...(model ? ['-m', model] : []),
+    ...effortArgs(kind, effort),
     ...prompt
   ]
 }
 
 /** Every other CLI, from its row in agents.ts: binary, its own fixed arguments, the adapter's, resume, model, first prompt. */
-function otherAgentArgv(kind: Exclude<AgentKind, 'shell' | ClaudeOrCodex>, resumeId: string | undefined, model: string | undefined, options: AgentLaunchOptions): string[] {
+function otherAgentArgv(kind: Exclude<AgentKind, 'shell' | ClaudeOrCodex>, resumeId: string | undefined, model: string | undefined, effort: string | undefined, options: AgentLaunchOptions): string[] {
   const spec = AGENT_SPECS[kind]
   const resume =
     resumeId === undefined
@@ -244,6 +260,7 @@ function otherAgentArgv(kind: Exclude<AgentKind, 'shell' | ClaudeOrCodex>, resum
     ...(permissionLaunch(kind, options).args ?? []),
     ...resume,
     ...(model && spec.modelFlag ? [spec.modelFlag, model] : []),
+    ...effortArgs(kind, effort),
     ...prompt
   ]
 }

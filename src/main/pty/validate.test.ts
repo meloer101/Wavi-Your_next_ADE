@@ -91,3 +91,11 @@ describe('other payloads', () => {
     expect(() => parseVisible(undefined)).toThrow()
   })
 })
+
+describe('parseSpawnOptions effort (PRD F9 v1.252)', () => {
+  const base = { sessionId: 's1', cwd: '/r', cols: 80, rows: 24, agent: 'claude' }
+  it('keeps a level and refuses anything else', () => {
+    expect(parseSpawnOptions({ ...base, effort: 'high' })).toMatchObject({ effort: 'high' })
+    for (const effort of ['', 'a b', '"; rm', 3]) expect(() => parseSpawnOptions({ ...base, effort })).toThrow()
+  })
+})

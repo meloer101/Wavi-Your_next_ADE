@@ -369,6 +369,7 @@ async function hostLaunch(
     ...(dispatch ? { pathPrefix: dispatch.pathPrefix } : {}),
     ...(options.resumeAgentSessionId ? { resumeAgentSessionId: options.resumeAgentSessionId } : {}),
     ...(options.model ? { model: options.model } : {}),
+    ...(options.effort ? { effort: options.effort } : {}),
     ...(options.permission ? { permission: options.permission, piGatePath: piGatePath() } : {}),
     ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     ...(extraArgs.length > 0 ? { extraArgs } : {}),
@@ -440,7 +441,7 @@ async function spawnSession(owner: WebContents, options: PtySpawnOptions): Promi
       else reject(error)
     }, SPAWN_TIMEOUT_MS)
     replacePendingStart(pendingSpawns, id, { resolve, reject, timer })
-    const { sessionId: _sessionId, env: _env, script: _script, initialPrompt: _prompt, model: _model, permission: _permission, dispatched: _dispatched, leader: _leader, ...rest } = options
+    const { sessionId: _sessionId, env: _env, script: _script, initialPrompt: _prompt, model: _model, effort: _effort, permission: _permission, dispatched: _dispatched, leader: _leader, ...rest } = options
     send({
       type: 'spawn',
       id,
