@@ -751,3 +751,28 @@ test('117A / B / C / F: the menus, the marquee, 派发 beside a card, the failur
   await page.keyboard.press('Escape')
   await expect(popover).toHaveCount(0)
 })
+
+test('the middle button and Space-drag pan; a plain drag on empty canvas does not', async () => {
+  const card = await make('p-acme', '平移用的卡')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(card)).toBeVisible(WITHIN)
+  const at = async () => (await note(card).boundingBox())!
+  const board0 = (await board().boundingBox())!
+  const drag = async (button: 'left' | 'middle') => {
+    await page.mouse.move(board0.x + 500, board0.y + 500)
+    await page.mouse.down({ button })
+    await page.mouse.move(board0.x + 560, board0.y + 530, { steps: 5 })
+    await page.mouse.up({ button })
+  }
+  const start = await at()
+  await drag('left')
+  expect(await at()).toEqual(start)
+  await drag('middle')
+  expect((await at()).x - start.x).toBeCloseTo(60, 0)
+  await page.keyboard.down(' ')
+  await expect(board()).toHaveAttribute('data-space', 'true')
+  await drag('left')
+  await page.keyboard.up(' ')
+  expect((await at()).x - start.x).toBeCloseTo(120, 0)
+  expect((await at()).y - start.y).toBeCloseTo(60, 0)
+})
