@@ -233,6 +233,7 @@ const api: TrApi = {
     create: (draft) => ipcRenderer.invoke(TASK_IPC.create, draft),
     update: (id, patch) => ipcRenderer.invoke(TASK_IPC.update, id, patch),
     remove: (id) => ipcRenderer.invoke(TASK_IPC.remove, id),
+    restore: (snapshot) => ipcRenderer.invoke(TASK_IPC.restore, snapshot),
     onChanged: (listener) => listen(TASK_IPC.changed, listener)
   },
   issueWatch: {

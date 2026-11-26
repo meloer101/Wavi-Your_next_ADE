@@ -1,6 +1,7 @@
 /* Floating panes over the canvas: solid glass in its thickest finish (--float-bg, --float-edge, --shadow-glass-menu). */
 .activity,
 .toolbar,
+.undo,
 .zoom {
   position: absolute;
   z-index: 3;
@@ -151,10 +152,40 @@
 }
 
 .tool:focus-visible,
+.undoButton:focus-visible,
 .zoomButton:focus-visible,
 .activityHead:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
+}
+
+/* Figma 117F: the same float as the toolbar, 8 above it. */
+.undo {
+  left: 50%;
+  bottom: calc(var(--space-16) + 32px + var(--space-8));
+  transform: translateX(-50%);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: 0 var(--space-12);
+  border-radius: var(--radius-window);
+  white-space: nowrap;
+}
+
+.undoText {
+  font: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.undoButton {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: var(--text-caption-strong);
+  color: var(--text-primary);
+  cursor: default;
 }
 
 .rule {

@@ -19,6 +19,7 @@ function fakeApi(initial: Task[]) {
     create: vi.fn(async () => null),
     update: vi.fn(async () => null),
     remove: vi.fn(async () => undefined),
+    restore: vi.fn(async () => true),
     onChanged(l) {
       listener = l
       return () => {
@@ -30,7 +31,7 @@ function fakeApi(initial: Task[]) {
 }
 
 beforeEach(() => {
-  useTaskBoard.setState({ tasks: [], loaded: false, selectedId: null, detailId: null, events: [] })
+  useTaskBoard.setState({ tasks: [], loaded: false, selected: [], detailId: null, events: [] })
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -84,9 +85,9 @@ describe('startTaskSync', () => {
 
   it('drops the selection and the open detail of a card main removed', () => {
     const a = task()
-    useTaskBoard.setState({ tasks: [a], selectedId: a.id, detailId: a.id })
+    useTaskBoard.setState({ tasks: [a], selected: [a.id], detailId: a.id })
     useTaskBoard.getState().setTasks([])
-    expect(useTaskBoard.getState()).toMatchObject({ selectedId: null, detailId: null })
+    expect(useTaskBoard.getState()).toMatchObject({ selected: [], detailId: null })
   })
 })
 

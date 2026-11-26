@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Task } from '@shared/task-board'
-import { actionLine, appendEvents, boardCounts, diffActivity, joinCards, matchesFilter, snapshotOf, splitCard, usableLeader, type CardSession } from './model'
+import { actionLine, appendEvents, boardCounts, diffActivity, isLeaderFailureNote, joinCards, leaderFailureNote, matchesFilter, snapshotOf, splitCard, usableLeader, type CardSession } from './model'
 
 let n = 0
 function task(over: Partial<Task> = {}): Task {
@@ -194,18 +194,35 @@ describe('splitCard · code points', () => {
 })
 
 describe('usableLeader', () => {
-  const check = { codexSandboxMode: false }
-  it('keeps 暂不派发 and an agent that is installed and may lead', () => {
-    expect(usableLeader('none', {}, check)).toBe('none')
-    expect(usableLeader('claude', { claude: true }, check)).toBe('claude')
+  it('keeps 暂不派发 and any installed CLI agent', () => {
+    expect(usableLeader('none', {})).toBe('none')
+    expect(usableLeader('claude', { claude: true })).toBe('claude')
+    expect(usableLeader('goose', { goose: true })).toBe('goose')
   })
-  it('falls back to 暂不派发 for an agent that is not installed or may not lead here', () => {
-    expect(usableLeader('codex', { claude: true, codex: false }, check)).toBe('none')
-    expect(usableLeader('codex', { claude: true }, check)).toBe('none')
-    expect(usableLeader('codex', { codex: true }, { codexSandboxMode: true })).toBe('none')
+  it('falls back to 暂不派发 for an agent that is not installed', () => {
+    expect(usableLeader('codex', { claude: true, codex: false })).toBe('none')
+    expect(usableLeader('codex', { claude: true })).toBe('none')
   })
   it('keeps the choice while detection is not back', () => {
-    expect(usableLeader('claude', null, check)).toBe('claude')
-    expect(usableLeader('claude', { claude: true }, null)).toBe('claude')
+    expect(usableLeader('claude', null)).toBe('claude')
+  })
+})
+
+describe('a leader that did not start', () => {
+  const root = { waitingBelow: 0 }
+  it('is the action line of the card, apart from an agent’s own note', () => {
+    const t = task({ note: leaderFailureNote('not-git') })
+    expect(actionLine(joinCards([t], [])[0]!, root)).toEqual({ kind: 'failed', text: '主理人没启动：项目不是 git 仓库' })
+    expect(isLeaderFailureNote('Leader did not start: starting failed')).toBe(true)
+    expect(isLeaderFailureNote('等 #3')).toBe(false)
+    expect(isLeaderFailureNote(undefined)).toBe(false)
+  })
+  it('is not shown once a session is bound', () => {
+    const t = task({ sessionId: 's', note: leaderFailureNote('failed') })
+    expect(actionLine(joinCards([t], [{ id: 's', status: 'idle' }])[0]!, root).kind).toBe('text')
+  })
+  it('says 出错 for a failed session, never 空闲 or a stale sentence', () => {
+    const t = task({ sessionId: 's', note: 'a note' })
+    expect(actionLine(joinCards([t], [{ id: 's', status: 'error' }])[0]!, root)).toEqual({ kind: 'key', key: 'error' })
   })
 })

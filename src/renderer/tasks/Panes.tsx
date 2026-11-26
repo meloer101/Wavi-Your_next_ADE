@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { defineMessages } from '@shared/i18n'
 import { Minus, Plus } from '../ui/icons'
 import { useMessages } from '../ui/i18n'
-import type { LeaderFailure } from '../dispatch/task-deliver'
-import type { ActivityEvent, ActivityKind } from './model'
+import { LEADER_FAILURE_M, type ActivityEvent, type ActivityKind } from './model'
+import type { DeletedSummary } from './selection'
 import styles from './Panes.module.css'
 
 const ICON = { size: 16, strokeWidth: 1.75 } as const
@@ -30,14 +30,9 @@ const M = defineMessages({
     canceled: (seq: number, title: string) => `#${seq} ${title} 已取消`,
     split: (parent: number, from: number, to?: number) => `#${parent} 拆出 #${from}${to !== undefined ? ` – #${to}` : ''}`,
     notDispatched: (seq: number, reason: string) => `#${seq} 没有派发：${reason}`,
-    reasons: {
-      'no-project': '项目已经不在了',
-      'not-git': '不是 git 仓库',
-      'no-plan': '建不出新的 worktree',
-      'no-session': '会话没能创建',
-      unbound: '会话没能绑定到这张卡，卡片消息没有送出',
-      failed: '启动时出错'
-    } satisfies Record<LeaderFailure, string>
+    undo: '撤销',
+    deletedOne: (seq: number, below: number) => (below > 0 ? `已删除 #${seq} 和 ${below} 张子任务` : `已删除 #${seq}`),
+    deletedMany: (count: number) => `已删除 ${count} 张任务`
   },
   en: {
     activity: 'Activity',
@@ -57,14 +52,9 @@ const M = defineMessages({
     canceled: (seq: number, title: string) => `#${seq} ${title} canceled`,
     split: (parent: number, from: number, to?: number) => `#${parent} split #${from}${to !== undefined ? ` – #${to}` : ''}`,
     notDispatched: (seq: number, reason: string) => `#${seq} not dispatched: ${reason}`,
-    reasons: {
-      'no-project': 'the project is gone',
-      'not-git': 'not a git repository',
-      'no-plan': 'no new worktree could be planned',
-      'no-session': 'the session could not be added',
-      unbound: 'the session could not be bound to this card, so the card was not sent',
-      failed: 'starting failed'
-    } satisfies Record<LeaderFailure, string>
+    undo: 'Undo',
+    deletedOne: (seq: number, below: number) => (below > 0 ? `Deleted #${seq} and ${below} ${below === 1 ? 'subtask' : 'subtasks'}` : `Deleted #${seq}`),
+    deletedMany: (count: number) => `Deleted ${count} tasks`
   }
 })
 
@@ -84,9 +74,10 @@ const clock = (at: number): string => new Date(at).toLocaleTimeString([], { hour
 
 export function ActivityPanel({ events, open, onToggle }: { events: readonly ActivityEvent[]; open: boolean; onToggle(): void }) {
   const m = useMessages(M)
+  const failure = useMessages(LEADER_FAILURE_M)
   const eventText = (e: ActivityEvent): string => {
     if (e.kind === 'split') return m.split(e.parentSeq ?? 0, e.seq, e.toSeq)
-    if (e.kind === 'notDispatched') return m.notDispatched(e.seq, m.reasons[e.reason ?? 'failed'])
+    if (e.kind === 'notDispatched') return m.notDispatched(e.seq, failure.reasons[e.reason ?? 'failed'])
     return m[e.kind](e.seq, e.title)
   }
   // Rows newer than the ones here when the panel mounted slide in; coming back to the tab shows the old ones still.
@@ -129,6 +120,20 @@ export function Toolbar({ onAdd, onFit }: { onAdd(): void; onFit(): void }) {
         {m.fit}
         <span className={styles.key}>⇧1</span>
       </button>
+    </div>
+  )
+}
+
+/** 「已删除 #12 和 2 张子任务 · 撤销 ⌘Z」 above the toolbar after a delete (PRD F9 v1.252, Figma 117F). */
+export function UndoBar({ deleted, onUndo }: { deleted: DeletedSummary; onUndo(): void }) {
+  const m = useMessages(M)
+  return (
+    <div className={styles.undo} role="status" data-testid="task-undo" data-no-pan="">
+      <span className={styles.undoText}>{deleted.seq !== undefined ? m.deletedOne(deleted.seq, deleted.count - 1) : m.deletedMany(deleted.count)}</span>
+      <button type="button" className={styles.undoButton} onClick={onUndo}>
+        {m.undo}
+      </button>
+      <span className={styles.key}>⌘Z</span>
     </div>
   )
 }

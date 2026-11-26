@@ -1,5 +1,5 @@
 // Validation of what the renderer sends over `TASK_IPC` (main never trusts it). Pure.
-import { parseTaskPos, type TaskDraft, type TaskId, type TaskManual, type TaskPatch } from '@shared/task-board'
+import { parseTaskPos, TASK_LIMITS, type Task, type TaskDraft, type TaskId, type TaskManual, type TaskPatch } from '@shared/task-board'
 
 const record = (v: unknown): Record<string, unknown> | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null)
 const idText = (v: unknown): v is string => typeof v === 'string' && v !== '' && v.length <= 128 && !v.includes('\0')
@@ -63,4 +63,50 @@ export function parseTaskPatch(raw: unknown): TaskPatch | null {
     }
   }
   return patch
+}
+
+/** More cards than this in one undo is not a delete the board made (300 per project, a handful of projects). */
+const MAX_SNAPSHOT = 3_000
+
+const count = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= Number.MAX_SAFE_INTEGER
+const time = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+const text = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max
+
+function parseCard(raw: unknown): Task | null {
+  const v = record(raw)
+  if (!v || !idText(v.id) || !count(v.seq) || !idText(v.projectId)) return null
+  if (!text(v.title, TASK_LIMITS.title) || v.title.trim() === '' || !text(v.body, TASK_LIMITS.body)) return null
+  if (!idText(v.createdBy) || !MANUAL.includes(v.manual) || !time(v.createdAt) || !time(v.updatedAt)) return null
+  if (v.parentId !== undefined && !idText(v.parentId)) return null
+  if (v.sessionId !== undefined && !idText(v.sessionId)) return null
+  if (v.note !== undefined && !text(v.note, TASK_LIMITS.note)) return null
+  const pos = v.pos === undefined ? undefined : parseTaskPos(v.pos)
+  if (pos === null) return null
+  return {
+    id: v.id,
+    seq: v.seq,
+    projectId: v.projectId,
+    title: v.title,
+    body: v.body,
+    createdBy: v.createdBy,
+    manual: v.manual as TaskManual,
+    createdAt: v.createdAt,
+    updatedAt: v.updatedAt,
+    ...(v.parentId !== undefined ? { parentId: v.parentId } : {}),
+    ...(v.sessionId !== undefined ? { sessionId: v.sessionId } : {}),
+    ...(v.note !== undefined ? { note: v.note } : {}),
+    ...(pos ? { pos } : {})
+  }
+}
+
+/** The cards an undo puts back, whole or not at all. */
+export function parseTaskSnapshot(raw: unknown): Task[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_SNAPSHOT) return null
+  const cards: Task[] = []
+  for (const item of raw) {
+    const card = parseCard(item)
+    if (!card) return null
+    cards.push(card)
+  }
+  return cards
 }

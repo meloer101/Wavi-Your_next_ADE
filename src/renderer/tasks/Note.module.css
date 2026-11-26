@@ -117,6 +117,10 @@
   color: var(--status-attention);
 }
 
+.action[data-error='true'] {
+  color: var(--status-error);
+}
+
 .segment {
   width: 18px;
   height: 4px;

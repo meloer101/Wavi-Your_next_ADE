@@ -1,5 +1,6 @@
 // The sheet's dropdown (Figma 15C Popover · 分支): glass like the sheet, an optional search field, grouped items with an
-// icon and right-aligned meta, and a hint line. Rendered into <body> under its anchor: a backdrop-filter inside the
+// icon and right-aligned meta, and a hint line. At least as wide as its control and as wide as its longest line, up to
+// the window (PRD F9 v1.252: names are not cut off). Rendered into <body> under its anchor: a backdrop-filter inside the
 // sheet would only see the sheet, not the window behind it. `align="selected"` (Figma 24A 智能体) puts the chosen item
 // over the control like a macOS pop-up menu and keeps the whole menu on screen, so a long list need not scroll.
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -91,6 +92,14 @@ export function SheetMenu({
     setBox((now) => (now && now.top === top && now.maxHeight === room ? now : { left: rect.left - OUTSET, top, width: rect.width + OUTSET * 2, maxHeight: room }))
   }, [align, anchor, placedOnce])
 
+  // The width follows the content: a menu wider than the room to the right of its control moves left to stay on screen.
+  useLayoutEffect(() => {
+    const el = menu.current
+    if (!el || !box) return
+    const left = Math.max(EDGE, Math.min(anchor.getBoundingClientRect().left - OUTSET, window.innerWidth - EDGE - el.offsetWidth))
+    if (Math.abs(left - box.left) > 0.5) setBox({ ...box, left })
+  }, [anchor, box, listed])
+
   // The menu renders once it is placed; then the keyboard goes to its search field (or list).
   const placed = box !== null
   useEffect(() => {
@@ -139,7 +148,7 @@ export function SheetMenu({
     <div
       ref={menu}
       className={styles.menu}
-      style={{ left: box.left, top: box.top, width: box.width, maxHeight: box.maxHeight }}
+      style={{ left: box.left, top: box.top, width: 'max-content', minWidth: box.width, maxWidth: `calc(100vw - ${2 * EDGE}px)`, maxHeight: box.maxHeight }}
       onKeyDown={onKeyDown}
       data-new-session-menu
     >
@@ -199,7 +208,12 @@ export function SheetMenu({
         ))}
         {flat.length === 0 && <div className={styles.menuEmpty}>{empty ?? m.noBranches}</div>}
       </div>
-      {hint && <p className={styles.menuHint}>{hint}</p>}
+      {/* A long hint wraps to the menu's width instead of widening it. */}
+      {hint && (
+        <p className={styles.menuHint} style={{ width: 0, minWidth: '100%' }}>
+          {hint}
+        </p>
+      )}
     </div>,
     document.body
   )

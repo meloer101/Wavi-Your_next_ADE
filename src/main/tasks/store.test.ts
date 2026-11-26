@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseTaskDraft, parseTaskPatch } from './parse'
+import { parseTaskDraft, parseTaskPatch, parseTaskSnapshot } from './parse'
 import { TaskBoard, TasksFile } from './store'
 
 const dirs: string[] = []
@@ -215,5 +215,62 @@ describe('parseTaskDraft / parseTaskPatch', () => {
     for (const bad of [null, 'x', { pos: { x: 1 } }, { pos: { x: 1e7, y: 0 } }, { pos: 'a' }, { title: 3 }, { manual: 'finished' }, { sessionId: 3 }, { parentId: '' }, { note: 5 }]) {
       expect(parseTaskPatch(bad)).toBeNull()
     }
+  })
+})
+
+describe('restore (undo of a delete, PRD F9 v1.252)', () => {
+  function deleted() {
+    const t = setup()
+    const root = t.board.create({ projectId: 'p1', title: 'root' })!
+    const child = t.board.create({ projectId: 'p1', title: 'child', parentId: root.id, createdBy: 's9' })!
+    t.board.update(root.id, { pos: { x: 40, y: 50 }, sessionId: 's1' })
+    t.board.update(child.id, { manual: 'done', note: 'n', pos: { x: 1, y: 2 }, body: 'b' })
+    const before = t.board.list()
+    t.board.remove(root.id)
+    return { ...t, root, child, before }
+  }
+
+  it('puts removed cards back exactly: id, seq, parent, place, session, note, state, also after a reload', () => {
+    const t = deleted()
+    expect(t.board.list()).toEqual([])
+    // Over IPC the cards are copies; the validated payload is what the store takes.
+    expect(t.board.restore(parseTaskSnapshot(structuredClone(t.before))!)).toBe(true)
+    expect(t.board.list()).toEqual(t.before)
+    expect(t.open().list()).toEqual(t.before)
+    expect(t.board.create({ projectId: 'p1', title: 'next' })!.seq).toBe(3)
+  })
+
+  it('refuses ids or seqs that are on the board, repeated, or never handed out', () => {
+    const t = deleted()
+    expect(t.board.restore(t.before)).toBe(true)
+    expect(t.board.restore(t.before)).toBe(false)
+    expect(t.board.restore([{ ...t.before[0]!, id: 'other' }])).toBe(false)
+    expect(t.board.restore([{ ...t.before[0]!, seq: 99 }])).toBe(false)
+    t.board.remove(t.root.id)
+    expect(t.board.restore([t.before[0]!, { ...t.before[1]!, id: t.before[0]!.id }])).toBe(false)
+    expect(t.board.restore([{ ...t.before[0]!, id: 'x', seq: 50 }])).toBe(false)
+    expect(t.board.restore([])).toBe(false)
+    expect(t.board.list()).toEqual([])
+  })
+
+  it('makes a root of a card whose parent is gone, and leaves a session with the card that has it now', () => {
+    const t = deleted()
+    const other = t.board.create({ projectId: 'p1', title: 'other' })!
+    t.board.update(other.id, { sessionId: 's1' })
+    expect(t.board.restore([t.before[0]!])).toBe(true)
+    expect(t.board.list().find((c) => c.id === t.root.id)?.sessionId).toBeUndefined()
+    const lost = deleted()
+    expect(lost.board.restore([lost.before[1]!])).toBe(true)
+    const back = lost.board.list()[0]!
+    expect(back.parentId).toBeUndefined()
+    expect(back.pos).toBeUndefined()
+  })
+
+  it('refuses a payload that is not whole cards', () => {
+    const card = deleted().before[0]!
+    for (const bad of [null, 'x', {}, [], [null], [{ ...card, id: '' }], [{ ...card, seq: 1.5 }], [{ ...card, title: ' ' }], [{ ...card, title: 'a'.repeat(121) }], [{ ...card, manual: 'x' }], [{ ...card, pos: { x: 1e9, y: 0 } }], [{ ...card, sessionId: 3 }], [{ ...card, note: 'a'.repeat(501) }], [card, { id: 'half' }]]) {
+      expect(parseTaskSnapshot(bad)).toBeNull()
+    }
+    expect(parseTaskSnapshot([{ ...card, extra: 1 }])).toEqual([card])
   })
 })

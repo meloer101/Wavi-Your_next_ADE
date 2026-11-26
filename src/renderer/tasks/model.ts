@@ -1,6 +1,7 @@
 // 任务 board's pure model (PRD F9 v1.249): a card is a task joined with the session it is bound to, and the 「动态」
 // panel's events are what changed between two looks at the board.
-import { leaderBlock, type DispatchAgent, type LeaderCheck } from '@shared/dispatch'
+import { canLeadCard, type DispatchAgent } from '@shared/dispatch'
+import { defineMessages, pick } from '@shared/i18n'
 import { taskState, TASK_LIMITS, type Task, type TaskId, type TaskState } from '@shared/task-board'
 import type { Session } from '@shared/types'
 import type { LeaderFailure } from '../dispatch/task-deliver'
@@ -132,13 +133,53 @@ export function appendEvents(list: readonly ActivityEvent[], drafts: readonly Dr
   return [...added, ...list].slice(0, MAX_EVENTS)
 }
 
+// ── A leader that did not start ───────────────────────────────────────────────
+
+export const LEADER_FAILURE_M = defineMessages({
+  zh: {
+    prefix: '主理人没启动：',
+    reasons: {
+      'no-project': '项目已经不在了',
+      'not-git': '项目不是 git 仓库',
+      'no-plan': '建不出新的 worktree',
+      'no-session': '会话没能创建',
+      unbound: '会话没能绑定到这张卡，卡片消息没有送出',
+      failed: '启动时出错'
+    } satisfies Record<LeaderFailure, string>
+  },
+  en: {
+    prefix: 'Leader did not start: ',
+    reasons: {
+      'no-project': 'the project is gone',
+      'not-git': 'the project is not a git repository',
+      'no-plan': 'no new worktree could be planned',
+      'no-session': 'the session could not be added',
+      unbound: 'the session could not be bound to this card, so the card was not sent',
+      failed: 'starting failed'
+    } satisfies Record<LeaderFailure, string>
+  }
+})
+
+/** The sentence left on a card whose leader did not start (its note, PRD F9 v1.252). */
+export function leaderFailureNote(reason: LeaderFailure): string {
+  const m = pick(LEADER_FAILURE_M)
+  return `${m.prefix}${m.reasons[reason]}`
+}
+
+/** Whether a note is one `leaderFailureNote` wrote, in either language (the language may have changed since). */
+export function isLeaderFailureNote(note: string | undefined): boolean {
+  return note !== undefined && [LEADER_FAILURE_M.zh, LEADER_FAILURE_M.en].some((m) => note.startsWith(m.prefix))
+}
+
 // ── The card's action line ────────────────────────────────────────────────────
 
 export type ActionLine =
   /** A parent whose descendants wait on the user: drawn in the attention colour. */
   | { kind: 'waiting'; count: number }
   | { kind: 'text'; text: string }
-  | { kind: 'key'; key: 'unassigned' | 'done' | 'doneReview' | 'canceled' | 'working' | 'idle' }
+  /** The leader did not start: the reason, drawn in the error colour. */
+  | { kind: 'failed'; text: string }
+  | { kind: 'key'; key: 'unassigned' | 'done' | 'doneReview' | 'canceled' | 'working' | 'idle' | 'error' }
 
 /**
  * The one line under a card's title: what its agent is doing (the session's current action, else its last sentence,
@@ -152,6 +193,8 @@ export function actionLine(
   const { state, session, task } = card
   if (state === 'canceled') return { kind: 'key', key: 'canceled' }
   if (state === 'done') return { kind: 'key', key: session?.status === 'done_unread' ? 'doneReview' : 'done' }
+  if (state === 'error') return { kind: 'key', key: 'error' }
+  if (!session && task.note !== undefined && isLeaderFailureNote(task.note)) return { kind: 'failed', text: task.note }
   const said = session?.currentAction?.trim() || session?.lastReply?.trim() || task.note?.trim()
   if (said) return { kind: 'text', text: said }
   if (session) return { kind: 'key', key: state === 'working' ? 'working' : 'idle' }
@@ -183,13 +226,12 @@ export function splitCard(text: string): { title: string; body: string } | null 
 export type LeaderChoice = DispatchAgent | 'none'
 
 /**
- * The leader the new-card box really uses: the chosen agent when it can lead here and is installed, else 暂不派发. A
- * remembered agent that is gone is not started, and is not forgotten either (the stored choice stays). `found` /
- * `check` are what detection returned; while either is null (not back yet) the choice stands, and the box looks again
- * before it submits.
+ * The leader the new-card box really uses: the chosen agent when it is installed, else 暂不派发. A remembered agent
+ * that is gone is not started, and is not forgotten either (the stored choice stays). While `found` (what detection
+ * returned) is null the choice stands, and the box looks again before it submits.
  */
-export function usableLeader(choice: LeaderChoice, found: Readonly<Record<string, boolean>> | null, check: LeaderCheck | null): LeaderChoice {
+export function usableLeader(choice: LeaderChoice, found: Readonly<Record<string, boolean>> | null): LeaderChoice {
   if (choice === 'none') return 'none'
-  if (found === null || check === null) return choice
-  return found[choice] === true && leaderBlock(choice, 'cli', check) === null ? choice : 'none'
+  if (found === null) return choice
+  return found[choice] === true && canLeadCard(choice) ? choice : 'none'
 }

@@ -247,6 +247,11 @@ export interface TaskApi {
   update(id: TaskId, patch: TaskPatch): Promise<Task | null>
   /** Removes the card and everything below it. */
   remove(id: TaskId): Promise<void>
+  /**
+   * Puts removed cards back as they were: id, `#seq`, parent, place, session, note, state (undo of a delete, PRD F9
+   * v1.252). False and nothing changes when an id or `#seq` is on the board already, or the payload is not cards.
+   */
+  restore(snapshot: Task[]): Promise<boolean>
   /** Every change to the list, the whole list (≤ 300 cards per project). */
   onChanged(listener: (tasks: Task[]) => void): () => void
 }
@@ -256,5 +261,6 @@ export const TASK_IPC = {
   create: 'task:create',
   update: 'task:update',
   remove: 'task:remove',
+  restore: 'task:restore',
   changed: 'task:changed'
 } as const

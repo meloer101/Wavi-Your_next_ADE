@@ -1,7 +1,7 @@
 // A card on the board (PRD F9 v1.249 · Figma 115A4 / 115A4b): a note at 100 %, a one-line chip when zoomed out, a dot
 // when far out. Status is the glyph's shape and the words, never only the colour; the agent's mark is a pin on the top
 // edge, so a card nobody took has no pin.
-import { memo, type CSSProperties } from 'react'
+import { memo, type CSSProperties, type MouseEvent } from 'react'
 import { defineMessages } from '@shared/i18n'
 import type { TaskState } from '@shared/task-board'
 import type { Session, SessionStatus } from '@shared/types'
@@ -21,6 +21,7 @@ export const NOTE_M = defineMessages({
     canceled: '已取消',
     working: '进行中',
     idle: '空闲',
+    error: '出错',
     waiting: (n: number) => `${n} 个子任务等你处理`,
     states: { idle: '待派发', working: '运行中', attention: '等你处理', done: '已完成', error: '出错', canceled: '已取消' } satisfies Record<TaskState, string>
   },
@@ -31,6 +32,7 @@ export const NOTE_M = defineMessages({
     canceled: 'Canceled',
     working: 'Working',
     idle: 'Idle',
+    error: 'Failed',
     waiting: (n: number) => `${n} ${n === 1 ? 'subtask needs' : 'subtasks need'} you`,
     states: { idle: 'To dispatch', working: 'Working', attention: 'Needs you', done: 'Done', error: 'Failed', canceled: 'Canceled' } satisfies Record<TaskState, string>
   }
@@ -63,13 +65,14 @@ export interface NoteProps {
   order: number
   dimmed: boolean
   now: number
-  onSelect(id: string): void
+  /** `additive`: ⇧ adds the card to the selection, or takes it out. */
+  onSelect(id: string, additive: boolean): void
   onOpen(id: string): void
 }
 
 export function useActionText(line: ActionLine): string {
   const m = useMessages(NOTE_M)
-  return line.kind === 'waiting' ? m.waiting(line.count) : line.kind === 'text' ? line.text : m[line.key]
+  return line.kind === 'waiting' ? m.waiting(line.count) : line.kind === 'key' ? m[line.key] : line.text
 }
 
 function timeOf(card: Card<Session>, now: number): string {
@@ -97,7 +100,7 @@ function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, o
     'data-dimmed': dimmed,
     'data-task-id': task.id,
     'data-seq': task.seq,
-    onClick: () => onSelect(task.id),
+    onClick: (e: MouseEvent) => onSelect(task.id, e.shiftKey),
     onDoubleClick: () => onOpen(task.id)
   }
 
@@ -128,7 +131,7 @@ function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, o
         {time && <span className={styles.mono}>{time}</span>}
       </span>
       <span className={styles.title}>{task.title}</span>
-      <span className={styles.action} data-attention={line.kind === 'waiting' || state === 'attention'}>
+      <span className={styles.action} data-attention={line.kind === 'waiting' || state === 'attention'} data-error={line.kind === 'failed' || (line.kind === 'key' && line.key === 'error')} title={line.kind === 'failed' ? action : undefined}>
         {action}
       </span>
       {placed.parent && (
