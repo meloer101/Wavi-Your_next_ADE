@@ -1,5 +1,5 @@
 // 任务看板 end to end (PRD F9 / F21 v1.250) through real processes: a card pasted in the new-card box with an agent chosen
-// starts that card's own leader session, bound to it, which gets the card once; 「暂不派发」 starts nothing. Leaders and
+// starts that card's own leader session, bound to it, with the card as its launch prompt; 「暂不派发」 starts nothing. Leaders and
 // other sessions run `wavi task …` and `wavi run … --task` in their own shells (the same fake `claude` as
 // e2e/dispatch.spec.ts), and the assertions read main's store through `window.tr.tasks.list()`, not the canvas. Fake
 // agents only, no model.
@@ -235,15 +235,19 @@ test.describe('任务看板 · wavi task', () => {
     // A new worktree of its own; its agent's env names the session (its WAVI_DIR).
     await expect.poll(() => childWorktree(root.sessionId!, '.fake-env'), { timeout: 60_000 }).not.toBe('')
     const dir = childWorktree(root.sessionId!, '.fake-env')
-    await expect.poll(() => inbox(dir).length, { timeout: 60_000 }).toBe(1)
-    const first = inbox(dir)[0]!
+    // The card is its first message, on the command line like a `wavi run` child's task: it starts working at once,
+    // never typed in or held under the terminal for 送进去.
+    await expect.poll(() => read(dir, '.fake-argv'), { timeout: 60_000 }).not.toBe('')
+    const argv = JSON.parse(read(dir, '.fake-argv')) as string[]
+    const first = argv[argv.indexOf('--') + 1] ?? ''
     expect(first.startsWith('[Wavi task board]')).toBe(true)
     expect(first).toContain(`#${root.seq}`)
     expect(first).toContain('Ship the login')
     expect(first).toContain('Make it work in Safari too.')
     expect(first).toContain("You are this card's leader")
     await page.waitForTimeout(3000)
-    expect(inbox(dir)).toHaveLength(1)
+    expect(inbox(dir)).toEqual([])
+    expect(read(dir, '.fake-typed')).toBe('')
     // Nobody else heard of it, and the project's own leader got nothing.
     expect(inbox(project)).toEqual([])
     expect(inbox(member)).toEqual([])
