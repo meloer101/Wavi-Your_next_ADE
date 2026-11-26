@@ -285,3 +285,16 @@ describe('viewport', () => {
     expect(boundsOf([])).toEqual({ x: 0, y: 0, w: 0, h: 0 })
   })
 })
+
+describe('layoutBoard · a card whose failure line wraps (PRD F9 v1.252)', () => {
+  it('is a row taller and pushes what is under it down; chips stay as they are', () => {
+    const tasks = [task('x', 'p'), task('y', 'p')]
+    const trees = groupByProject(tasks, ['p'], buildTaskTree)
+    const tall = new Set(['x'])
+    const plain = layoutBoard(trees, 'note')
+    const wrapped = layoutBoard(trees, 'note', undefined, tall)
+    expect(card(wrapped, 'x').h).toBe(DIMS.note.h + DIMS.note.wrap)
+    expect(card(wrapped, 'y').y - card(plain, 'y').y).toBe(DIMS.note.wrap)
+    expect(layoutBoard(trees, 'chip', undefined, tall)).toEqual(layoutBoard(trees, 'chip'))
+  })
+})

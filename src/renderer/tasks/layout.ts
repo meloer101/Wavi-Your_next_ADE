@@ -23,6 +23,8 @@ export interface Dims {
   gap: number
   /** A single child sits this much lower than its parent, so the connector is a curve. */
   leafShift: number
+  /** How much taller a card is whose failure line takes a second row (PRD F9 v1.252). */
+  wrap: number
   /** Gap between the trees of one project's roots. */
   rootGap: number
   /** Gap between project clusters, and the width a row of clusters may reach before it wraps. */
@@ -31,8 +33,8 @@ export interface Dims {
 }
 
 export const DIMS: Record<LayoutMode, Dims> = {
-  note: { w: 220, h: 94, hParent: 118, pitch: 290, gap: 24, leafShift: 30, rootGap: 24, clusterGap: 80, rowWidth: 2000 },
-  chip: { w: 156, h: 28, hParent: 28, pitch: 176, gap: 8, leafShift: 10, rootGap: 16, clusterGap: 32, rowWidth: 1100 }
+  note: { w: 220, h: 94, hParent: 118, pitch: 290, gap: 24, leafShift: 30, wrap: 16, rootGap: 24, clusterGap: 80, rowWidth: 2000 },
+  chip: { w: 156, h: 28, hParent: 28, pitch: 176, gap: 8, leafShift: 10, wrap: 0, rootGap: 16, clusterGap: 32, rowWidth: 1100 }
 }
 
 export const MIN_ZOOM = 0.25
@@ -102,9 +104,9 @@ function shift(cards: PlacedCard[], dy: number): void {
 }
 
 /** One tree with its top at y = `top`, its root at x = 0. Parents come before their children in `cards`. */
-function placeTree(node: TaskNode, projectId: ProjectId, top: number, d: Dims, depth = 0, parentId?: TaskId): Placed {
+function placeTree(node: TaskNode, projectId: ProjectId, top: number, d: Dims, tall: ReadonlySet<TaskId>, depth = 0, parentId?: TaskId): Placed {
   const parent = node.children.length > 0
-  const h = parent ? d.hParent : d.h
+  const h = (parent ? d.hParent : d.h) + (tall.has(node.task.id) ? d.wrap : 0)
   const x = depth * d.pitch
   const self: PlacedCard = { id: node.task.id, projectId, depth, parent, x, y: top, w: d.w, h, ...(parentId !== undefined ? { parentId } : {}) }
   if (!parent) return { cards: [self], centre: top + h / 2, bottom: top + h }
@@ -113,7 +115,7 @@ function placeTree(node: TaskNode, projectId: ProjectId, top: number, d: Dims, d
   const kids: Placed[] = []
   let at = top
   for (const child of node.children) {
-    const placed = placeTree(child, projectId, at, d, depth + 1, node.task.id)
+    const placed = placeTree(child, projectId, at, d, tall, depth + 1, node.task.id)
     kids.push(placed)
     cards.push(...placed.cards)
     at = placed.bottom + d.gap
@@ -142,11 +144,11 @@ interface Packed {
 }
 
 /** A project's trees stacked in the automatic layout; a root the user dragged away keeps its slot, so the rest stay put. */
-function layoutProject(trees: ProjectTrees, d: Dims): Packed {
+function layoutProject(trees: ProjectTrees, d: Dims, tall: ReadonlySet<TaskId>): Packed {
   const cards: PlacedCard[] = []
   let top = 0
   for (const root of trees.roots) {
-    const placed = placeTree(root, trees.projectId, top, d)
+    const placed = placeTree(root, trees.projectId, top, d, tall)
     cards.push(...placed.cards)
     top = placed.bottom + d.rootGap
   }
@@ -197,7 +199,7 @@ function linksOf(cards: readonly PlacedCard[]): Link[] {
  * wrapped into rows, so none overlaps. A project without cards takes no room. Then the cards the user dragged are
  * placed (`applyPositions`); `overrides` (a drag in progress) wins over the saved `Task.pos`.
  */
-export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode, overrides?: PosOverrides): BoardLayout {
+export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode, overrides?: PosOverrides, tall: ReadonlySet<TaskId> = new Set()): BoardLayout {
   const d = DIMS[mode]
   const scale = d.pitch / DIMS.note.pitch
   const nodes = new Map<TaskId, TaskNode>()
@@ -208,7 +210,7 @@ export function layoutBoard(projects: readonly ProjectTrees[], mode: LayoutMode,
   let y = 0
   let rowH = 0
   for (const project of projects) {
-    const one = layoutProject(project, d)
+    const one = layoutProject(project, d, tall)
     if (one.cards.length === 0) continue
     if (x > 0 && x + one.w > d.rowWidth) {
       x = 0

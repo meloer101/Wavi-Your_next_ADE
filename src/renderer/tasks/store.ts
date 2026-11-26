@@ -5,15 +5,22 @@
 // only knows what changed since the window opened (a reload starts it empty).
 import { create } from 'zustand'
 import { CLI_AGENTS } from '@shared/agents'
-import { canLead, type DispatchAgent } from '@shared/dispatch'
+import type { DispatchAgent } from '@shared/dispatch'
 import type { Task, TaskId } from '@shared/task-board'
 import type { ProjectId } from '@shared/types'
 import { DEFAULT_VIEW, parseView, type View } from './layout'
 import { appendEvents, type ActivityEvent, type LeaderChoice } from './model'
+import { NO_PICKS, parseLeaderPicks, type LeaderPicks } from './picks'
+import { toggleId } from './selection'
 
 export const VIEW_KEY = 'tr.tasks.view.v1'
 export const ACTIVITY_KEY = 'tr.tasks.activity.v1'
 export const LEADER_KEY = 'tr.tasks.leader.v1'
+export const PICKS_KEY = 'tr.tasks.picks.v1'
+/** How long the undo bar stays after a delete (⌘Z still works after it has gone). */
+export const UNDO_BAR_MS = 6_000
+/** How many deletes ⌘Z can walk back. */
+export const UNDO_DEPTH = 20
 
 export type { LeaderChoice } from './model'
 
@@ -41,9 +48,25 @@ function loadActivityPref(): boolean | null {
 
 function loadLeaderChoice(): LeaderChoice {
   try {
-    return parseLeaderChoice(globalThis.localStorage?.getItem(LEADER_KEY) ?? null, CLI_AGENTS.filter((id) => canLead(id)))
+    return parseLeaderChoice(globalThis.localStorage?.getItem(LEADER_KEY) ?? null, CLI_AGENTS)
   } catch {
     return 'claude'
+  }
+}
+
+function loadLeaderPicks(): LeaderPicks {
+  try {
+    return parseLeaderPicks(JSON.parse(globalThis.localStorage?.getItem(PICKS_KEY) ?? 'null'))
+  } catch {
+    return NO_PICKS
+  }
+}
+
+function store(key: string, value: string): void {
+  try {
+    globalThis.localStorage?.setItem(key, value)
+  } catch {
+    // Not saved; the default comes back next time.
   }
 }
 
@@ -76,9 +99,19 @@ interface TaskBoardState {
   view: View
   /** Whether the user moved the view; until then the board fits itself to the window once. */
   viewTouched: boolean
-  selectedId: TaskId | null
+  /** The selected cards, in the order they were picked (PRD F9 v1.252 框选和多选). */
+  selected: readonly TaskId[]
   /** The card open in the detail overlay (114B). */
   detailId: TaskId | null
+  /** The overlay opens with the title being edited (⌘E, 编辑). */
+  detailEdit: boolean
+  /**
+   * The deletes ⌘Z can undo, the latest last, each the cards main removed; and the bar above the toolbar (`bar`: shown,
+   * `failed`: the last undo could not put them back).
+   */
+  undo: { stack: readonly Task[][]; bar: boolean; failed: boolean }
+  /** Cards whose leader is starting: they are not offered 派发 a second time. */
+  dispatching: readonly TaskId[]
   events: ActivityEvent[]
   /** The user's own toggle of 「动态」 (kept on this device); null = they never chose, the canvas width decides. */
   activityPref: boolean | null
@@ -86,53 +119,100 @@ interface TaskBoardState {
   lastProjectId: ProjectId | null
   /** Who led the last pasted card; the new-card box starts with it. */
   leaderChoice: LeaderChoice
+  /** Each agent's last model and effort. */
+  leaderPicks: LeaderPicks
   setTasks(tasks: Task[]): void
   setView(view: View, touched?: boolean): void
+  /** Selects this card alone, or nothing. */
   select(id: TaskId | null): void
-  openDetail(id: TaskId | null): void
+  toggle(id: TaskId): void
+  selectMany(ids: readonly TaskId[]): void
+  openDetail(id: TaskId | null, edit?: boolean): void
+  pushDeleted(cards: Task[]): void
+  /** These cards are back: their delete leaves the stack, and the bar goes. */
+  popDeleted(cards: Task[]): void
+  /** The latest delete could not be undone: it stays, and the bar says so. */
+  undoFailed(): void
+  setDispatching(id: TaskId, on: boolean): void
   pushEvents(drafts: Parameters<typeof appendEvents>[1]): void
   setActivity(open: boolean): void
   setLastProject(id: ProjectId): void
   setLeaderChoice(choice: LeaderChoice): void
+  /** `null` goes back to 默认. */
+  setLeaderPick(kind: 'models' | 'efforts', agent: DispatchAgent, value: string | null): void
 }
 
-export const useTaskBoard = create<TaskBoardState>()((set) => {
+let undoTimer: ReturnType<typeof setTimeout> | undefined
+
+/** Hides the bar once it has been up for `UNDO_BAR_MS`; the stack stays for ⌘Z. */
+function hideBarLater(hide: () => void): void {
+  clearTimeout(undoTimer)
+  undoTimer = setTimeout(hide, UNDO_BAR_MS)
+}
+
+export const useTaskBoard = create<TaskBoardState>()((set, get) => {
   const view = loadView()
   return {
     tasks: [],
     loaded: false,
     view,
     viewTouched: view !== DEFAULT_VIEW,
-    selectedId: null,
+    selected: [],
     detailId: null,
+    detailEdit: false,
+    undo: { stack: [], bar: false, failed: false },
+    dispatching: [],
     events: [],
     activityPref: loadActivityPref(),
     lastProjectId: null,
     leaderChoice: loadLeaderChoice(),
-    setTasks: (tasks) => set((s) => ({ tasks, loaded: true, ...(s.selectedId !== null && !tasks.some((t) => t.id === s.selectedId) ? { selectedId: null } : {}), ...(s.detailId !== null && !tasks.some((t) => t.id === s.detailId) ? { detailId: null } : {}) })),
+    leaderPicks: loadLeaderPicks(),
+    setTasks: (tasks) =>
+      set((s) => {
+        const ids = new Set(tasks.map((t) => t.id))
+        const kept = s.selected.filter((id) => ids.has(id))
+        return { tasks, loaded: true, ...(kept.length !== s.selected.length ? { selected: kept } : {}), ...(s.detailId !== null && !ids.has(s.detailId) ? { detailId: null } : {}) }
+      }),
     setView(next, touched = true) {
       set({ view: next, viewTouched: touched })
       saveView(next)
     },
-    select: (selectedId) => set({ selectedId }),
-    openDetail: (detailId) => set(detailId === null ? { detailId } : { detailId, selectedId: detailId }),
+    select: (id) => set({ selected: id === null ? [] : [id] }),
+    toggle: (id) => set((s) => ({ selected: toggleId(s.selected, id) })),
+    selectMany(ids) {
+      const now = get().selected
+      if (ids.length !== now.length || ids.some((id, i) => now[i] !== id)) set({ selected: ids })
+    },
+    openDetail: (detailId, edit = false) => set(detailId === null ? { detailId, detailEdit: false } : { detailId, detailEdit: edit, selected: [detailId] }),
+    pushDeleted(cards) {
+      set((s) => ({ undo: { stack: [...s.undo.stack, cards].slice(-UNDO_DEPTH), bar: true, failed: false } }))
+      hideBarLater(() => set((s) => ({ undo: { ...s.undo, bar: false } })))
+    },
+    popDeleted(cards) {
+      clearTimeout(undoTimer)
+      set((s) => ({ undo: { stack: s.undo.stack.filter((entry) => entry !== cards), bar: false, failed: false } }))
+    },
+    undoFailed() {
+      set((s) => ({ undo: { ...s.undo, bar: true, failed: true } }))
+      hideBarLater(() => set((s) => ({ undo: { ...s.undo, bar: false } })))
+    },
+    setDispatching: (id, on) => set((s) => ({ dispatching: on ? [...s.dispatching, id] : s.dispatching.filter((other) => other !== id) })),
     pushEvents: (drafts) => set((s) => ({ events: appendEvents(s.events, drafts) })),
     setActivity(open) {
       set({ activityPref: open })
-      try {
-        globalThis.localStorage?.setItem(ACTIVITY_KEY, open ? 'open' : 'closed')
-      } catch {
-        // Not saved; the width default comes back next time.
-      }
+      store(ACTIVITY_KEY, open ? 'open' : 'closed')
     },
     setLastProject: (lastProjectId) => set({ lastProjectId }),
     setLeaderChoice(choice) {
       set({ leaderChoice: choice })
-      try {
-        globalThis.localStorage?.setItem(LEADER_KEY, choice)
-      } catch {
-        // Not saved; Claude Code comes back next time.
-      }
+      store(LEADER_KEY, choice)
+    },
+    setLeaderPick(kind, agent, value) {
+      const picks = get().leaderPicks
+      const { [agent]: _old, ...others } = picks[kind]
+      const next = { ...picks, [kind]: value === null ? others : { ...others, [agent]: value } }
+      set({ leaderPicks: next })
+      store(PICKS_KEY, JSON.stringify(next))
     }
   }
 })

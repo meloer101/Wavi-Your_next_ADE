@@ -1,28 +1,24 @@
-// 「贴一张」 (N · PRD F9 v1.250, Figma 116B): a 320-wide note at the middle of the view. The text grows to six lines
-// and then scrolls; Enter pastes it, ⇧Enter starts a new line, Esc drops it. The first line is the title (drawn Medium),
-// the rest is the body. Below: the project (only with more than one), the card's leader (Claude Code, Codex or
-// 暂不派发) and 「贴上」. The leader menu is the new-session sheet's menu.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { agentName, CLI_AGENTS } from '@shared/agents'
-import { canLead, leaderBlock, type DispatchAgent, type LeaderCheck } from '@shared/dispatch'
+// 「贴一张」 (N · PRD F9 v1.250 / v1.252, Figma 117D / 117D′ / 117E): a 460-wide note at the middle of the view, or where
+// the user right-clicked. The text grows to six lines and then scrolls; Enter pastes it, ⇧Enter starts a new line, Esc
+// drops it. The first line is the title (drawn Medium), the rest is the body. Below: the project (only with more than
+// one), the card's leader with its model and effort (./LeaderPickers.tsx) and 「贴上」. A sub-card added by hand
+// (加子任务) has neither: its parent's leader decides who does it.
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { defineMessages } from '@shared/i18n'
 import { TASK_LIMITS } from '@shared/task-board'
 import type { Project, ProjectId } from '@shared/types'
-import { SheetMenu, type SheetMenuSection } from '../new-session/SheetMenu'
-import { AgentIcon } from '../ui/AgentIcon'
+import { SheetMenu } from '../new-session/SheetMenu'
 import { useMessages } from '../ui/i18n'
-import { Check, ChevronDown } from '../ui/icons'
-import { splitCard, usableLeader } from './model'
-import { useTaskBoard, type LeaderChoice } from './store'
+import { Check } from '../ui/icons'
+import { LeaderPickers, Picker, useLeaderPickers, type LeaderSelection } from './LeaderPickers'
+import { splitCard } from './model'
 import styles from './Compose.module.css'
 
 const M = defineMessages({
-  zh: { placeholder: '任务标题', project: '项目', leader: '主理人', none: '暂不派发', paste: '贴上', missing: '没装' },
-  en: { placeholder: 'Task title', project: 'Project', leader: 'Leader', none: 'Do not dispatch', paste: 'Paste', missing: 'Not installed' }
+  zh: { placeholder: '任务标题', project: '项目', paste: '贴上' },
+  en: { placeholder: 'Task title', project: 'Project', paste: 'Paste' }
 })
 
-/** The agents that can lead a card (`canLead`), in the menu's order. */
-const LEADER_KINDS: readonly DispatchAgent[] = CLI_AGENTS.filter((id) => canLead(id))
 const LINE = 20
 const MAX_LINES = 6
 
@@ -30,12 +26,17 @@ export interface ComposeResult {
   projectId: ProjectId
   title: string
   body: string
-  leader: LeaderChoice
+  /** `agent` null: 暂不派发, and always for a sub-card. */
+  leader: LeaderSelection
 }
 
 interface Props {
   projects: readonly Pick<Project, 'id' | 'name'>[]
   initialProject: ProjectId
+  /** A sub-card of this card: no project and no leader to pick. */
+  child?: boolean
+  /** Its top-left corner in the board, px; centred without it. */
+  at?: { x: number; y: number }
   /** Resolves true when the card was made; false keeps the box (main refused it). */
   onSubmit(result: ComposeResult): Promise<boolean>
   onCancel(): void
@@ -45,34 +46,17 @@ interface Props {
 
 const ICON = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
 
-export function Compose({ projects, initialProject, onSubmit, onCancel, leaving = false }: Props) {
+export function Compose({ projects, initialProject, child = false, at, onSubmit, onCancel, leaving = false }: Props) {
   const m = useMessages(M)
   const [text, setText] = useState('')
   const [projectId, setProjectId] = useState(initialProject)
-  const [choice, setChoice] = useState(() => useTaskBoard.getState().leaderChoice)
   const [busy, setBusy] = useState(false)
-  const [menu, setMenu] = useState<{ kind: 'project' | 'leader'; anchor: HTMLElement } | null>(null)
-  const [found, setFound] = useState<Record<string, boolean> | null>(null)
-  const [check, setCheck] = useState<LeaderCheck | null>(null)
-  // What the box really uses (and shows): the remembered agent, unless it is not available here now. Not forgotten.
-  const leader = usableLeader(choice, found, check)
+  const [projectMenu, setProjectMenu] = useState<HTMLElement | null>(null)
+  const leader = useLeaderPickers(true)
   const input = useRef<HTMLTextAreaElement>(null)
   const mirror = useRef<HTMLDivElement>(null)
+  const focusInput = (): void => input.current?.focus()
   useEffect(() => input.current?.focus(), [])
-  useEffect(() => {
-    let cancelled = false
-    void window.tr.app
-      .detectAgents()
-      .then((next) => !cancelled && setFound(next as unknown as Record<string, boolean>))
-      .catch(() => {})
-    void window.tr.dispatch
-      .leaderCheck()
-      .then((next) => !cancelled && setCheck(next))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   // Grows with the text up to six lines, then scrolls; the mirror behind it follows the scroll.
   useLayoutEffect(() => {
@@ -86,15 +70,8 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
     const card = splitCard(text)
     if (!card || busy || leaving) return
     setBusy(true)
-    // A remembered agent that is not here now is not started: look again if detection is not back yet.
-    let seen = { found, check }
-    if (found === null || check === null) {
-      seen = await Promise.all([window.tr.app.detectAgents(), window.tr.dispatch.leaderCheck()])
-        .then(([f, c]) => ({ found: f as unknown as Record<string, boolean>, check: c }))
-        .catch(() => ({ found: null, check: null }))
-    }
-    const chosen = seen.found === null || seen.check === null ? 'none' : usableLeader(choice, seen.found, seen.check)
-    const made = await onSubmit({ projectId, ...card, leader: chosen })
+    const selection = child ? { agent: null, options: {} } : await leader.resolve()
+    const made = await onSubmit({ projectId, ...card, leader: selection })
     // Pasted: the box is on its way out and stays shut (no second card from a key repeat or a double click).
     if (!made) {
       setBusy(false)
@@ -115,34 +92,12 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
     }
   }
 
-  const choose = (next: LeaderChoice): void => {
-    setChoice(next)
-    useTaskBoard.getState().setLeaderChoice(next)
-  }
-  const closeMenu = (refocus: boolean): void => {
-    setMenu(null)
-    if (refocus) input.current?.focus()
-  }
-  const toggle = (kind: 'project' | 'leader', anchor: HTMLElement): void => setMenu(menu?.kind === kind ? null : { kind, anchor })
-
-  const leaderSections = (): SheetMenuSection[] => [
-    {
-      items: LEADER_KINDS.map((id) => {
-        const blocked = leaderBlock(id, 'cli', check) ?? (found && found[id] === false ? m.missing : null)
-        const meta = blocked ?? undefined
-        return { value: id, label: agentName(id), icon: leader === id ? <Check {...ICON} /> : <AgentIcon kind={id} size={12} />, ...(meta ? { meta, disabled: true } : {}) }
-      })
-    },
-    { items: [{ value: 'none', label: m.none, icon: leader === 'none' ? <Check {...ICON} /> : <span className={styles.noMark} /> }] }
-  ]
-  const projectSections = (): SheetMenuSection[] => [{ items: projects.map((p) => ({ value: p.id, label: p.name, icon: p.id === projectId ? <Check {...ICON} /> : null })) }]
-
   const [first, ...rest] = text.split('\n')
-  const leaderLabel = leader === 'none' ? m.none : agentName(leader)
   const projectName = projects.find((p) => p.id === projectId)?.name ?? ''
+  const place: CSSProperties | undefined = at ? { left: at.x, top: at.y } : undefined
 
   return (
-    <div className={styles.compose} data-testid="task-compose" data-no-pan="" data-leaving={leaving}>
+    <div className={styles.compose} style={place} data-placed={at !== undefined} data-testid="task-compose" data-no-pan="" data-own-keys="" data-leaving={leaving}>
       <div className={styles.field}>
         {/* The first line is Medium, the rest regular: a textarea has one weight, so the visible text is this mirror and
             the textarea above it carries only the caret and the selection. */}
@@ -169,46 +124,37 @@ export function Compose({ projects, initialProject, onSubmit, onCancel, leaving 
         />
       </div>
       <div className={styles.row}>
-        {projects.length > 1 && (
-          <Picker label={m.project} testId="task-compose-project" plain onClick={(el) => toggle('project', el)}>
+        {!child && projects.length > 1 && (
+          <Picker label={m.project} testId="task-compose-project" plain onClick={(el) => setProjectMenu(projectMenu ? null : el)}>
             <span className={styles.pickerText}>{projectName}</span>
           </Picker>
         )}
-        <Picker label={m.leader} testId="task-compose-leader" onClick={(el) => toggle('leader', el)}>
-          {leader !== 'none' && <AgentIcon kind={leader} size={12} />}
-          <span className={styles.pickerText}>{leaderLabel}</span>
-        </Picker>
-        <span className={styles.spacer} />
+        {!child && <LeaderPickers state={leader} onClosed={focusInput} />}
         <button type="button" className={styles.submit} disabled={busy || leaving || splitCard(text) === null} data-testid="task-compose-submit" onClick={() => void submit()}>
           {m.paste}
         </button>
       </div>
       {/* The menu is portalled to <body>, but React still bubbles its events up through here: keep them off the canvas. */}
-      <div className={styles.menuHost} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-        {menu && (
+      <div className={styles.menuHost} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
+        {projectMenu && (
           <SheetMenu
-            anchor={menu.anchor}
-            label={menu.kind === 'leader' ? m.leader : m.project}
-            sections={menu.kind === 'leader' ? leaderSections : projectSections}
-            selected={menu.kind === 'leader' ? leader : projectId}
+            fit
+            anchor={projectMenu}
+            label={m.project}
+            sections={() => [{ items: projects.map((p) => ({ value: p.id, label: p.name, icon: p.id === projectId ? <Check {...ICON} /> : null })) }]}
+            selected={projectId}
             onPick={(value) => {
-              if (menu.kind === 'leader') choose(value === 'none' ? 'none' : (LEADER_KINDS.find((id) => id === value) ?? leader))
-              else setProjectId(value)
-              closeMenu(true)
+              setProjectId(value)
+              setProjectMenu(null)
+              focusInput()
             }}
-            onClose={closeMenu}
+            onClose={(refocus) => {
+              setProjectMenu(null)
+              if (refocus) focusInput()
+            }}
           />
         )}
       </div>
     </div>
-  )
-}
-
-function Picker({ label, testId, plain, onClick, children }: { label: string; testId: string; plain?: boolean; onClick(anchor: HTMLElement): void; children: ReactNode }) {
-  return (
-    <button type="button" className={plain ? `${styles.picker} ${styles.plain}` : styles.picker} aria-label={label} aria-haspopup="listbox" data-testid={testId} onClick={(e) => onClick(e.currentTarget)}>
-      {children}
-      <ChevronDown {...ICON} />
-    </button>
   )
 }

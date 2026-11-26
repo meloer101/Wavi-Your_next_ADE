@@ -65,6 +65,11 @@ export interface AgentSpec {
   continueLatest: readonly string[] | null
   /** The model flag, or null when the CLI has none. */
   modelFlag: string | null
+  /**
+   * Reasoning effort for one launch (PRD F9 v1.252): argv with `{effort}` replaced, and the values the menu offers.
+   * Absent where the CLI has no such flag.
+   */
+  effort?: { args: readonly string[]; values: readonly string[] }
   /** Argv Wavi always adds after the binary (e.g. a TUI subcommand). */
   baseArgs?: readonly string[]
   /** Older versions lack what `status` relies on (their status is then 估计). */
@@ -88,6 +93,7 @@ export const AGENT_SPECS: Readonly<Record<CliAgent, AgentSpec>> = {
     resumeById: ['--resume', '{id}'],
     continueLatest: ['--continue'],
     modelFlag: '--model',
+    effort: { args: ['--effort', '{effort}'], values: ['low', 'medium', 'high', 'xhigh', 'max'] },
     listedWhenMissing: true
   }),
   codex: spec({
@@ -100,6 +106,8 @@ export const AGENT_SPECS: Readonly<Record<CliAgent, AgentSpec>> = {
     resumeById: ['resume', '{id}'],
     continueLatest: ['resume', '--last'],
     modelFlag: '-m',
+    // Codex's levels vary by model; the model list Wavi probes does not carry them, so the common four.
+    effort: { args: ['-c', 'model_reasoning_effort="{effort}"'], values: ['low', 'medium', 'high', 'xhigh'] },
     listedWhenMissing: true
   }),
   opencode: spec({
@@ -149,7 +157,8 @@ export const AGENT_SPECS: Readonly<Record<CliAgent, AgentSpec>> = {
     prompt: { kind: 'argv' },
     resumeById: ['--session', '{id}'],
     continueLatest: ['--continue'],
-    modelFlag: '--model'
+    modelFlag: '--model',
+    effort: { args: ['--thinking', '{effort}'], values: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] }
   }),
   copilot: spec({
     id: 'copilot',
@@ -184,7 +193,8 @@ export const AGENT_SPECS: Readonly<Record<CliAgent, AgentSpec>> = {
     prompt: { kind: 'argv', separator: true },
     resumeById: ['--resume', '{id}'],
     continueLatest: ['--continue'],
-    modelFlag: '--model'
+    modelFlag: '--model',
+    effort: { args: ['--effort', '{effort}'], values: ['low', 'medium', 'high', 'xhigh'] }
   }),
   kimi: spec({
     id: 'kimi',

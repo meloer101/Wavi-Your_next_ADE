@@ -246,7 +246,7 @@ export class SessionTerminal {
         ...(child ? { dispatched: true } : {}),
         ...(leader ? { leader: true } : {}),
         ...(dispatched
-          ? { initialPrompt: dispatched.initialPrompt, ...(dispatched.model ? { model: dispatched.model } : {}), ...(dispatched.permission ? { permission: dispatched.permission } : {}) }
+          ? { initialPrompt: dispatched.initialPrompt, ...(dispatched.model ? { model: dispatched.model } : {}), ...(dispatched.effort ? { effort: dispatched.effort } : {}), ...(dispatched.permission ? { permission: dispatched.permission } : {}) }
           : {})
       })
     } catch (error) {

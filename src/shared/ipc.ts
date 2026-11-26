@@ -62,6 +62,8 @@ export interface PtySpawnOptions {
   initialPrompt?: string
   /** The model for this launch (PRD F21). */
   model?: string
+  /** The reasoning effort for this launch (PRD F9 v1.252); CLIs without the flag ignore it. */
+  effort?: string
   /** A 定时任务's 权限 (PRD F24): Claude's `--permission-mode`; other CLIs have no such flag and start with their default. */
   permission?: CliPermission
   /** The session was started by another session's `wavi run` (PRD F21): its brief, not a system prompt, tells it about `wavi`. */

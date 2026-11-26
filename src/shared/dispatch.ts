@@ -178,6 +178,12 @@ const LEADER_AGENTS: Partial<Record<DispatchAgent, true>> = { claude: true, code
 /** Whether a session of this kind and 界面 can be its project's leader (the only answer to that question). */
 export const canLead = (kind: AgentKind, ui: SessionUi = 'cli'): kind is DispatchAgent => kind !== 'shell' && ui !== 'gui' && LEADER_AGENTS[kind] === true
 
+/**
+ * Who can lead one card of the task board (PRD F9 v1.252): any terminal agent. Its rule not to change files rides on the
+ * card's message, not on launch flags, unlike the project leader's (`canLead`).
+ */
+export const canLeadCard = (kind: AgentKind, ui: SessionUi = 'cli'): kind is DispatchAgent => kind !== 'shell' && ui !== 'gui'
+
 /** What main found on this machine that keeps an agent from being a leader (PRD F21 v1.198 · 不改代码). */
 export interface LeaderCheck {
   /** The user's `$CODEX_HOME/config.toml` sets `sandbox_mode`, so Codex ignores the read-only permission profile. */

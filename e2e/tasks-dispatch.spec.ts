@@ -98,6 +98,8 @@ test.describe('任务看板 · wavi task', () => {
   const member = join(fake.root, 'board-member')
   /** A project without a leader. */
   const other = join(fake.root, 'plain')
+  /** A project that is not a git repository: no leader can start there. */
+  const bare = join(fake.root, 'bare')
   const profile = join(fake.root, 'profile')
   let app: ElectronApplication
   let page: Page
@@ -155,6 +157,7 @@ test.describe('任务看板 · wavi task', () => {
     repo(project, '# board\n')
     git(project, 'worktree', 'add', '-q', '-b', 'jacob/member', member)
     repo(other, '# plain\n')
+    mkdirSync(bare, { recursive: true })
     for (const dir of [project, member, other]) writeFileSync(join(dir, '.fake-steps'), '')
     mkdirSync(profile, { recursive: true })
     writeFileSync(
@@ -163,12 +166,14 @@ test.describe('任务看板 · wavi task', () => {
         version: 2,
         projects: [
           { id: 'p1', name: 'board', rootPath: project },
-          { id: 'p2', name: 'plain', rootPath: other }
+          { id: 'p2', name: 'plain', rootPath: other },
+          { id: 'p3', name: 'bare', rootPath: bare }
         ],
         worktrees: [
           { id: 'w-main', projectId: 'p1', branch: 'main', path: project, isMain: true },
           { id: 'w-member', projectId: 'p1', branch: 'jacob/member', path: member, isMain: false },
-          { id: 'w-plain', projectId: 'p2', branch: 'main', path: other, isMain: true }
+          { id: 'w-plain', projectId: 'p2', branch: 'main', path: other, isMain: true },
+          { id: 'w-bare', projectId: 'p3', branch: '', path: bare, isMain: true }
         ],
         sessions: [
           { id: 's-lead', worktreeId: 'w-main', kind: 'claude', ui: 'cli', title: 'leader', startedAt: 1, lastActivityAt: 1 },
@@ -176,6 +181,8 @@ test.describe('任务看板 · wavi task', () => {
           { id: 's-plain', worktreeId: 'w-plain', kind: 'claude', ui: 'cli', title: 'plain', startedAt: 1, lastActivityAt: 1 }
         ],
         leaderSessions: { p1: 's-lead' },
+        // What a probe would have found, so the box offers models without asking the fake CLI.
+        guiPicks: { claude: { models: [{ value: 'opus', label: 'Opus 5.5' }, { value: 'sonnet', label: 'Sonnet 5.5' }], modelsFrom: 'live' } },
         activeSessionId: 's-lead',
         sidebarCollapsed: false,
         drafts: {}
@@ -224,7 +231,11 @@ test.describe('任务看板 · wavi task', () => {
     await input.press('Shift+Enter')
     await expect(page.getByTestId('task-compose')).toBeVisible()
     await input.pressSequentially('Make it work in Safari too.')
-    await expect(page.getByTestId('task-compose-leader')).toContainText('Claude Code')
+    await expect(page.getByTestId('task-leader')).toContainText('Claude Code')
+    await page.getByTestId('task-model').click()
+    await page.getByRole('option', { name: 'Opus 5.5' }).click()
+    await page.getByTestId('task-effort').click()
+    await page.getByRole('option', { name: '高', exact: true }).click()
     await input.press('Enter')
     await expect(page.getByTestId('task-compose')).toHaveCount(0)
     await expect.poll(async () => (await cards()).find((c) => c.title === 'Ship the login')?.sessionId, WITHIN).toBeTruthy()
@@ -245,6 +256,9 @@ test.describe('任务看板 · wavi task', () => {
     expect(first).toContain('Ship the login')
     expect(first).toContain('Make it work in Safari too.')
     expect(first).toContain("You are this card's leader")
+    // With the model and effort picked in the box.
+    expect(argv[argv.indexOf('--model') + 1]).toBe('opus')
+    expect(argv[argv.indexOf('--effort') + 1]).toBe('high')
     await page.waitForTimeout(3000)
     expect(inbox(dir)).toEqual([])
     expect(read(dir, '.fake-typed')).toBe('')
@@ -261,7 +275,7 @@ test.describe('任务看板 · wavi task', () => {
     const before = await sessionIds()
     await page.keyboard.press('n')
     const input = page.getByTestId('task-compose-input')
-    await expect(page.getByTestId('task-compose-leader')).toContainText('Claude Code')
+    await expect(page.getByTestId('task-leader')).toContainText('Claude Code')
     await input.fill('Pasted once')
     await input.press('Enter')
     await page.keyboard.press('Enter')
@@ -277,9 +291,9 @@ test.describe('任务看板 · wavi task', () => {
     const before = await sessionIds()
     await board().click({ position: { x: 300, y: 300 } })
     await page.keyboard.press('n')
-    await page.getByTestId('task-compose-leader').click()
+    await page.getByTestId('task-leader').click()
     await page.getByRole('option', { name: '暂不派发' }).click()
-    await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发')
+    await expect(page.getByTestId('task-leader')).toContainText('暂不派发')
     await page.getByTestId('task-compose-input').fill('Nobody leads')
     await page.getByTestId('task-compose-input').press('Enter')
     await expect.poll(async () => (await cards()).find((c) => c.title === 'Nobody leads'), WITHIN).toMatchObject({ manual: 'todo' })
@@ -290,18 +304,49 @@ test.describe('任务看板 · wavi task', () => {
     expect(read(other, '.fake-typed')).toBe('')
   })
 
-  test('a remembered agent that cannot lead here shows 暂不派发 and starts nothing', async () => {
-    // A `sandbox_mode` in Codex's config keeps it from leading (`leaderBlock`); whether Codex is installed on the machine
-    // running this test does not matter. The choice is remembered per device; a reload starts the box from it.
-    mkdirSync(join(home, '.codex'), { recursive: true })
-    writeFileSync(join(home, '.codex', 'config.toml'), 'sandbox_mode = "workspace-write"\n')
-    await page.addInitScript(() => globalThis.localStorage?.setItem('tr.tasks.leader.v1', 'codex'))
+  test('「暂不派发」 can be dispatched later: 派给主理人… binds a session; a failure is said on the card and cleared by a retry', async () => {
+    const waiting = (await cards()).find((c) => c.title === 'Nobody leads')!
+    const before = await sessionIds()
+    const note = board().locator(`[data-task-id="${waiting.id}"]`)
+    await note.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '派给主理人…' }).click()
+    const popover = page.getByTestId('task-redispatch')
+    await expect(popover.getByTestId('task-leader')).toContainText('Claude Code')
+    await popover.getByTestId('task-redispatch-submit').click()
+    await expect(popover).toHaveCount(0)
+    await expect.poll(async () => (await cardBySeq(waiting.seq))?.sessionId, WITHIN).toBeTruthy()
+    await expect.poll(sessionIds, WITHIN).toHaveLength(before.length + 1)
+
+    // A project that is not a repository has nowhere to start a leader.
+    const stuck = await page.evaluate(() =>
+      (globalThis as unknown as { tr: { tasks: { create(d: unknown): Promise<{ id: string; seq: number }> } } }).tr.tasks.create({ projectId: 'p3', title: 'Cannot start' })
+    )
+    const stuckNote = board().locator(`[data-task-id="${stuck.id}"]`)
+    const retry = async (): Promise<void> => {
+      await stuckNote.click({ button: 'right' })
+      await page.getByRole('menuitem', { name: '派给主理人…' }).click()
+      await page.getByTestId('task-redispatch-submit').click()
+    }
+    await page.getByTestId('task-fit').click()
+    await retry()
+    await expect.poll(async () => (await cardBySeq(stuck.seq))?.note, WITHIN).toBe('主理人没启动：项目不是 git 仓库')
+    await expect(stuckNote.locator('[data-error="true"]')).toHaveText('主理人没启动：项目不是 git 仓库')
+    git(bare, 'init', '-q', '-b', 'main')
+    git(bare, 'commit', '-q', '--allow-empty', '-m', 'init')
+    await retry()
+    await expect.poll(async () => (await cardBySeq(stuck.seq))?.sessionId, WITHIN).toBeTruthy()
+    await expect.poll(async () => (await cardBySeq(stuck.seq))?.note, WITHIN).toBeUndefined()
+  })
+
+  test('a remembered agent that is not installed shows 暂不派发 and starts nothing', async () => {
+    // Goose is on no test machine's PATH. The choice is remembered per device; a reload starts the box from it.
+    await page.addInitScript(() => globalThis.localStorage?.setItem('tr.tasks.leader.v1', 'goose'))
     await page.reload()
     await expect(page.locator('[data-region="terminal"] .xterm').first()).toBeVisible(WITHIN)
     await openBoard()
     const before = await sessionIds()
     await page.keyboard.press('n')
-    await expect(page.getByTestId('task-compose-leader')).toContainText('暂不派发', WITHIN)
+    await expect(page.getByTestId('task-leader')).toContainText('暂不派发', WITHIN)
     await page.getByTestId('task-compose-input').fill('Remembered but missing')
     await page.getByTestId('task-compose-input').press('Enter')
     await expect.poll(async () => (await cards()).find((c) => c.title === 'Remembered but missing'), WITHIN).toMatchObject({ manual: 'todo' })
@@ -309,7 +354,7 @@ test.describe('任务看板 · wavi task', () => {
     expect((await cards()).find((c) => c.title === 'Remembered but missing')?.sessionId).toBeUndefined()
     expect(await sessionIds()).toHaveLength(before.length)
     // The stored choice is untouched: it is what the user chose, not what was available.
-    expect(await page.evaluate(() => globalThis.localStorage?.getItem('tr.tasks.leader.v1'))).toBe('codex')
+    expect(await page.evaluate(() => globalThis.localStorage?.getItem('tr.tasks.leader.v1'))).toBe('goose')
   })
 
   test('the leader adds a child card under the root; others without a card of their own are refused', async () => {

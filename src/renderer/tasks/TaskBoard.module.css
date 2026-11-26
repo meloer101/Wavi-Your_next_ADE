@@ -4,14 +4,29 @@
   min-height: 0;
   overflow: hidden;
   outline: none;
-  cursor: grab;
+  cursor: default;
+  user-select: none;
   touch-action: none;
 }
 
-.board[data-space='true'],
+/* Space turns the drag into a pan (a drag on empty canvas is a marquee otherwise). */
+.board[data-space='true'] {
+  cursor: grab;
+}
+
 .board[data-panning='true'],
 .board[data-dragging='true'] {
   cursor: grabbing;
+}
+
+/* Figma 117B: the selection box, above the notes. */
+.marquee {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-hover);
+  pointer-events: none;
 }
 
 /* The world: cards, links and labels in layout units, moved and scaled by the viewport. */

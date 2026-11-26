@@ -296,3 +296,24 @@ describe('a child starts at its dispatcher\'s 权限 (PRD F21 v1.209)', () => {
     expect(childPermission('auto', 'droid', 'cli')).toBeUndefined()
   })
 })
+
+describe('agentArgv effort (PRD F9 v1.252)', () => {
+  it('gives each CLI with a flag its own, next to the model and before the first message', () => {
+    expect(agentArgv('claude', '/r', { model: 'opus', effort: 'high', initialPrompt: 'go' })).toEqual(['claude', '--model', 'opus', '--effort', 'high', '--', 'go'])
+    expect(agentArgv('codex', '/r', { effort: 'xhigh', initialPrompt: 'go' }).slice(-4)).toEqual(['-c', 'model_reasoning_effort="xhigh"', '--', 'go'])
+    expect(agentArgv('pi', '/r', { model: 'm', effort: 'off', initialPrompt: 'go' })).toEqual(['pi', '--model', 'm', '--thinking', 'off', 'go'])
+    expect(agentArgv('grok', '/r', { effort: 'low' })).toEqual(['grok', '--effort', 'low'])
+  })
+  it('passes nothing for a CLI without the flag', () => {
+    for (const kind of CLI_AGENTS.filter((id) => !['claude', 'codex', 'pi', 'grok'].includes(id))) {
+      expect(agentArgv(kind, '/r', { effort: 'high' })).toEqual(agentArgv(kind, '/r'))
+    }
+    expect(agentArgv('cursor', '/r', { effort: 'high' })).toEqual(['cursor-agent'])
+  })
+  it('passes nothing when resuming, or for a value that is no level', () => {
+    for (const kind of ['claude', 'codex', 'pi', 'grok'] as const) {
+      expect(agentArgv(kind, '/r', { effort: 'high', resumeAgentSessionId: 'abc' })).toEqual(agentArgv(kind, '/r', { resumeAgentSessionId: 'abc' }))
+      expect(agentArgv(kind, '/r', { effort: 'high" -c x="1' })).toEqual(agentArgv(kind, '/r'))
+    }
+  })
+})

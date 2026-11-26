@@ -118,6 +118,11 @@ export class TaskBoard {
       updatedAt: now,
       ...(draft.parentId !== undefined ? { parentId: draft.parentId } : {})
     }
+    if (draft.pos !== undefined) {
+      const pos = parseTaskPos(draft.pos)
+      if (!pos) return null
+      task.pos = pos
+    }
     return this.commit({ ...this.data, nextSeq: this.data.nextSeq + 1, tasks: [...this.data.tasks, task] }) ? { ...task } : null
   }
 
@@ -173,11 +178,47 @@ export class TaskBoard {
     return this.commit({ ...this.data, tasks: tasks.map((t, i) => (i === at ? next : t)) }) ? { ...next } : null
   }
 
-  /** Removes the card and everything below it; whether it was removed (false: no such card, or the save failed). */
-  remove(id: TaskId): boolean {
-    if (!this.data.tasks.some((t) => t.id === id)) return false
+  /** Removes the card and everything below it; the cards removed (none: no such card, or the save failed). */
+  remove(id: TaskId): Task[] {
+    if (!this.data.tasks.some((t) => t.id === id)) return []
     const gone = new Set(withDescendants(this.data.tasks, id))
-    return this.commit({ ...this.data, tasks: this.data.tasks.filter((t) => !gone.has(t.id)) })
+    const removed = this.data.tasks.filter((t) => gone.has(t.id)).map((t) => ({ ...t }))
+    return this.commit({ ...this.data, tasks: this.data.tasks.filter((t) => !gone.has(t.id)) }) ? removed : []
+  }
+
+  /**
+   * Puts removed cards back with their own ids, `#seq`s and places (undo, PRD F9 v1.252). Refused (false, nothing
+   * changes) when an id or `#seq` is on the board or repeated, a `#seq` was never handed out, or a project would pass
+   * its limit. A card whose parent is gone for good comes back as a root, and a session since bound to another card
+   * stays with that card.
+   */
+  restore(cards: readonly Task[]): boolean {
+    const ids = new Set(this.data.tasks.map((t) => t.id))
+    const seqs = new Set(this.data.tasks.map((t) => t.seq))
+    const bound = new Set(this.data.tasks.map((t) => t.sessionId).filter((id) => id !== undefined))
+    for (const card of cards) {
+      if (ids.has(card.id) || seqs.has(card.seq) || card.seq >= this.data.nextSeq) return false
+      ids.add(card.id)
+      seqs.add(card.seq)
+    }
+    if (cards.length === 0) return false
+    const tasks = [...this.data.tasks, ...cards.map((c) => ({ ...c }))]
+    const byId = new Map(tasks.map((t) => [t.id, t]))
+    for (const card of tasks.slice(this.data.tasks.length)) {
+      if (tasks.filter((t) => t.projectId === card.projectId).length > TASK_LIMITS.perProject) return false
+      if (card.sessionId !== undefined) {
+        if (bound.has(card.sessionId)) delete card.sessionId
+        else bound.add(card.sessionId)
+      }
+      if (card.parentId === undefined) continue
+      const parent = byId.get(card.parentId)
+      if (!parent || parent.projectId !== card.projectId || taskDepth(tasks, card.id) > TASK_LIMITS.maxDepth) {
+        delete card.parentId
+        // A child's place is an offset from its parent: without one it means nothing.
+        delete card.pos
+      }
+    }
+    return this.commit({ ...this.data, tasks })
   }
 
   /** Makes `next` the board and saves it; when the save fails the board stays as it was and nobody is told of a change. */

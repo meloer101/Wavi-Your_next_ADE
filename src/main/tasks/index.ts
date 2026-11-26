@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { TASK_IPC, type Task } from '@shared/task-board'
 import { getMainWindow } from '../windows'
-import { parseTaskDraft, parseTaskId, parseTaskPatch } from './parse'
+import { parseTaskDraft, parseTaskId, parseTaskPatch, parseTaskSnapshot } from './parse'
 import { TaskBoard, TasksFile } from './store'
 
 const isMainPage = (event: IpcMainInvokeEvent): boolean => event.sender === getMainWindow()?.webContents
@@ -32,7 +32,9 @@ export function registerTaskHandlers(): void {
     const patch = parseTaskPatch(raw)
     return patch ? board.update(parseTaskId(id), patch) : null
   })
-  handle(TASK_IPC.remove, (id) => {
-    board.remove(parseTaskId(id))
+  handle(TASK_IPC.remove, (id) => board.remove(parseTaskId(id)))
+  handle(TASK_IPC.restore, (raw) => {
+    const cards = parseTaskSnapshot(raw)
+    return cards ? board.restore(cards) : false
   })
 }
