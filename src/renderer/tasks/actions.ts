@@ -4,12 +4,12 @@ import type { DispatchAgent } from '@shared/dispatch'
 import type { Task, TaskId } from '@shared/task-board'
 import { startCardLeader, type LeaderFailure, type LeaderOptions } from '../dispatch/task-deliver'
 import { isLeaderFailureNote, leaderFailureNote } from './model'
-import { subtreesOf, topmost } from './selection'
+import { topmost } from './selection'
 import { useTaskBoard } from './store'
 
 /**
- * Starts the card's leader (贴上 with an agent, or 派发 later). A failure is said on the card (its note) and in 「动态」,
- * and the card stays 待派发; a success clears an earlier failure's note.
+ * Starts the card's leader (贴上 with an agent, or 派发 later). A failure is said on the card (its note) and in 「动态」;
+ * a success clears an earlier failure's note.
  */
 export async function dispatchLeader(task: Task, agent: DispatchAgent, options: LeaderOptions): Promise<void> {
   const state = useTaskBoard.getState()
@@ -20,7 +20,8 @@ export async function dispatchLeader(task: Task, agent: DispatchAgent, options: 
     await window.tr.tasks.update(task.id, { note: leaderFailureNote(reason) })
   }
   try {
-    const result = await startCardLeader(task, agent, options)
+    // A card typed after the start can still fail to arrive, long after this returns.
+    const result = await startCardLeader(task, agent, options, (reason) => void failed(reason).catch(() => {}))
     if (!result.ok) await failed(result.reason)
     // The card as it is now: an agent may have written its own note meanwhile.
     else if (isLeaderFailureNote(useTaskBoard.getState().tasks.find((t) => t.id === task.id)?.note)) await window.tr.tasks.update(task.id, { note: null })
@@ -32,29 +33,36 @@ export async function dispatchLeader(task: Task, agent: DispatchAgent, options: 
   }
 }
 
-/** Deletes the cards and everything below them, without asking; the removed cards are kept for ⌘Z. */
-export async function deleteCards(ids: readonly TaskId[]): Promise<void> {
-  const { tasks, setDeleted } = useTaskBoard.getState()
-  const removed = subtreesOf(tasks, ids)
-  if (removed.length === 0) return
-  setDeleted(removed)
-  // Sent together, so main has every remove before a ⌘Z's restore can reach it.
-  await Promise.all(topmost(tasks, ids).map((id) => window.tr.tasks.remove(id)))
+// Deletes and undos run one after another: a ⌘Z right after ⌫ waits for main's answer, and each ⌘Z takes the next one.
+let queue: Promise<void> = Promise.resolve()
+const inTurn = (work: () => Promise<void>): Promise<void> => (queue = queue.then(work).catch((error: unknown) => console.error('[tasks] delete or undo failed:', error)))
+
+/**
+ * Deletes the cards and everything below them, without asking. What ⌘Z puts back is what main says it removed, so a
+ * card an agent added a moment ago comes back too.
+ */
+export function deleteCards(ids: readonly TaskId[]): Promise<void> {
+  return inTurn(async () => {
+    const removed: Task[] = []
+    for (const id of topmost(useTaskBoard.getState().tasks, ids)) removed.push(...(await window.tr.tasks.remove(id)))
+    if (removed.length > 0) useTaskBoard.getState().pushDeleted(removed)
+  })
 }
 
-/** Puts the last deleted cards back as they were, and selects the ones that were picked. */
-export async function undoDelete(): Promise<void> {
-  const { deleted, setDeleted } = useTaskBoard.getState()
-  if (!deleted) return
-  // Taken at once: a second ⌘Z while main answers has nothing to put back twice.
-  setDeleted(null)
-  const ok = await window.tr.tasks.restore(deleted.cards).catch(() => false)
-  if (!ok) {
-    console.error('[tasks] the deleted cards could not be put back')
-    return
-  }
-  const ids = new Set(deleted.cards.map((c) => c.id))
-  useTaskBoard.getState().selectMany(deleted.cards.filter((c) => c.parentId === undefined || !ids.has(c.parentId)).map((c) => c.id))
+/** Puts the latest delete's cards back as they were, and selects the ones at the top of it. */
+export function undoDelete(): Promise<void> {
+  return inTurn(async () => {
+    const cards = useTaskBoard.getState().undo.stack.at(-1)
+    if (!cards) return
+    const ok = await window.tr.tasks.restore(cards).catch(() => false)
+    if (!ok) {
+      useTaskBoard.getState().undoFailed()
+      return
+    }
+    useTaskBoard.getState().popDeleted(cards)
+    const ids = new Set(cards.map((c) => c.id))
+    useTaskBoard.getState().selectMany(cards.filter((c) => c.parentId === undefined || !ids.has(c.parentId)).map((c) => c.id))
+  })
 }
 
 export function setManual(ids: readonly TaskId[], manual: 'todo' | 'canceled'): void {

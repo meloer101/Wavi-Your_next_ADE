@@ -19,7 +19,7 @@ import { useTaskBoard } from './store'
 import styles from './LeaderPickers.module.css'
 
 const M = defineMessages({
-  zh: { leader: '主理人', model: '模型', effort: 'effort', none: '暂不派发', missing: '没装', default: '默认', defaultModel: '默认模型', defaultEffort: '默认 effort', off: '关' },
+  zh: { leader: '主理人', model: '模型', effort: '推理强度', none: '暂不派发', missing: '没装', default: '默认', defaultModel: '默认模型', defaultEffort: '默认推理强度', off: '关' },
   en: { leader: 'Leader', model: 'Model', effort: 'Effort', none: 'Do not dispatch', missing: 'Not installed', default: 'Default', defaultModel: 'Default model', defaultEffort: 'Default effort', off: 'Off' }
 })
 
@@ -131,8 +131,8 @@ export function LeaderPickers({ state, onClosed }: { state: LeaderPickersState; 
     const item = (id: DispatchAgent) => ({ value: id, label: agentName(id), icon: agent === id ? <Check {...ICON} /> : <AgentIcon kind={id} size={12} /> })
     return [
       { items: installed.map(item) },
-      { items: missing.map((id) => ({ ...item(id), meta: m.missing, disabled: true })) },
-      ...(state.allowNone ? [{ items: [{ value: 'none', label: m.none, icon: agent === 'none' ? <Check {...ICON} /> : <span className={styles.noMark} /> }] }] : [])
+      ...(state.allowNone ? [{ items: [{ value: 'none', label: m.none, icon: agent === 'none' ? <Check {...ICON} /> : <span className={styles.noMark} /> }] }] : []),
+      { items: missing.map((id) => ({ ...item(id), meta: m.missing, disabled: true })) }
     ].filter((section) => section.items.length > 0)
   }
 
@@ -167,6 +167,7 @@ export function LeaderPickers({ state, onClosed }: { state: LeaderPickersState; 
       <div className={styles.menuHost} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
         {menu && (
           <SheetMenu
+            fit
             anchor={menu.anchor}
             label={m[menu.kind]}
             sections={sections}

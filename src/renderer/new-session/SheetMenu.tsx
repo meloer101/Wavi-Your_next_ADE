@@ -41,6 +41,7 @@ export function SheetMenu({
   hint,
   empty,
   align = 'below',
+  fit = false,
   onPick,
   onClose
 }: {
@@ -54,6 +55,8 @@ export function SheetMenu({
   hint?: string | null
   empty?: string
   align?: 'below' | 'selected'
+  /** Never past the window: above its control when the room below is too small, and no taller than the room it has. */
+  fit?: boolean
   onPick: (value: string) => void
   onClose: (refocus: boolean) => void
 }) {
@@ -99,6 +102,21 @@ export function SheetMenu({
     const left = Math.max(EDGE, Math.min(anchor.getBoundingClientRect().left - OUTSET, window.innerWidth - EDGE - el.offsetWidth))
     if (Math.abs(left - box.left) > 0.5) setBox({ ...box, left })
   }, [anchor, box, listed])
+
+  useLayoutEffect(() => {
+    const el = menu.current
+    const items = list.current
+    if (!fit || !el || !items || !box) return
+    const rect = anchor.getBoundingClientRect()
+    // Its height with nothing cut: what is around the list plus all of the list.
+    const wanted = Math.min(MAX_HEIGHT, el.offsetHeight - items.clientHeight + items.scrollHeight)
+    const below = window.innerHeight - rect.bottom - GAP - EDGE
+    const above = rect.top - GAP - EDGE
+    const up = wanted > below && above > below
+    const maxHeight = Math.max(0, Math.min(MAX_HEIGHT, up ? above : below))
+    const top = up ? rect.top - GAP - Math.min(wanted, maxHeight) : rect.bottom + GAP
+    if (Math.abs(top - box.top) > 0.5 || Math.abs(maxHeight - box.maxHeight) > 0.5) setBox({ ...box, top, maxHeight })
+  }, [fit, anchor, box, listed])
 
   // The menu renders once it is placed; then the keyboard goes to its search field (or list).
   const placed = box !== null

@@ -1,6 +1,6 @@
 // 任务 board's selection maths (PRD F9 v1.252 框选和多选): pure, no DOM. The selection is a list of card ids; the
 // marquee is hit-tested in world coordinates (layout.ts), so it works at every zoom.
-import { withDescendants, type Task, type TaskId } from '@shared/task-board'
+import type { Task, TaskId } from '@shared/task-board'
 import { scaleFor, type Rect, type View } from './layout'
 
 export interface Point {
@@ -19,9 +19,14 @@ export function toWorld(view: View, point: Point): Point {
   return { x: (point.x - view.x) / s, y: (point.y - view.y) / s }
 }
 
-export function rectToWorld(view: View, rect: Rect): Rect {
+/**
+ * The marquee from where it started on the world to where the pointer is in the board now: the world box (what it
+ * selects) and the board box (what is drawn). The start is held in world coordinates, so the box follows a pan or a zoom.
+ */
+export function marqueeBox(view: View, from: Point, to: Point): { world: Rect; screen: Rect } {
   const s = scaleFor(view.zoom)
-  return { ...toWorld(view, rect), w: rect.w / s, h: rect.h / s }
+  const start = { x: view.x + from.x * s, y: view.y + from.y * s }
+  return { world: rectBetween(from, toWorld(view, to)), screen: rectBetween(start, to) }
 }
 
 /** Every card the box touches: overlapping is enough, it need not hold the whole card. */
@@ -35,8 +40,8 @@ export function toggleId(ids: readonly TaskId[], id: TaskId): TaskId[] {
 }
 
 /**
- * The selected cards none of whose ancestors is selected: what a group drag moves and a delete removes (the rest go
- * with their ancestor).
+ * The selected cards none of whose ancestors is selected: what a group drag moves and a delete asks main to remove (the
+ * rest go with their ancestor).
  */
 export function topmost(tasks: readonly Pick<Task, 'id' | 'parentId'>[], ids: readonly TaskId[]): TaskId[] {
   const byId = new Map(tasks.map((t) => [t.id, t]))
@@ -50,12 +55,6 @@ export function topmost(tasks: readonly Pick<Task, 'id' | 'parentId'>[], ids: re
     }
     return true
   })
-}
-
-/** The selected cards and everything below them: what a delete takes away, kept for its undo. */
-export function subtreesOf(tasks: readonly Task[], ids: readonly TaskId[]): Task[] {
-  const gone = new Set(topmost(tasks, ids).flatMap((id) => withDescendants(tasks, id)))
-  return tasks.filter((t) => gone.has(t.id))
 }
 
 export interface DeletedSummary {

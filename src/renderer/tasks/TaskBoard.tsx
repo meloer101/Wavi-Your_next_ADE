@@ -22,7 +22,7 @@ import { diffMotion, hasMotion, useReducedMotion } from './motion'
 import { Note, type NoteInfo } from './Note'
 import { ActivityPanel, Toolbar, UndoBar, ZoomControl } from './Panes'
 import { Redispatch } from './Redispatch'
-import { cardsTouching, deletedSummary, rectBetween, rectToWorld, toWorld, topmost, type Point } from './selection'
+import { cardsTouching, deletedSummary, marqueeBox, toWorld, topmost, type Point } from './selection'
 import { activityShown, defaultProject, startTaskSync, useTaskBoard } from './store'
 import { TaskMenu, type TaskMenuItem } from './TaskMenu'
 import { useCards } from './use-cards'
@@ -133,7 +133,20 @@ export function TaskBoard() {
   const [composing, setComposing] = useState<Composing | null>(null)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   const [redispatchId, setRedispatchId] = useState<TaskId | null>(null)
-  const [marquee, setMarquee] = useState<Rect | null>(null)
+  // Cards whose failure line takes a second row (their notes report it).
+  const [tall, setTall] = useState<ReadonlySet<TaskId>>(() => new Set())
+  const onTall = useCallback((id: TaskId, is: boolean) => {
+    setTall((now) => {
+      if (now.has(id) === is) return now
+      const next = new Set(now)
+      if (is) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+  // The marquee: where it started on the board's world (so a pan or a zoom during the drag keeps it there), where the
+  // pointer is in the board, and what was selected before it (kept with ⇧).
+  const [marquee, setMarquee] = useState<{ from: Point; to: Point; base: readonly TaskId[] } | null>(null)
   const [spaceDown, setSpaceDown] = useState(false)
   const [panning, setPanning] = useState(false)
   // The cards being dragged (one, or the selection) and where they are held (note coordinates, as `Task.pos`); saved
@@ -149,8 +162,8 @@ export function TaskBoard() {
   const [now, setNow] = useState(() => Date.now())
 
   const m = useMessages(M)
-  const { view, selected, detailId, detailEdit, events, activityPref, lastProjectId, loaded, deleted, dispatching } = useTaskBoard(
-    useShallow((s) => ({ view: s.view, selected: s.selected, detailId: s.detailId, detailEdit: s.detailEdit, events: s.events, activityPref: s.activityPref, lastProjectId: s.lastProjectId, loaded: s.loaded, deleted: s.deleted, dispatching: s.dispatching }))
+  const { view, selected, detailId, detailEdit, events, activityPref, lastProjectId, loaded, undone, dispatching } = useTaskBoard(
+    useShallow((s) => ({ view: s.view, selected: s.selected, detailId: s.detailId, detailEdit: s.detailEdit, events: s.events, activityPref: s.activityPref, lastProjectId: s.lastProjectId, loaded: s.loaded, undone: s.undo, dispatching: s.dispatching }))
   )
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const tasks = useTaskBoard((s) => s.tasks)
@@ -202,13 +215,13 @@ export function TaskBoard() {
   const heldDragging = held?.dragging === true
   const heldTilt = held?.tilt ?? 0
   // The saved places, both modes: they change with the cards, not with a drag.
-  const layouts = useMemo(() => ({ note: layoutBoard(trees, 'note'), chip: layoutBoard(trees, 'chip') }), [trees])
+  const layouts = useMemo(() => ({ note: layoutBoard(trees, 'note', undefined, tall), chip: layoutBoard(trees, 'chip') }), [trees, tall])
   const bounds = useMemo<Record<LayoutMode, Rect>>(() => ({ note: layouts.note.bounds, chip: layouts.chip.bounds }), [layouts])
   const drawing = drawingFor(view.zoom)
   const drawnMode = modeFor(view.zoom)
   // While a card is held, only the mode on screen is laid out again (every frame); the other one is not drawn, and
   // both are recomputed from the saved place when it is let go.
-  const heldLayout = useMemo(() => (overrides ? layoutBoard(trees, drawnMode, overrides) : null), [trees, drawnMode, overrides])
+  const heldLayout = useMemo(() => (overrides ? layoutBoard(trees, drawnMode, overrides, tall) : null), [trees, drawnMode, overrides, tall])
   const layout = heldLayout ?? (drawnMode === 'note' ? layouts.note : layouts.chip)
   const scale = scaleFor(view.zoom)
 
@@ -402,10 +415,9 @@ export function TaskBoard() {
     // The box stays up for its 200 ms exit: a second Enter or click in that time is not a second card.
     if (composeLeaving || !composing) return false
     const { parentId, pos } = composing
-    const made = await window.tr.tasks.create({ projectId, title, ...(body !== '' ? { body } : {}), ...(parentId !== undefined ? { parentId } : {}) })
+    const made = await window.tr.tasks.create({ projectId, title, ...(body !== '' ? { body } : {}), ...(parentId !== undefined ? { parentId } : {}), ...(pos ? { pos } : {}) })
     if (!made) return false
     const state = useTaskBoard.getState()
-    if (pos) await window.tr.tasks.update(made.id, { pos })
     state.setLastProject(projectId)
     state.select(made.id)
     focusBoard()
@@ -561,6 +573,8 @@ export function TaskBoard() {
       const target = e.target as HTMLElement
       // The new-card box too: ⌫ or ⇥ on one of its buttons is not about the cards behind it.
       if (target.closest('input, textarea, select, [role="dialog"], [data-own-keys]')) return
+      // ⌫, ⌦, ⇥ and ↵ on a button or any control of the panes are that control's, never the selected cards'.
+      if (['Delete', 'Backspace', 'Tab', 'Enter'].includes(e.key) && target.closest('button, [role="menu"], [role="menuitem"], [data-no-pan]')) return
       const state = useTaskBoard.getState()
       if (e.altKey && e.code === 'KeyD' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -592,11 +606,10 @@ export function TaskBoard() {
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && state.selected.length > 0) {
         e.preventDefault()
         acts.current.remove(state.selected)
-      } else if (e.key === 'Tab' && !e.shiftKey && only !== null && !target.closest('button') && acts.current.canAddChild(only)) {
+      } else if (e.key === 'Tab' && !e.shiftKey && only !== null && acts.current.canAddChild(only)) {
         e.preventDefault()
         acts.current.addChild(only)
       } else if (e.key === 'Enter' && only !== null) {
-        if (target.closest('button')) return
         e.preventDefault()
         state.openDetail(only)
       } else if (e.key === 'Escape' && state.selected.length > 0) {
@@ -625,7 +638,8 @@ export function TaskBoard() {
     perPx?: number
     frame?: number
     last?: ReadonlyMap<TaskId, TaskPos>
-    /** The marquee: what was selected before it (kept with ⇧). */
+    /** The marquee: its start on the world, and what was selected before it (kept with ⇧). */
+    from?: Point
     base?: readonly TaskId[]
     additive?: boolean
     /** The pointer now, and where it was at the last frame (for the tilt). */
@@ -648,6 +662,17 @@ export function TaskBoard() {
     return out
   }
 
+  /** Selects what the marquee touches, at the view as it is now. */
+  const selectIn = (box: { from: Point; to: Point; base: readonly TaskId[] }): void => {
+    const touched = cardsTouching(layout.cards, marqueeBox(useTaskBoard.getState().view, box.from, box.to).world)
+    useTaskBoard.getState().selectMany([...box.base, ...touched.filter((id) => !box.base.includes(id))])
+  }
+  // A two-finger pan or a zoom while the button is down moves cards under the box without a pointer move.
+  useEffect(() => {
+    if (marquee) selectIn(marquee)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the view's changes only; a pointer move selects itself
+  }, [view])
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
     // Left or middle; a ⌃-click is a right-click (its `contextmenu` follows).
     if ((e.button !== 0 && e.button !== 1) || (e.button === 0 && e.ctrlKey)) return
@@ -669,7 +694,9 @@ export function TaskBoard() {
       // No text selection while the box is drawn.
       e.preventDefault()
       const base = useTaskBoard.getState().selected
-      drag.current = { ...press, mode: 'marquee', base, additive: e.shiftKey }
+      const rect = e.currentTarget.getBoundingClientRect()
+      const from = toWorld(useTaskBoard.getState().view, { x: e.clientX - rect.left, y: e.clientY - rect.top })
+      drag.current = { ...press, mode: 'marquee', from, base, additive: e.shiftKey }
     }
     e.currentTarget.setPointerCapture(e.pointerId)
     focusBoard()
@@ -713,11 +740,9 @@ export function TaskBoard() {
     d.moved = true
     if (d.mode === 'marquee') {
       const rect = e.currentTarget.getBoundingClientRect()
-      const box = rectBetween({ x: d.x - rect.left, y: d.y - rect.top }, { x: e.clientX - rect.left, y: e.clientY - rect.top })
-      setMarquee(box)
-      const touched = cardsTouching(layout.cards, rectToWorld(view, box))
-      const base = d.additive ? d.base! : []
-      useTaskBoard.getState().selectMany([...base, ...touched.filter((id) => !base.includes(id))])
+      const next = { from: d.from!, to: { x: e.clientX - rect.left, y: e.clientY - rect.top }, base: d.additive ? d.base! : [] }
+      setMarquee(next)
+      selectIn(next)
       return
     }
     setPanning(true)
@@ -764,6 +789,7 @@ export function TaskBoard() {
   // ── Render ──
   const activityOpen = activityShown(activityPref, size.w)
   const detail = detailId !== null ? cardById.get(detailId) : undefined
+  const drawnMarquee = marquee ? marqueeBox(view, marquee.from, marquee.to).screen : null
   const parentCard = composing?.parentId !== undefined ? cardById.get(composing.parentId) : undefined
   // A sub-card whose parent was deleted meanwhile has nowhere to go: the box goes with it.
   const compose = !composing || (composing.parentId !== undefined && !parentCard) ? undefined : (parentCard?.task.projectId ?? defaultProject(projectIds, lastProjectId, activeProject))
@@ -818,12 +844,13 @@ export function TaskBoard() {
               now={now}
               onSelect={onSelect}
               onOpen={onOpen}
+              onTall={onTall}
             />
           )
         })}
       </>
     ),
-    [layout, drawing, cardById, infos, selectedSet, overrides, heldDragging, heldTilt, fx, edges, leaving, filter, projectName, now, onSelect, onOpen]
+    [layout, drawing, cardById, infos, selectedSet, overrides, heldDragging, heldTilt, fx, edges, leaving, filter, projectName, now, onSelect, onOpen, onTall]
   )
 
   return (
@@ -845,10 +872,10 @@ export function TaskBoard() {
       <div className={styles.world} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${scale})`, ['--world-scale' as string]: scale }}>
         {world}
       </div>
-      {marquee && <div className={styles.marquee} data-testid="task-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
+      {drawnMarquee && <div className={styles.marquee} data-testid="task-marquee" style={{ left: drawnMarquee.x, top: drawnMarquee.y, width: drawnMarquee.w, height: drawnMarquee.h }} />}
       <ActivityPanel events={events} open={activityOpen} onToggle={() => useTaskBoard.getState().setActivity(!activityOpen)} />
       <Toolbar onAdd={() => startCompose()} onFit={fit} />
-      {deleted?.bar && <UndoBar deleted={deletedSummary(deleted.cards)} onUndo={undo} />}
+      {undone.bar && undone.stack.length > 0 && <UndoBar deleted={deletedSummary(undone.stack.at(-1)!)} failed={undone.failed} onUndo={undo} />}
       <ZoomControl zoom={view.zoom} onStep={(dir) => zoomBy(dir === 1 ? ZOOM_STEP : 1 / ZOOM_STEP)} />
       {compose !== undefined && (
         <Compose

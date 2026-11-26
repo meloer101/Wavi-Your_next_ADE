@@ -344,8 +344,12 @@ test('the new-card box: ⇧Enter is a new line, Enter pastes, the first line is 
   // The leader menu: every CLI agent, the ones not installed greyed, then 暂不派发; the chosen one is ticked.
   await page.getByTestId('task-leader').click()
   const options = page.getByRole('option')
+  // Installed agents, then 暂不派发, then the ones not installed.
   await expect(options).toHaveCount(20)
-  await expect(options.last()).toHaveText('暂不派发')
+  const texts = await options.allTextContents()
+  const none = texts.indexOf('暂不派发')
+  expect(texts.slice(0, none).filter((t) => t.endsWith('没装'))).toEqual([])
+  expect(texts.slice(none + 1).filter((t) => !t.endsWith('没装'))).toEqual([])
   await expect(page.getByRole('option', { name: /Claude Code/ })).toHaveAttribute('aria-selected', 'true')
   await shoot('compose-leader-menu')
   await page.getByRole('option', { name: '暂不派发' }).click()
@@ -647,6 +651,9 @@ test('the new-card box shows full project and agent names: no picker label is cu
   await expect(page.getByRole('option')).toHaveText(['默认', '低', '中', '高', '更高', '最高'])
   await page.getByRole('option', { name: '高', exact: true }).click()
   await expect(page.getByTestId('task-model')).toContainText('Opus 5.5')
+  await page.getByTestId('task-leader').click()
+  await expect(page.getByRole('option', { name: '暂不派发' })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   const labels = page.getByTestId('task-compose').locator('[aria-haspopup="listbox"] span:not([aria-hidden])')
   const sizes = await labels.evaluateAll((els) => els.map((el) => ({ text: el.textContent ?? '', scroll: el.scrollWidth, client: el.clientWidth })))
@@ -655,6 +662,14 @@ test('the new-card box shows full project and agent names: no picker label is cu
   await page.getByTestId('task-leader').click()
   const cut = await page.getByRole('option').evaluateAll((els) => els.flatMap((el) => Array.from(el.querySelectorAll('span'))).filter((el) => el.scrollWidth > el.clientWidth + 1 && el.textContent !== '').map((el) => el.textContent))
   expect(cut).toEqual([])
+  const list = page.getByRole('listbox')
+  await expect(page.getByRole('option', { name: '暂不派发' })).toBeInViewport({ ratio: 1 })
+  expect(await list.evaluate((el) => el.scrollTop)).toBe(0)
+  const [listBox, noneBox] = [(await list.boundingBox())!, (await page.getByRole('option', { name: '暂不派发' }).boundingBox())!]
+  expect(noneBox.y + noneBox.height).toBeLessThanOrEqual(listBox.y + listBox.height)
+  const height = await page.evaluate(() => (globalThis as unknown as { innerHeight: number }).innerHeight)
+  expect(listBox.y).toBeGreaterThanOrEqual(0)
+  expect(listBox.y + listBox.height).toBeLessThanOrEqual(height)
   await shoot('117E-compose-agent-menu')
   await page.keyboard.press('Escape')
   await shoot('117D2-compose')
@@ -718,7 +733,12 @@ test('117A / B / C / F: the menus, the marquee, 派发 beside a card, the failur
   await openTasks({ x: 24, y: 24, zoom: 1 })
   await seedModels()
   await expect(note(waiting)).toBeVisible(WITHIN)
-  await expect(board().locator('[data-error="true"]', { hasText: '主理人没启动' })).toBeVisible()
+  const failure = board().locator('[data-error="true"]', { hasText: '主理人没启动' })
+  await expect(failure).toBeVisible()
+  // The reason takes two rows instead of an ellipsis, and its card is a row taller.
+  await expect.poll(async () => (await note(failed).boundingBox())!.height).toBeCloseTo(110, 0)
+  expect(await failure.evaluate((el) => [el.clientHeight > 24, el.scrollWidth <= el.clientWidth, el.scrollHeight <= el.clientHeight])).toEqual([true, true, true])
+  await shoot('117F-failure-wraps')
 
   await note(waiting).click({ button: 'right' })
   await item('派给主理人…').hover()
@@ -775,4 +795,57 @@ test('the middle button and Space-drag pan; a plain drag on empty canvas does no
   await page.keyboard.up(' ')
   expect((await at()).x - start.x).toBeCloseTo(120, 0)
   expect((await at()).y - start.y).toBeCloseTo(60, 0)
+})
+
+test('⌫, Delete, ↵ and ⇥ on a button of the panes never act on the selected cards', async () => {
+  const card = await make('p-acme', '按钮上的按键')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(card)).toBeVisible(WITHIN)
+  await note(card).click()
+  for (const control of [page.getByRole('button', { name: '放大' }), page.getByTestId('task-fit')]) {
+    await control.focus()
+    for (const key of ['Backspace', 'Delete', 'Tab']) {
+      await control.focus()
+      await page.keyboard.press(key)
+    }
+  }
+  await expect(page.getByTestId('task-compose')).toHaveCount(0)
+  await expect(page.getByTestId('task-detail')).toHaveCount(0)
+  expect(await cardsNow()).toHaveLength(1)
+})
+
+test('a two-finger pan during the marquee keeps its start on the canvas', async () => {
+  const top = await make('p-acme', '框的起点这张')
+  const below = await make('p-acme', '滚上来的那张')
+  await place(top, 100, 60)
+  await place(below, 100, 1000)
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(top)).toBeVisible(WITHIN)
+  const box = (await board().boundingBox())!
+  await page.mouse.move(box.x + 60, box.y + 60)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 300, box.y + 500, { steps: 6 })
+  await expect(selected()).toHaveCount(1)
+  await page.mouse.wheel(0, 700)
+  await expect(selected()).toHaveCount(2)
+  await page.mouse.up()
+  await expect(selected()).toHaveCount(2)
+})
+
+// Last: it breaks agent detection for the rest of the app's life.
+test('派发 says why when the installed CLIs cannot be detected', async () => {
+  const card = await make('p-acme', '检测不到')
+  await openTasks({ x: 24, y: 24, zoom: 1 })
+  await expect(note(card)).toBeVisible(WITHIN)
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('app:detect-agents')
+    ipcMain.handle('app:detect-agents', () => {
+      throw new Error('no shell')
+    })
+  })
+  await note(card).click({ button: 'right' })
+  await item('派给主理人…').click()
+  const popover = page.getByTestId('task-redispatch')
+  await popover.getByTestId('task-redispatch-submit').click()
+  await expect(popover.getByRole('alert')).toHaveText('没能检测装了哪些 CLI')
 })

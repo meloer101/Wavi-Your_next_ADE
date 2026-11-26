@@ -7,8 +7,8 @@ import { LeaderPickers, useLeaderPickers, type LeaderSelection } from './LeaderP
 import styles from './Redispatch.module.css'
 
 const M = defineMessages({
-  zh: { title: (seq: number) => `把 #${seq} 派给主理人`, dispatch: '派发' },
-  en: { title: (seq: number) => `Dispatch #${seq} to a leader`, dispatch: 'Dispatch' }
+  zh: { title: (seq: number) => `把 #${seq} 派给主理人`, dispatch: '派发', noAgent: '没找到装了的 CLI', noDetect: '没能检测装了哪些 CLI' },
+  en: { title: (seq: number) => `Dispatch #${seq} to a leader`, dispatch: 'Dispatch', noAgent: 'No installed CLI found', noDetect: 'Could not detect the installed CLIs' }
 })
 
 interface Props {
@@ -23,6 +23,7 @@ export function Redispatch({ seq, at, onDispatch, onClose }: Props) {
   const m = useMessages(M)
   const leader = useLeaderPickers(false)
   const [busy, setBusy] = useState(false)
+  const [undetected, setUndetected] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
   useEffect(() => button.current?.focus({ preventScroll: true }), [])
@@ -40,10 +41,16 @@ export function Redispatch({ seq, at, onDispatch, onClose }: Props) {
   const dispatch = async (): Promise<void> => {
     if (busy) return
     setBusy(true)
+    setUndetected(false)
     const selection = await leader.resolve()
-    if (selection.agent === null) setBusy(false)
-    else onDispatch(selection)
+    if (selection.agent !== null) {
+      onDispatch(selection)
+      return
+    }
+    setBusy(false)
+    setUndetected(true)
   }
+  const reason = leader.found !== null && leader.agent === 'none' ? m.noAgent : undetected ? m.noDetect : null
 
   return (
     <div
@@ -67,6 +74,11 @@ export function Redispatch({ seq, at, onDispatch, onClose }: Props) {
       <button ref={button} type="button" className={styles.submit} disabled={busy || leader.agent === 'none'} data-testid="task-redispatch-submit" onClick={() => void dispatch()}>
         {m.dispatch}
       </button>
+      {reason !== null && (
+        <p className={styles.error} role="alert">
+          {reason}
+        </p>
+      )}
     </div>
   )
 }

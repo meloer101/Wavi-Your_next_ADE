@@ -125,9 +125,9 @@ describe('TaskBoard', () => {
     const b = t.board.create({ projectId: 'p1', title: 'b', parentId: a.id })!
     t.board.create({ projectId: 'p1', title: 'c', parentId: b.id })
     t.board.create({ projectId: 'p1', title: 'keep' })
-    expect(t.board.remove(a.id)).toBe(true)
+    expect(t.board.remove(a.id).map((x) => x.title)).toEqual(['a', 'b', 'c'])
     expect(t.board.list().map((x) => x.title)).toEqual(['keep'])
-    expect(t.board.remove(a.id)).toBe(false)
+    expect(t.board.remove(a.id)).toEqual([])
   })
 
   it('calls changed once per change and not for refusals', () => {
@@ -181,7 +181,7 @@ describe('TaskBoard and a file that cannot be read or written', () => {
     const before = t.changes.length
     expect(t.board.create({ projectId: 'p1', title: 'b' })).toBeNull()
     expect(t.board.update(a.id, { title: 'A' })).toBeNull()
-    expect(t.board.remove(a.id)).toBe(false)
+    expect(t.board.remove(a.id)).toEqual([])
     expect(t.board.list().map((x) => x.title)).toEqual(['a'])
     expect(t.changes.length).toBe(before)
     rmSync(`${t.path}.tmp`, { recursive: true })
@@ -272,5 +272,17 @@ describe('restore (undo of a delete, PRD F9 v1.252)', () => {
       expect(parseTaskSnapshot(bad)).toBeNull()
     }
     expect(parseTaskSnapshot([{ ...card, extra: 1 }])).toEqual([card])
+  })
+})
+
+describe('a draft with a place (在这里贴一张, PRD F9 v1.252)', () => {
+  it('keeps it, and refuses a draft whose place is not one', () => {
+    const t = setup()
+    const draft = parseTaskDraft({ projectId: 'p', title: 't', pos: { x: 4, y: -5, z: 1 } })!
+    expect(draft.pos).toEqual({ x: 4, y: -5 })
+    expect(t.board.create(draft)?.pos).toEqual({ x: 4, y: -5 })
+    expect(t.open().list()[0]?.pos).toEqual({ x: 4, y: -5 })
+    for (const pos of [{ x: 1 }, { x: 1e7, y: 0 }, 'a', null]) expect(parseTaskDraft({ projectId: 'p', title: 't', pos })).toBeNull()
+    expect(t.board.create({ projectId: 'p', title: 't', pos: { x: Number.NaN, y: 0 } })).toBeNull()
   })
 })

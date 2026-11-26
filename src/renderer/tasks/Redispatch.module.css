@@ -37,3 +37,11 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+/* A row of its own under the pickers. */
+.error {
+  width: 100%;
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--status-error);
+}

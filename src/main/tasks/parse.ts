@@ -15,7 +15,10 @@ export function parseTaskDraft(raw: unknown): TaskDraft | null {
   if (v.body !== undefined && typeof v.body !== 'string') return null
   if (v.parentId !== undefined && !idText(v.parentId)) return null
   if (v.createdBy !== undefined && !idText(v.createdBy)) return null
+  const pos = v.pos === undefined ? undefined : parseTaskPos(v.pos)
+  if (pos === null) return null
   return {
+    ...(pos ? { pos } : {}),
     projectId: v.projectId,
     title: v.title,
     ...(typeof v.body === 'string' ? { body: v.body } : {}),

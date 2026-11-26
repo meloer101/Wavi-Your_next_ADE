@@ -31,6 +31,7 @@ const M = defineMessages({
     split: (parent: number, from: number, to?: number) => `#${parent} 拆出 #${from}${to !== undefined ? ` – #${to}` : ''}`,
     notDispatched: (seq: number, reason: string) => `#${seq} 没有派发：${reason}`,
     undo: '撤销',
+    undoFailed: '没能恢复',
     deletedOne: (seq: number, below: number) => (below > 0 ? `已删除 #${seq} 和 ${below} 张子任务` : `已删除 #${seq}`),
     deletedMany: (count: number) => `已删除 ${count} 张任务`
   },
@@ -53,6 +54,7 @@ const M = defineMessages({
     split: (parent: number, from: number, to?: number) => `#${parent} split #${from}${to !== undefined ? ` – #${to}` : ''}`,
     notDispatched: (seq: number, reason: string) => `#${seq} not dispatched: ${reason}`,
     undo: 'Undo',
+    undoFailed: 'Could not restore',
     deletedOne: (seq: number, below: number) => (below > 0 ? `Deleted #${seq} and ${below} ${below === 1 ? 'subtask' : 'subtasks'}` : `Deleted #${seq}`),
     deletedMany: (count: number) => `Deleted ${count} tasks`
   }
@@ -125,11 +127,13 @@ export function Toolbar({ onAdd, onFit }: { onAdd(): void; onFit(): void }) {
 }
 
 /** 「已删除 #12 和 2 张子任务 · 撤销 ⌘Z」 above the toolbar after a delete (PRD F9 v1.252, Figma 117F). */
-export function UndoBar({ deleted, onUndo }: { deleted: DeletedSummary; onUndo(): void }) {
+export function UndoBar({ deleted, failed, onUndo }: { deleted: DeletedSummary; failed: boolean; onUndo(): void }) {
   const m = useMessages(M)
   return (
     <div className={styles.undo} role="status" data-testid="task-undo" data-no-pan="">
-      <span className={styles.undoText}>{deleted.seq !== undefined ? m.deletedOne(deleted.seq, deleted.count - 1) : m.deletedMany(deleted.count)}</span>
+      <span className={styles.undoText} data-failed={failed}>
+        {failed ? m.undoFailed : deleted.seq !== undefined ? m.deletedOne(deleted.seq, deleted.count - 1) : m.deletedMany(deleted.count)}
+      </span>
       <button type="button" className={styles.undoButton} onClick={onUndo}>
         {m.undo}
       </button>

@@ -118,6 +118,11 @@ export class TaskBoard {
       updatedAt: now,
       ...(draft.parentId !== undefined ? { parentId: draft.parentId } : {})
     }
+    if (draft.pos !== undefined) {
+      const pos = parseTaskPos(draft.pos)
+      if (!pos) return null
+      task.pos = pos
+    }
     return this.commit({ ...this.data, nextSeq: this.data.nextSeq + 1, tasks: [...this.data.tasks, task] }) ? { ...task } : null
   }
 
@@ -173,11 +178,12 @@ export class TaskBoard {
     return this.commit({ ...this.data, tasks: tasks.map((t, i) => (i === at ? next : t)) }) ? { ...next } : null
   }
 
-  /** Removes the card and everything below it; whether it was removed (false: no such card, or the save failed). */
-  remove(id: TaskId): boolean {
-    if (!this.data.tasks.some((t) => t.id === id)) return false
+  /** Removes the card and everything below it; the cards removed (none: no such card, or the save failed). */
+  remove(id: TaskId): Task[] {
+    if (!this.data.tasks.some((t) => t.id === id)) return []
     const gone = new Set(withDescendants(this.data.tasks, id))
-    return this.commit({ ...this.data, tasks: this.data.tasks.filter((t) => !gone.has(t.id)) })
+    const removed = this.data.tasks.filter((t) => gone.has(t.id)).map((t) => ({ ...t }))
+    return this.commit({ ...this.data, tasks: this.data.tasks.filter((t) => !gone.has(t.id)) }) ? removed : []
   }
 
   /**

@@ -28,11 +28,17 @@ export function taskBoardMessage(task: Pick<Task, 'seq' | 'title' | 'body'>): st
   ].join('\n\n')
 }
 
-/** Why a card's leader did not start (the board's 「动态」 says it): the card then stays 待派发. */
-export type LeaderFailure = 'no-project' | 'not-git' | 'no-plan' | 'no-session' | 'unbound' | 'failed'
+/**
+ * Why a card's leader did not start or did not get the card (the card and 「动态」 say it). `not-delivered`: the session
+ * is bound and running, but the card never reached it; for every other reason the card stays 待派发.
+ */
+export type LeaderFailure = 'no-project' | 'not-git' | 'no-plan' | 'no-session' | 'unbound' | 'failed' | 'not-delivered'
 
-/** `launch` creates the worktree and starts the agent, with `prompt` (when given) as its first message. */
-export type LeaderStart = { ok: true; id: SessionId; launch(prompt: string | null): void } | { ok: false; reason: LeaderFailure }
+/**
+ * `launch` creates the worktree and starts the agent with `prompt` as its first message; it resolves false when a
+ * message that has to be typed did not reach the agent. `discard` removes the session instead, before any launch.
+ */
+export type LeaderStart = { ok: true; id: SessionId; launch(prompt: string): Promise<boolean>; discard(): void } | { ok: false; reason: LeaderFailure }
 export type LeaderResult = { ok: true } | { ok: false; reason: LeaderFailure }
 
 /** The model and effort the user picked for the card's leader; absent = the CLI's own default. */
@@ -50,15 +56,32 @@ export interface LeaderDeps {
 
 /**
  * Adds the card's leader, binds it to the card (the pin shows), then starts it with the card as its first message.
- * A session that is not bound to its card starts without the card: the board would show the card unstarted while an
- * agent works on it.
+ * A session that cannot be bound is not started: the board would show the card unstarted while an agent works on it,
+ * so it is removed again. `late` hears that a typed card did not arrive, after this has answered.
  */
-export async function handCardToLeader(task: Task, agent: DispatchAgent, deps: LeaderDeps, options: LeaderOptions = {}): Promise<LeaderResult> {
+export async function handCardToLeader(task: Task, agent: DispatchAgent, deps: LeaderDeps, options: LeaderOptions = {}, late?: (reason: LeaderFailure) => void): Promise<LeaderResult> {
   const started = await deps.start(task, agent, options)
   if (!started.ok) return started
-  const bound = await deps.bind(task, started.id)
-  started.launch(bound ? taskBoardMessage(task) : null)
-  return bound ? { ok: true } : { ok: false, reason: 'unbound' }
+  if (!(await deps.bind(task, started.id))) {
+    started.discard()
+    return { ok: false, reason: 'unbound' }
+  }
+  void started.launch(taskBoardMessage(task)).then((delivered) => {
+    if (!delivered) late?.('not-delivered')
+  })
+  return { ok: true }
+}
+
+/** Types the card into a CLI that takes no first message on its command line, once it is ready; whether it got there. */
+export async function typeCard(id: SessionId, prompt: string, io: { ready(id: SessionId): Promise<void>; submit(id: SessionId, text: string): Promise<void> }): Promise<boolean> {
+  try {
+    await io.ready(id)
+    await io.submit(id, prompt)
+    return true
+  } catch (error) {
+    console.error('[tasks] the card did not reach its leader:', error)
+    return false
+  }
 }
 
 /** The new worktree a leader starts in, from what git says about the project (`taken`: branch names already in use). */
@@ -87,18 +110,20 @@ async function startSession(task: Task, agent: DispatchAgent, options: LeaderOpt
     useWorkspace.getState().patchSession(id, { title: task.title, titleSource: 'prompt' })
     // Its terminal waits for the worktree, which `launch` creates once the card is bound.
     holdForWorktree(id)
-    const launch = (prompt: string | null): void => {
-      // Model and effort apply even when the card is not sent (an unbound session): '' puts nothing on the command line.
-      if (prompt !== null || options.model || options.effort) setLaunch(id, { initialPrompt: prompt ?? '', ...options })
+    const launch = async (prompt: string): Promise<boolean> => {
+      setLaunch(id, { initialPrompt: prompt, ...options })
       startEagerly(id)
-      void createWorktreeFor(id, agent, plan.request).then((created) => {
-        if (!created || prompt === null || promptOnCommandLine(agent)) return
-        void whenAgentReady(id)
-          .then(() => submitPrompt(id, prompt))
-          .catch((error: unknown) => console.error('[tasks] the card did not reach its leader:', error))
-      })
+      const created = await createWorktreeFor(id, agent, plan.request)
+      // A worktree that could not be created is said on the session itself.
+      if (!created || promptOnCommandLine(agent)) return true
+      return typeCard(id, prompt, { ready: whenAgentReady, submit: submitPrompt })
     }
-    return { ok: true, id, launch }
+    // Never launched, so there is no process and no folder: the record and its session go.
+    const discard = (): void => {
+      const worktreeId = useWorkspace.getState().sessions.find((s) => s.id === id)?.worktreeId
+      if (worktreeId !== undefined) useWorkspace.getState().forgetWorktrees([worktreeId])
+    }
+    return { ok: true, id, launch, discard }
   } catch (error) {
     console.error('[tasks] the leader could not be started:', error)
     return { ok: false, reason: 'failed' }
@@ -115,6 +140,6 @@ const realDeps: LeaderDeps = {
 }
 
 /** The board's 贴上 (or 派发) with an agent chosen: the card's leader (see the file header). */
-export function startCardLeader(task: Task, agent: DispatchAgent, options: LeaderOptions = {}): Promise<LeaderResult> {
-  return handCardToLeader(task, agent, realDeps, options)
+export function startCardLeader(task: Task, agent: DispatchAgent, options: LeaderOptions = {}, late?: (reason: LeaderFailure) => void): Promise<LeaderResult> {
+  return handCardToLeader(task, agent, realDeps, options, late)
 }

@@ -221,6 +221,15 @@ describe('a leader that did not start', () => {
     const t = task({ sessionId: 's', note: leaderFailureNote('failed') })
     expect(actionLine(joinCards([t], [{ id: 's', status: 'idle' }])[0]!, root).kind).toBe('text')
   })
+  it('says that an idle leader never got the card, and stops once it works', () => {
+    const t = task({ sessionId: 's', note: leaderFailureNote('not-delivered') })
+    expect(t.note).toBe('主理人没收到卡片')
+    expect(isLeaderFailureNote(t.note)).toBe(true)
+    const line = (status: CardSession['status']) => actionLine(joinCards([t], [{ id: 's', status }])[0]!, root)
+    expect(line('idle')).toEqual({ kind: 'failed', text: '主理人没收到卡片' })
+    expect(line('running').kind).toBe('text')
+    expect(isLeaderFailureNote('The leader did not get the card')).toBe(true)
+  })
   it('says 出错 for a failed session, never 空闲 or a stale sentence', () => {
     const t = task({ sessionId: 's', note: 'a note' })
     expect(actionLine(joinCards([t], [{ id: 's', status: 'error' }])[0]!, root)).toEqual({ kind: 'key', key: 'error' })

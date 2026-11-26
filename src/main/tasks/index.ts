@@ -32,9 +32,7 @@ export function registerTaskHandlers(): void {
     const patch = parseTaskPatch(raw)
     return patch ? board.update(parseTaskId(id), patch) : null
   })
-  handle(TASK_IPC.remove, (id) => {
-    board.remove(parseTaskId(id))
-  })
+  handle(TASK_IPC.remove, (id) => board.remove(parseTaskId(id)))
   handle(TASK_IPC.restore, (raw) => {
     const cards = parseTaskSnapshot(raw)
     return cards ? board.restore(cards) : false

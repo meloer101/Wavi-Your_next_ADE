@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Task, TaskApi } from '@shared/task-board'
 import { joinCards } from './model'
-import { ACTIVITY_KEY, activityShown, defaultProject, startTaskSync, useTaskBoard } from './store'
+import { deleteCards, undoDelete } from './actions'
+import { ACTIVITY_KEY, activityShown, defaultProject, startTaskSync, UNDO_DEPTH, useTaskBoard } from './store'
 
 let n = 0
 function task(over: Partial<Task> = {}): Task {
@@ -18,7 +19,7 @@ function fakeApi(initial: Task[]) {
     list: () => (initial.length >= 0 ? gate : Promise.resolve([])),
     create: vi.fn(async () => null),
     update: vi.fn(async () => null),
-    remove: vi.fn(async () => undefined),
+    remove: vi.fn(async () => []),
     restore: vi.fn(async () => true),
     onChanged(l) {
       listener = l
@@ -34,6 +35,8 @@ beforeEach(() => {
   useTaskBoard.setState({ tasks: [], loaded: false, selected: [], detailId: null, events: [] })
 })
 afterEach(() => vi.unstubAllGlobals())
+
+vi.mock('../dispatch/task-deliver', () => ({ startCardLeader: vi.fn() }))
 
 describe('startTaskSync', () => {
   it('loads the list main holds', async () => {
@@ -131,5 +134,52 @@ describe('the 「动态」 panel default', () => {
     expect(useTaskBoard.getState().activityPref).toBe(false)
     useTaskBoard.getState().setActivity(true)
     expect(saved.get(ACTIVITY_KEY)).toBe('open')
+  })
+})
+
+describe('delete and undo (PRD F9 v1.252)', () => {
+  const setup = () => {
+    const a = task()
+    const b = task()
+    // Main's answer holds a card the window has not heard of yet: an agent added it under `a`.
+    const added = task({ parentId: a.id })
+    const restored: Task[][] = []
+    let accept = true
+    const api = {
+      remove: vi.fn(async (id: string) => (id === a.id ? [a, added] : [b])),
+      restore: vi.fn(async (cards: Task[]) => (accept ? (restored.push(cards), true) : false))
+    }
+    vi.stubGlobal('window', { tr: { tasks: api } })
+    useTaskBoard.setState({ tasks: [a, b], selected: [], undo: { stack: [], bar: false, failed: false } })
+    return { a, b, added, api, restored, refuse: (refuse: boolean) => (accept = !refuse) }
+  }
+  const undo = () => useTaskBoard.getState().undo
+
+  it('keeps what main removed, and undoes one delete per ⌘Z, the latest first, also when pressed at once', async () => {
+    const t = setup()
+    void deleteCards([t.a.id])
+    void deleteCards([t.b.id])
+    const first = undoDelete()
+    await Promise.all([first, undoDelete()])
+    expect(t.restored).toEqual([[t.b], [t.a, t.added]])
+    expect(undo()).toEqual({ stack: [], bar: false, failed: false })
+  })
+
+  it('keeps the delete and says so when main refuses to put it back', async () => {
+    const t = setup()
+    await deleteCards([t.a.id])
+    t.refuse(true)
+    await undoDelete()
+    expect(undo()).toMatchObject({ bar: true, failed: true })
+    expect(undo().stack).toHaveLength(1)
+    t.refuse(false)
+    await undoDelete()
+    expect(t.restored).toEqual([[t.a, t.added]])
+    expect(undo().stack).toEqual([])
+  })
+
+  it(`walks back at most ${UNDO_DEPTH} deletes`, () => {
+    for (let i = 0; i < UNDO_DEPTH + 3; i++) useTaskBoard.getState().pushDeleted([task()])
+    expect(undo().stack).toHaveLength(UNDO_DEPTH)
   })
 })

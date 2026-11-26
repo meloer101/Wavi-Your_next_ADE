@@ -143,8 +143,9 @@ export const LEADER_FAILURE_M = defineMessages({
       'not-git': '项目不是 git 仓库',
       'no-plan': '建不出新的 worktree',
       'no-session': '会话没能创建',
-      unbound: '会话没能绑定到这张卡，卡片消息没有送出',
-      failed: '启动时出错'
+      unbound: '会话没能绑定到这张卡',
+      failed: '启动时出错',
+      'not-delivered': '主理人没收到卡片'
     } satisfies Record<LeaderFailure, string>
   },
   en: {
@@ -154,21 +155,30 @@ export const LEADER_FAILURE_M = defineMessages({
       'not-git': 'the project is not a git repository',
       'no-plan': 'no new worktree could be planned',
       'no-session': 'the session could not be added',
-      unbound: 'the session could not be bound to this card, so the card was not sent',
-      failed: 'starting failed'
+      unbound: 'the session could not be bound to this card',
+      failed: 'starting failed',
+      'not-delivered': 'the leader did not get the card'
     } satisfies Record<LeaderFailure, string>
   }
 })
 
-/** The sentence left on a card whose leader did not start (its note, PRD F9 v1.252). */
+/** `not-delivered` is a sentence of its own: that leader did start. */
+const sentence = (m: (typeof LEADER_FAILURE_M)['zh'], reason: LeaderFailure): string =>
+  reason === 'not-delivered' ? m.reasons[reason].replace(/^./, (c) => c.toUpperCase()) : `${m.prefix}${m.reasons[reason]}`
+
+/** The sentence left on a card whose leader did not start or did not get it (its note, PRD F9 v1.252). */
 export function leaderFailureNote(reason: LeaderFailure): string {
-  const m = pick(LEADER_FAILURE_M)
-  return `${m.prefix}${m.reasons[reason]}`
+  return sentence(pick(LEADER_FAILURE_M), reason)
+}
+
+/** Whether a note says the card never reached its running leader, in either language. */
+function isNotDeliveredNote(note: string): boolean {
+  return [LEADER_FAILURE_M.zh, LEADER_FAILURE_M.en].some((m) => note === sentence(m, 'not-delivered'))
 }
 
 /** Whether a note is one `leaderFailureNote` wrote, in either language (the language may have changed since). */
 export function isLeaderFailureNote(note: string | undefined): boolean {
-  return note !== undefined && [LEADER_FAILURE_M.zh, LEADER_FAILURE_M.en].some((m) => note.startsWith(m.prefix))
+  return note !== undefined && (isNotDeliveredNote(note) || [LEADER_FAILURE_M.zh, LEADER_FAILURE_M.en].some((m) => note.startsWith(m.prefix)))
 }
 
 // ── The card's action line ────────────────────────────────────────────────────
@@ -194,7 +204,8 @@ export function actionLine(
   if (state === 'canceled') return { kind: 'key', key: 'canceled' }
   if (state === 'done') return { kind: 'key', key: session?.status === 'done_unread' ? 'doneReview' : 'done' }
   if (state === 'error') return { kind: 'key', key: 'error' }
-  if (!session && task.note !== undefined && isLeaderFailureNote(task.note)) return { kind: 'failed', text: task.note }
+  // Without a session: why none started. With an idle one that never got the card: that, until it does something.
+  if (task.note !== undefined && isLeaderFailureNote(task.note) && (!session || (state === 'idle' && isNotDeliveredNote(task.note)))) return { kind: 'failed', text: task.note }
   const said = session?.currentAction?.trim() || session?.lastReply?.trim() || task.note?.trim()
   if (said) return { kind: 'text', text: said }
   if (session) return { kind: 'key', key: state === 'working' ? 'working' : 'idle' }

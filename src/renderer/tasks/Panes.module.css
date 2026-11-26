@@ -178,6 +178,10 @@
   color: var(--text-secondary);
 }
 
+.undoText[data-failed='true'] {
+  color: var(--status-error);
+}
+
 .undoButton {
   padding: 0;
   border: 0;

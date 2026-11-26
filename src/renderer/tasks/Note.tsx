@@ -1,7 +1,7 @@
 // A card on the board (PRD F9 v1.249 · Figma 115A4 / 115A4b): a note at 100 %, a one-line chip when zoomed out, a dot
 // when far out. Status is the glyph's shape and the words, never only the colour; the agent's mark is a pin on the top
 // edge, so a card nobody took has no pin.
-import { memo, type CSSProperties, type MouseEvent } from 'react'
+import { memo, useLayoutEffect, useRef, type CSSProperties, type MouseEvent } from 'react'
 import { defineMessages } from '@shared/i18n'
 import type { TaskState } from '@shared/task-board'
 import type { Session, SessionStatus } from '@shared/types'
@@ -12,6 +12,9 @@ import { StatusGlyph } from '../ui/StatusGlyph'
 import type { Drawing, PlacedCard } from './layout'
 import { actionLine, type ActionLine, type Card } from './model'
 import styles from './Note.module.css'
+
+/** The action line's row height (Note.module.css). */
+const ACTION_ROW = 16
 
 export const NOTE_M = defineMessages({
   zh: {
@@ -68,6 +71,8 @@ export interface NoteProps {
   /** `additive`: ⇧ adds the card to the selection, or takes it out. */
   onSelect(id: string, additive: boolean): void
   onOpen(id: string): void
+  /** The card's failure line took a second row, or no longer does: the layout gives it the room. */
+  onTall?(id: string, tall: boolean): void
 }
 
 export function useActionText(line: ActionLine): string {
@@ -82,11 +87,19 @@ function timeOf(card: Card<Session>, now: number): string {
   return ''
 }
 
-function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, order, dimmed, now, onSelect, onOpen }: NoteProps) {
+function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, order, dimmed, now, onSelect, onOpen, onTall }: NoteProps) {
   const m = useMessages(NOTE_M)
   const { task, state, session } = card
   const line = actionLine(card, { waitingBelow: info.waiting })
   const action = useActionText(line)
+  const failed = line.kind === 'failed' || (line.kind === 'key' && line.key === 'error')
+  const actionLineRef = useRef<HTMLSpanElement>(null)
+  // Measured, not guessed: whether the failure line wraps depends on the font and the words. The line's own height does
+  // not depend on the card's, so this settles in one pass.
+  useLayoutEffect(() => {
+    const el = actionLineRef.current
+    if (el) onTall?.(task.id, failed && el.offsetHeight > ACTION_ROW * 1.5)
+  }, [action, failed, drawing, task.id, onTall])
   const style = { left: placed.x, top: placed.y, width: placed.w, height: placed.h, '--tilt': `${tilt}deg`, '--fx-order': order } as CSSProperties
   const common = {
     className: styles.card,
@@ -131,7 +144,7 @@ function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, o
         {time && <span className={styles.mono}>{time}</span>}
       </span>
       <span className={styles.title}>{task.title}</span>
-      <span className={styles.action} data-attention={line.kind === 'waiting' || state === 'attention'} data-error={line.kind === 'failed' || (line.kind === 'key' && line.key === 'error')} title={line.kind === 'failed' ? action : undefined}>
+      <span ref={actionLineRef} className={styles.action} data-attention={line.kind === 'waiting' || state === 'attention'} data-error={failed} title={failed ? action : undefined}>
         {action}
       </span>
       {placed.parent && (
@@ -160,6 +173,7 @@ const same = (a: NoteProps, b: NoteProps): boolean =>
   a.card.session?.statusSince === b.card.session?.statusSince &&
   a.placed.x === b.placed.x &&
   a.placed.y === b.placed.y &&
+  a.placed.h === b.placed.h &&
   a.placed.parent === b.placed.parent &&
   a.drawing === b.drawing &&
   a.selected === b.selected &&
@@ -174,6 +188,7 @@ const same = (a: NoteProps, b: NoteProps): boolean =>
   a.info.progress.total === b.info.progress.total &&
   a.info.segments.join() === b.info.segments.join() &&
   a.onSelect === b.onSelect &&
-  a.onOpen === b.onOpen
+  a.onOpen === b.onOpen &&
+  a.onTall === b.onTall
 
 export const Note = memo(NoteView, same)

@@ -138,6 +138,7 @@ export function Compose({ projects, initialProject, child = false, at, onSubmit,
       <div className={styles.menuHost} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
         {projectMenu && (
           <SheetMenu
+            fit
             anchor={projectMenu}
             label={m.project}
             sections={() => [{ items: projects.map((p) => ({ value: p.id, label: p.name, icon: p.id === projectId ? <Check {...ICON} /> : null })) }]}

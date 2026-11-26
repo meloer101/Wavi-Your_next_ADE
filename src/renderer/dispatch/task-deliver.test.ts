@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Task } from '@shared/task-board'
 import type { NewSessionInfo } from '@shared/new-session'
-import { handCardToLeader, planLeaderWorktree, taskBoardMessage, type LeaderDeps } from './task-deliver'
+import { handCardToLeader, planLeaderWorktree, taskBoardMessage, typeCard, type LeaderDeps } from './task-deliver'
 
 vi.mock('../state/workspace', () => ({ useWorkspace: { getState: () => ({ sessions: [] }) } }))
 vi.mock('../new-session/creation', () => ({ createWorktreeFor: async () => true, holdForWorktree: () => {}, startEagerly: () => {} }))
@@ -29,13 +29,13 @@ describe('taskBoardMessage', () => {
 })
 
 describe('handCardToLeader', () => {
-  const setup = (over: Partial<LeaderDeps> = {}) => {
+  const setup = (over: Partial<LeaderDeps> = {}, delivered = true) => {
     const calls: string[] = []
-    const launched: (string | null)[] = []
+    const launched: string[] = []
     const deps: LeaderDeps = {
       start: async (t, agent) => (
         calls.push(`start ${t.id} ${agent}`),
-        { ok: true, id: 's1', launch: (prompt) => void (calls.push('launch'), launched.push(prompt)) }
+        { ok: true, id: 's1', launch: async (prompt) => (calls.push('launch'), launched.push(prompt), delivered), discard: () => void calls.push('discard') }
       ),
       bind: async (t, id) => (calls.push(`bind ${t.id} ${id}`), true),
       ...over
@@ -52,7 +52,7 @@ describe('handCardToLeader', () => {
   })
   it('hands the picked model and effort to the new session', async () => {
     const seen: unknown[] = []
-    const t = setup({ start: async (_t, _agent, options) => (seen.push(options), { ok: true, id: 's1', launch: () => {} }) })
+    const t = setup({ start: async (_t, _agent, options) => (seen.push(options), { ok: true, id: 's1', launch: async () => true, discard: () => {} }) })
     await handCardToLeader(card(1), 'pi', t.deps, { model: 'm', effort: 'high' })
     expect(seen).toEqual([{ model: 'm', effort: 'high' }])
   })
@@ -62,10 +62,36 @@ describe('handCardToLeader', () => {
     expect(t.calls).toEqual([])
     expect(t.launched).toEqual([])
   })
-  it('starts a session that could not be bound without the card', async () => {
+  it('does not start a session that could not be bound, and removes it', async () => {
     const t = setup({ bind: async () => false })
     expect(await handCardToLeader(card(1), 'claude', t.deps)).toEqual({ ok: false, reason: 'unbound' })
-    expect(t.launched).toEqual([null])
+    expect(t.calls).toEqual(['start t1 claude', 'discard'])
+    expect(t.launched).toEqual([])
+  })
+  it('says later that a typed card did not arrive, and nothing when it did', async () => {
+    for (const delivered of [false, true]) {
+      const t = setup({}, delivered)
+      const late = vi.fn()
+      expect(await handCardToLeader(card(1), 'kimi', t.deps, {}, late)).toEqual({ ok: true })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(late.mock.calls).toEqual(delivered ? [] : [['not-delivered']])
+    }
+  })
+})
+
+describe('typeCard', () => {
+  it('types the card once the agent is ready', async () => {
+    const calls: string[] = []
+    expect(await typeCard('s1', 'card', { ready: async () => void calls.push('ready'), submit: async (id, text) => void calls.push(`${id} ${text}`) })).toBe(true)
+    expect(calls).toEqual(['ready', 's1 card'])
+  })
+  it('answers false when the agent never gets ready or the submit fails', async () => {
+    const submit = vi.fn(async () => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await typeCard('s1', 'card', { ready: () => Promise.reject(new Error('timeout')), submit })).toBe(false)
+    expect(submit).not.toHaveBeenCalled()
+    expect(await typeCard('s1', 'card', { ready: async () => {}, submit: () => Promise.reject(new Error('gone')) })).toBe(false)
+    vi.restoreAllMocks()
   })
 })
 

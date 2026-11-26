@@ -19,6 +19,8 @@ export const LEADER_KEY = 'tr.tasks.leader.v1'
 export const PICKS_KEY = 'tr.tasks.picks.v1'
 /** How long the undo bar stays after a delete (⌘Z still works after it has gone). */
 export const UNDO_BAR_MS = 6_000
+/** How many deletes ⌘Z can walk back. */
+export const UNDO_DEPTH = 20
 
 export type { LeaderChoice } from './model'
 
@@ -103,8 +105,11 @@ interface TaskBoardState {
   detailId: TaskId | null
   /** The overlay opens with the title being edited (⌘E, 编辑). */
   detailEdit: boolean
-  /** The last delete, for ⌘Z and the bar above the toolbar (`bar`: still shown). */
-  deleted: { cards: Task[]; bar: boolean } | null
+  /**
+   * The deletes ⌘Z can undo, the latest last, each the cards main removed; and the bar above the toolbar (`bar`: shown,
+   * `failed`: the last undo could not put them back).
+   */
+  undo: { stack: readonly Task[][]; bar: boolean; failed: boolean }
   /** Cards whose leader is starting: they are not offered 派发 a second time. */
   dispatching: readonly TaskId[]
   events: ActivityEvent[]
@@ -123,8 +128,11 @@ interface TaskBoardState {
   toggle(id: TaskId): void
   selectMany(ids: readonly TaskId[]): void
   openDetail(id: TaskId | null, edit?: boolean): void
-  /** Remembers what a delete took (null: undone, nothing left to undo). */
-  setDeleted(cards: Task[] | null): void
+  pushDeleted(cards: Task[]): void
+  /** These cards are back: their delete leaves the stack, and the bar goes. */
+  popDeleted(cards: Task[]): void
+  /** The latest delete could not be undone: it stays, and the bar says so. */
+  undoFailed(): void
   setDispatching(id: TaskId, on: boolean): void
   pushEvents(drafts: Parameters<typeof appendEvents>[1]): void
   setActivity(open: boolean): void
@@ -136,6 +144,12 @@ interface TaskBoardState {
 
 let undoTimer: ReturnType<typeof setTimeout> | undefined
 
+/** Hides the bar once it has been up for `UNDO_BAR_MS`; the stack stays for ⌘Z. */
+function hideBarLater(hide: () => void): void {
+  clearTimeout(undoTimer)
+  undoTimer = setTimeout(hide, UNDO_BAR_MS)
+}
+
 export const useTaskBoard = create<TaskBoardState>()((set, get) => {
   const view = loadView()
   return {
@@ -146,7 +160,7 @@ export const useTaskBoard = create<TaskBoardState>()((set, get) => {
     selected: [],
     detailId: null,
     detailEdit: false,
-    deleted: null,
+    undo: { stack: [], bar: false, failed: false },
     dispatching: [],
     events: [],
     activityPref: loadActivityPref(),
@@ -170,10 +184,17 @@ export const useTaskBoard = create<TaskBoardState>()((set, get) => {
       if (ids.length !== now.length || ids.some((id, i) => now[i] !== id)) set({ selected: ids })
     },
     openDetail: (detailId, edit = false) => set(detailId === null ? { detailId, detailEdit: false } : { detailId, detailEdit: edit, selected: [detailId] }),
-    setDeleted(cards) {
+    pushDeleted(cards) {
+      set((s) => ({ undo: { stack: [...s.undo.stack, cards].slice(-UNDO_DEPTH), bar: true, failed: false } }))
+      hideBarLater(() => set((s) => ({ undo: { ...s.undo, bar: false } })))
+    },
+    popDeleted(cards) {
       clearTimeout(undoTimer)
-      set({ deleted: cards ? { cards, bar: true } : null })
-      if (cards) undoTimer = setTimeout(() => set((s) => (s.deleted ? { deleted: { ...s.deleted, bar: false } } : {})), UNDO_BAR_MS)
+      set((s) => ({ undo: { stack: s.undo.stack.filter((entry) => entry !== cards), bar: false, failed: false } }))
+    },
+    undoFailed() {
+      set((s) => ({ undo: { ...s.undo, bar: true, failed: true } }))
+      hideBarLater(() => set((s) => ({ undo: { ...s.undo, bar: false } })))
     },
     setDispatching: (id, on) => set((s) => ({ dispatching: on ? [...s.dispatching, id] : s.dispatching.filter((other) => other !== id) })),
     pushEvents: (drafts) => set((s) => ({ events: appendEvents(s.events, drafts) })),

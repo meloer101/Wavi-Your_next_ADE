@@ -25,7 +25,7 @@ export function parseLeaderPicks(raw: unknown): LeaderPicks {
   }
 }
 
-/** Every agent the leader menu lists: the installed ones first, each group in `CLI_AGENTS` order (Figma 117E). */
+/** Every agent the leader menu lists, installed and not, each group in `CLI_AGENTS` order (PRD F9 v1.252). */
 export function leaderAgents(found: Readonly<Record<string, boolean>> | null): { installed: DispatchAgent[]; missing: DispatchAgent[] } {
   const all = CLI_AGENTS.filter((id) => canLeadCard(id))
   return { installed: all.filter((id) => found === null || found[id] === true), missing: all.filter((id) => found !== null && found[id] !== true) }
