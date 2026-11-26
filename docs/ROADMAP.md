@@ -8,6 +8,7 @@
 
 ## 当前位置
 
+- 2026-11-26：任务看板补全（PRD v1.252，Figma 117 `2005:544`）开工：设计定稿；右键菜单和键盘、框选多选、新建框选厂商 · 模型 · effort、补派与失败原因、可编辑详情与撤销，开发中。
 - 2026-11-25：任务看板（PRD v1.249，Figma 115A4）开工：设计定稿；共享契约 `src/shared/task-board.ts`、`TrApi.tasks`（`TaskApi`，preload 已接）已提交，纯逻辑 19 个单测通过；基线 `npm run check` 改动前通过（304 个测试文件、4089 个用例）。下面「进行中：任务看板」是剩下的步骤。
 - 2026-11-25：GUI 对话显示 agent 回传的图片、所有缩略图点开预览（PRD v1.246，Figma 112F–112H）已做完：Claude / Codex（app-server 与 rollout）/ Pi / ACP 的工具结果和消息里的图片存成 `sent-<哈希>` 文件，`tool` / `text` 条目多 `images`（`src/shared/transcript-chat.ts`，手机不发）；工具行下方 120 高缩略图（折叠时也显示）、正文 markdown 本地图片；预览层 `src/renderer/gui/ImagePreview.tsx`（本会话图片一组，缩放平移、在 Finder 中显示、复制图片 `ui.copyImage`，⎋ 只关预览）。已验证：单测、typecheck、lint、`e2e/gui-session.spec.ts` 新增用例；未验证：真机按 ⌘= 时 View 菜单的字号加速键是否抢先于预览。
 - 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
