@@ -1,0 +1,194 @@
+// A card on the board (PRD F9 v1.249 · Figma 115A4 / 115A4b): a note at 100 %, a one-line chip when zoomed out, a dot
+// when far out. Status is the glyph's shape and the words, never only the colour; the agent's mark is a pin on the top
+// edge, so a card nobody took has no pin.
+import { memo, useLayoutEffect, useRef, type CSSProperties, type MouseEvent } from 'react'
+import { defineMessages } from '@shared/i18n'
+import type { TaskState } from '@shared/task-board'
+import type { Session, SessionStatus } from '@shared/types'
+import { sessionTime } from '../sidebar/format-elapsed'
+import { AgentIcon } from '../ui/AgentIcon'
+import { useMessages } from '../ui/i18n'
+import { StatusGlyph } from '../ui/StatusGlyph'
+import type { Drawing, PlacedCard } from './layout'
+import { actionLine, type ActionLine, type Card } from './model'
+import styles from './Note.module.css'
+
+/** The action line's row height (Note.module.css). */
+const ACTION_ROW = 16
+
+export const NOTE_M = defineMessages({
+  zh: {
+    unassigned: '待派发',
+    done: '已完成',
+    doneReview: '已完成 · 等你审阅',
+    canceled: '已取消',
+    working: '进行中',
+    idle: '空闲',
+    error: '出错',
+    waiting: (n: number) => `${n} 个子任务等你处理`,
+    states: { idle: '待派发', working: '运行中', attention: '等你处理', done: '已完成', error: '出错', canceled: '已取消' } satisfies Record<TaskState, string>
+  },
+  en: {
+    unassigned: 'To dispatch',
+    done: 'Done',
+    doneReview: 'Done · awaiting review',
+    canceled: 'Canceled',
+    working: 'Working',
+    idle: 'Idle',
+    error: 'Failed',
+    waiting: (n: number) => `${n} ${n === 1 ? 'subtask needs' : 'subtasks need'} you`,
+    states: { idle: 'To dispatch', working: 'Working', attention: 'Needs you', done: 'Done', error: 'Failed', canceled: 'Canceled' } satisfies Record<TaskState, string>
+  }
+})
+
+/** The glyph a task state draws: the session glyphs, so the board reads like the sidebar. */
+export const GLYPH_OF: Record<TaskState, SessionStatus> = { idle: 'idle', working: 'running', attention: 'needs_you', done: 'done_unread', error: 'error', canceled: 'exited' }
+
+export interface NoteInfo {
+  /** The children's states in order (the little segments under a parent). */
+  segments: readonly TaskState[]
+  progress: { done: number; total: number }
+  /** Descendants waiting on the user. */
+  waiting: number
+}
+
+export interface NoteProps {
+  card: Card<Session>
+  placed: PlacedCard
+  drawing: Drawing
+  info: NoteInfo
+  selected: boolean
+  /** Held by the pointer: raised above the others. */
+  dragging: boolean
+  /** Degrees of tilt while it is dragged along (0 at rest); the board computes it from the pointer's speed. */
+  tilt: number
+  /** What just happened to it, for its motion (`data-fx`: land slide pin done cancel leave, space separated). */
+  fx: string
+  /** Its place in a batch of new cards (the stagger). */
+  order: number
+  dimmed: boolean
+  now: number
+  /** `additive`: ⇧ adds the card to the selection, or takes it out. */
+  onSelect(id: string, additive: boolean): void
+  onOpen(id: string): void
+  /** The card's failure line took a second row, or no longer does: the layout gives it the room. */
+  onTall?(id: string, tall: boolean): void
+}
+
+export function useActionText(line: ActionLine): string {
+  const m = useMessages(NOTE_M)
+  return line.kind === 'waiting' ? m.waiting(line.count) : line.kind === 'key' ? m[line.key] : line.text
+}
+
+function timeOf(card: Card<Session>, now: number): string {
+  if (card.session) return sessionTime(card.session, card.session.status, now).text
+  // Done by hand (or by an agent that has since gone): how long ago it was marked.
+  if (card.state === 'done') return sessionTime({ startedAt: card.task.updatedAt, lastActivityAt: card.task.updatedAt }, 'idle', now).text
+  return ''
+}
+
+function NoteView({ card, placed, drawing, info, selected, dragging, tilt, fx, order, dimmed, now, onSelect, onOpen, onTall }: NoteProps) {
+  const m = useMessages(NOTE_M)
+  const { task, state, session } = card
+  const line = actionLine(card, { waitingBelow: info.waiting })
+  const action = useActionText(line)
+  const failed = line.kind === 'failed' || (line.kind === 'key' && line.key === 'error')
+  const actionLineRef = useRef<HTMLSpanElement>(null)
+  // Measured, not guessed: whether the failure line wraps depends on the font and the words. The line's own height does
+  // not depend on the card's, so this settles in one pass.
+  useLayoutEffect(() => {
+    const el = actionLineRef.current
+    if (el) onTall?.(task.id, failed && el.offsetHeight > ACTION_ROW * 1.5)
+  }, [action, failed, drawing, task.id, onTall])
+  const style = { left: placed.x, top: placed.y, width: placed.w, height: placed.h, '--tilt': `${tilt}deg`, '--fx-order': order } as CSSProperties
+  const common = {
+    className: styles.card,
+    style,
+    'data-state': state,
+    'data-drawing': drawing,
+    'data-selected': selected,
+    'data-dragging': dragging,
+    'data-tilt': tilt !== 0 ? tilt.toFixed(1) : undefined,
+    'data-fx': fx !== '' ? fx : undefined,
+    'data-dimmed': dimmed,
+    'data-task-id': task.id,
+    'data-seq': task.seq,
+    onClick: (e: MouseEvent) => onSelect(task.id, e.shiftKey),
+    onDoubleClick: () => onOpen(task.id)
+  }
+
+  if (drawing === 'dot') {
+    return <div {...common} role="img" aria-label={`#${task.seq} ${task.title} · ${m.states[state]}`} title={`#${task.seq} ${task.title}`}><span className={styles.dot} /></div>
+  }
+  if (drawing === 'chip') {
+    return (
+      <div {...common} role="button" tabIndex={-1} aria-label={`#${task.seq} ${task.title} · ${m.states[state]}`}>
+        <StatusGlyph status={GLYPH_OF[state]} />
+        <span className={styles.chipTitle}>{task.title}</span>
+        {session && <AgentIcon kind={session.kind} size={12} />}
+      </div>
+    )
+  }
+  const time = timeOf(card, now)
+  return (
+    <div {...common} role="button" tabIndex={-1} aria-label={`#${task.seq} ${task.title} · ${m.states[state]}`}>
+      {session && (
+        <span className={styles.pin}>
+          <AgentIcon kind={session.kind} size={12} />
+        </span>
+      )}
+      <span className={styles.meta}>
+        <StatusGlyph status={GLYPH_OF[state]} />
+        <span className={styles.mono}>#{task.seq}</span>
+        <span className={styles.spacer} />
+        {time && <span className={styles.mono}>{time}</span>}
+      </span>
+      <span className={styles.title}>{task.title}</span>
+      <span ref={actionLineRef} className={styles.action} data-attention={line.kind === 'waiting' || state === 'attention'} data-error={failed} title={failed ? action : undefined}>
+        {action}
+      </span>
+      {placed.parent && (
+        <span className={styles.segments}>
+          {info.segments.map((s, i) => (
+            <span key={i} className={styles.segment} data-state={s} />
+          ))}
+          <span className={styles.spacer} />
+          <span className={styles.mono}>
+            {info.progress.done}/{info.progress.total}
+          </span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+const same = (a: NoteProps, b: NoteProps): boolean =>
+  a.card.task === b.card.task &&
+  a.card.state === b.card.state &&
+  a.card.session?.id === b.card.session?.id &&
+  a.card.session?.kind === b.card.session?.kind &&
+  a.card.session?.status === b.card.session?.status &&
+  a.card.session?.currentAction === b.card.session?.currentAction &&
+  a.card.session?.lastReply === b.card.session?.lastReply &&
+  a.card.session?.statusSince === b.card.session?.statusSince &&
+  a.placed.x === b.placed.x &&
+  a.placed.y === b.placed.y &&
+  a.placed.h === b.placed.h &&
+  a.placed.parent === b.placed.parent &&
+  a.drawing === b.drawing &&
+  a.selected === b.selected &&
+  a.dragging === b.dragging &&
+  a.tilt === b.tilt &&
+  a.fx === b.fx &&
+  a.order === b.order &&
+  a.dimmed === b.dimmed &&
+  a.now === b.now &&
+  a.info.waiting === b.info.waiting &&
+  a.info.progress.done === b.info.progress.done &&
+  a.info.progress.total === b.info.progress.total &&
+  a.info.segments.join() === b.info.segments.join() &&
+  a.onSelect === b.onSelect &&
+  a.onOpen === b.onOpen &&
+  a.onTall === b.onTall
+
+export const Note = memo(NoteView, same)

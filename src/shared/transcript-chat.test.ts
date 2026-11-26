@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHAT_LIMITS, createChatParser, fileDiffs, lineDiff, toolArg, toolLabel, type ChatItem } from './transcript-chat'
+import { CHAT_LIMITS, createChatParser, fileDiffs, imageFileOf, lineDiff, mediaTypeOfBase64, toolArg, toolLabel, type ChatItem } from './transcript-chat'
 
 const CWD = '/Users/me/.tr/worktrees/acme/session-refresh'
 const T = '2026-11-01T10:00:00.000Z'
@@ -270,6 +270,25 @@ describe('Claude transcript → chat', () => {
     expect(p.items[0]).toMatchObject({ kind: 'user', text: '看图', images: 3, attachments: ['/tmp/sent-AAAA.png', '/tmp/sent-CCCC.png'] })
   })
 
+  it('keeps the pictures a tool result and an assistant message carry as files (Figma 112F; live and history share the parser)', () => {
+    const p = createChatParser('claude', () => 0, (image) => (image.mediaType === 'image/png' ? `/tmp/sent-${image.data}.png` : null))
+    const png = (data: string): object => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data } })
+    p.push(line({ type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: `${CWD}/shot.png` } }] } }))
+    p.push(line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'r1', content: [{ type: 'text', text: 'ok' }, png('AAAA'), { type: 'image', source: { type: 'base64', media_type: 'image/heic', data: 'B' } }, png('CCCC')] }] } }))
+    expect(toolAt([...p.items], 0)).toMatchObject({ state: 'ok', output: 'ok', images: ['/tmp/sent-AAAA.png', '/tmp/sent-CCCC.png'] })
+    // A picture after the words joins their item; one with no words is an item of its own; none is kept without `keep`.
+    p.push(line({ type: 'assistant', message: { id: 'm2', content: [{ type: 'text', text: '截图在这里' }, png('DDDD')] } }))
+    p.push(line({ type: 'assistant', message: { id: 'm3', content: [png('EEEE')] } }))
+    expect(p.items[1]).toMatchObject({ kind: 'text', text: '截图在这里', images: ['/tmp/sent-DDDD.png'] })
+    expect(p.items[2]).toMatchObject({ kind: 'text', text: '', images: ['/tmp/sent-EEEE.png'] })
+    const without = parse([line({ type: 'assistant', message: { id: 'm', content: [png('AAAA')] } })])
+    expect(without).toEqual([])
+    const many = createChatParser('claude', () => 0, (image) => `/tmp/${image.data}.png`)
+    many.push(line({ type: 'assistant', message: { id: 'm', content: [{ type: 'tool_use', id: 'r', name: 'Read', input: {} }] } }))
+    many.push(line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'r', content: Array.from({ length: 11 }, (_, i) => png(`P${i}`)) }] } }))
+    expect(toolAt([...many.items], 0).images).toHaveLength(CHAT_LIMITS.images)
+  })
+
   it('leaves out thinking with no text (signature only, display omitted): there is nothing to open', () => {
     const items = parse([
       line({ type: 'assistant', thinkingDurationMs: 2687, message: { id: 'm1', content: [{ type: 'thinking', thinking: '', signature: 'EsYB' }] } }),
@@ -297,6 +316,27 @@ describe('fileDiffs', () => {
 
 describe('Codex rollout → chat', () => {
   const r = (type: string, payload: object): string => JSON.stringify({ timestamp: T, type, payload })
+  it('keeps the pictures of a tool output and a generated image as files (Figma 112F)', () => {
+    const p = createChatParser('codex', () => 0, (image) => `/tmp/sent-${image.mediaType.replace('/', '-')}-${image.data.slice(0, 6)}`)
+    p.push(r('response_item', { type: 'function_call', call_id: 'c1', name: 'view_image', arguments: '{"path":"/a/b.png"}' }))
+    p.push(r('response_item', { type: 'function_call_output', call_id: 'c1', output: [{ type: 'input_text', text: 'viewed' }, { type: 'input_image', image_url: 'data:image/png;base64,iVBORAAA' }, { type: 'input_image', image_url: 'https://x/y.png' }] }))
+    expect(toolAt([...p.items], 0)).toMatchObject({ state: 'ok', output: 'viewed', images: ['/tmp/sent-image-png-iVBORA'] })
+    p.push(r('response_item', { type: 'image_generation_call', id: 'g1', status: 'completed', revised_prompt: 'a red fox', result: '/9j/4AAQ' }))
+    expect(toolAt([...p.items], 1)).toMatchObject({ name: 'ImageGeneration', arg: 'a red fox', state: 'ok', images: ['/tmp/sent-image-jpeg-/9j/4A'] })
+    p.push(r('response_item', { type: 'image_generation_call', id: 'g2', status: 'completed', result: 'not-an-image' }))
+    expect(toolAt([...p.items], 2)).not.toHaveProperty('images')
+  })
+
+  it('reads a picture file by its path and the type of base64 data by its first bytes', () => {
+    expect(imageFileOf('/a/b.PNG')).toBe('/a/b.PNG')
+    expect(imageFileOf('b.png')).toBeUndefined()
+    expect(imageFileOf('/a/b.svg')).toBeUndefined()
+    expect(imageFileOf(3)).toBeUndefined()
+    expect(mediaTypeOfBase64('UklGRabc')).toBe('image/webp')
+    expect(mediaTypeOfBase64('R0lGODabc')).toBe('image/gif')
+    expect(mediaTypeOfBase64('zzz')).toBeUndefined()
+  })
+
   it('reads prompts, shell calls with their output, replies and interruptions; skips its own context', () => {
     const items = parse(
       [

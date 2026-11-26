@@ -8,6 +8,7 @@ import type { ActivitySummary, ConfirmOptions } from './lifecycle'
 import type { BrowserApi } from './browser'
 import type { SimulatorApi } from './simulator'
 import type { ScheduleApi } from './schedule'
+import type { TaskApi } from './task-board'
 import type { IssueWatchApi } from './issue-watch'
 import type { CliPermission } from './gui-chat'
 import type { ArchiveApi } from './archive'
@@ -61,6 +62,8 @@ export interface PtySpawnOptions {
   initialPrompt?: string
   /** The model for this launch (PRD F21). */
   model?: string
+  /** The reasoning effort for this launch (PRD F9 v1.252); CLIs without the flag ignore it. */
+  effort?: string
   /** A 定时任务's 权限 (PRD F24): Claude's `--permission-mode`; other CLIs have no such flag and start with their default. */
   permission?: CliPermission
   /** The session was started by another session's `wavi run` (PRD F21): its brief, not a system prompt, tells it about `wavi`. */
@@ -132,6 +135,9 @@ export interface PtyApi {
   onHostRestarted(listener: (sessionIds: SessionId[]) => void): Unsubscribe
 }
 
+/** What a menu key asks of the open image preview (⌘+ / ⌘− / ⌘0). */
+export type ImageZoomAction = 'in' | 'out' | 'fit'
+
 export type ImageExtension = 'png' | 'jpg' | 'gif' | 'webp'
 
 export interface FilesApi {
@@ -177,6 +183,11 @@ export interface UiApi {
   onFullScreen(listener: (fullScreen: boolean) => void): Unsubscribe
   /** Reveals a file or folder in Finder. Absolute paths only. */
   revealInFinder(path: string): void
+  /** The chat's image preview opened or closed: while it is open, the View menu's font size items (⌘+ ⌘= ⌘− ⌘0) zoom the picture instead (`onImageZoom`). */
+  setImagePreviewOpen(open: boolean): void
+  onImageZoom(listener: (action: ImageZoomAction) => void): Unsubscribe
+  /** Puts a picture file (png, jpg, jpeg, gif, webp; absolute path of an existing file) on the clipboard as an image (the chat's image preview, Figma 112G). Resolves to whether it did. */
+  copyImage(path: string): Promise<boolean>
   /** Native confirmation sheet; resolves to true when the user picked the confirm button. */
   confirm(options: ConfirmOptions): Promise<boolean>
 }
@@ -459,6 +470,8 @@ export interface TrApi {
   repoScripts: RepoScriptsApi
   /** 定时任务 (PRD F24); channels in SCHEDULE_IPC. */
   schedules: ScheduleApi
+  /** 看板 · 任务: the task cards (PRD F9 v1.249); channels in TASK_IPC. */
+  tasks: TaskApi
   /** 自动领取 GitHub issue (PRD F26); channels in ISSUE_WATCH_IPC. */
   issueWatch: IssueWatchApi
   /** Background code review (PRD F13); channels in REVIEW_IPC. */
@@ -553,6 +566,9 @@ export const IPC = {
   /** main → renderer, payload boolean: the main window is full screen */
   uiFullScreen: 'ui:full-screen',
   uiRevealInFinder: 'ui:reveal-in-finder',
+  uiCopyImage: 'ui:copy-image',
+  uiSetImagePreviewOpen: 'ui:set-image-preview-open',
+  uiImageZoom: 'ui:image-zoom',
   uiConfirm: 'ui:confirm',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',

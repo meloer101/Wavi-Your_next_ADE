@@ -1,0 +1,384 @@
+/* Figma 115A4 / 115A4′ Note: a status-coloured block (card/*), the glass finish from --tile-edge plus a hairline, so
+   the other materials still draw an edge; 220 × 94, 118 with the segment row. */
+.card {
+  --note-bg: var(--card-idle);
+  --note-meta: var(--card-idle-meta);
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: calc(var(--space-12) + var(--space-2)) var(--space-16);
+  border-radius: var(--radius-note);
+  background: var(--note-bg);
+  color: var(--text-primary);
+  box-shadow: var(--tile-edge), inset 0 0 0 1px var(--border-subtle), var(--note-shadow);
+  cursor: default;
+  user-select: none;
+  /* Lift and tilt while held (PRD v1.250 ④): the board sets --tilt from the pointer's speed; letting go springs back. */
+  transform: scale(var(--lift, 1)) rotate(var(--tilt, 0deg));
+  transition:
+    background-color var(--motion-status) ease,
+    opacity var(--motion-status) ease,
+    transform var(--motion-duration-slide) var(--motion-spring);
+}
+
+.card[data-state='working'] {
+  --note-bg: var(--card-working);
+  --note-meta: var(--card-working-meta);
+}
+
+.card[data-state='attention'] {
+  --note-bg: var(--card-attention);
+  --note-meta: var(--card-attention-meta);
+}
+
+.card[data-state='done'] {
+  --note-bg: var(--card-review);
+  --note-meta: var(--card-review-meta);
+}
+
+.card[data-state='error'] {
+  --note-bg: var(--card-error);
+  --note-meta: var(--card-error-meta);
+}
+
+.card[data-state='canceled'] {
+  opacity: 0.55;
+}
+
+.card[data-dimmed='true'] {
+  opacity: 0.28;
+}
+
+.card[data-dragging='true'] {
+  --lift: 1.02;
+  z-index: 2;
+  box-shadow: var(--tile-edge), inset 0 0 0 1px var(--border-subtle), var(--shadow-glass-menu);
+  transition:
+    background-color var(--motion-status) ease,
+    transform var(--motion-lift) var(--ease-out),
+    box-shadow var(--motion-lift) var(--ease-out);
+}
+
+.card[data-selected='true'] {
+  outline: 2px solid var(--text-secondary);
+  outline-offset: 2px;
+}
+
+.meta,
+.segments {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 16px;
+  flex: none;
+}
+
+.segments {
+  gap: var(--space-4);
+}
+
+.mono {
+  font: var(--text-mono-s);
+  color: var(--note-meta);
+  white-space: nowrap;
+  transition: color var(--motion-status) ease;
+}
+
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  flex: none;
+  font: var(--text-body-strong);
+  line-height: 18px;
+  height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action {
+  flex: none;
+  height: 16px;
+  font: var(--text-caption);
+  line-height: 16px;
+  color: var(--note-meta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--motion-status) ease;
+}
+
+.action[data-attention='true'] {
+  color: var(--status-attention);
+}
+
+/* A failure says why: two rows before anything is cut, the card as much taller (layout.ts `wrap`). */
+.action[data-error='true'] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  height: auto;
+  max-height: 32px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--status-error);
+}
+
+.segment {
+  width: 18px;
+  height: 4px;
+  border-radius: var(--radius-xs);
+  background: var(--border-default);
+  transition: background-color var(--motion-status) ease;
+}
+
+.segment[data-state='done'] {
+  background: var(--status-done);
+}
+
+.segment[data-state='working'] {
+  background: var(--status-working);
+}
+
+.segment[data-state='attention'] {
+  background: var(--status-attention);
+}
+
+.segment[data-state='error'] {
+  background: var(--status-error);
+}
+
+/* The agent's pin: on the top edge, centred. */
+.pin {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--border-subtle), var(--note-pin-shadow);
+}
+
+/* Zoomed out (Figma 115A4b): one line, 156 × 28. */
+.card[data-drawing='chip'] {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 calc(var(--space-8) + var(--space-2));
+  border-radius: var(--radius-note);
+  box-shadow: var(--tile-edge), inset 0 0 0 1px var(--border-subtle), var(--card-shadow);
+}
+
+.chipTitle {
+  flex: 1;
+  min-width: 0;
+  font: var(--text-caption-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Far out: a status-coloured dot in the middle of the chip's place; the card itself is not drawn. */
+.card[data-drawing='dot'] {
+  background: transparent;
+  box-shadow: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--status-idle);
+}
+
+.card[data-state='working'] .dot {
+  background: var(--status-working);
+}
+
+.card[data-state='attention'] .dot {
+  background: var(--status-attention);
+}
+
+.card[data-state='done'] .dot {
+  background: var(--status-done);
+}
+
+.card[data-state='error'] .dot {
+  background: var(--status-error);
+}
+
+/* ── Motion (PRD F9 v1.250 · 动效); transform and opacity only. `data-fx` lists what just happened to the card. ── */
+
+/* ① Pasted: a note slapped onto the board; its bigger shadow is a layer whose opacity fades. */
+.card[data-fx~='land'] {
+  animation: land var(--motion-duration-slide) var(--motion-spring) both;
+}
+
+.card[data-fx~='land']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-glass-menu);
+  pointer-events: none;
+  animation: shadow-out var(--motion-duration-slide) var(--ease-out) both;
+}
+
+/* ③ Split from a parent: slides out of it once the line is half drawn, one after another. */
+.card[data-fx~='slide'] {
+  animation: slide-out var(--motion-duration-slide) var(--motion-spring) calc(var(--motion-edge-draw) / 2 + var(--fx-order, 0) * var(--motion-stagger)) both;
+}
+
+/* ⑥ Deleted: shrinks a little and fades (the ghost of a card that is already gone). */
+.card[data-fx~='leave'] {
+  pointer-events: none;
+  animation: leave var(--motion-note-out) var(--ease-out) both;
+}
+
+/* ⑥ Canceled: the same give, ending dim. */
+.card[data-fx~='cancel'] {
+  animation: give var(--motion-note-out) var(--ease-out);
+}
+
+/* ② Dispatched: the pin drops in, and the card gives 1 px as it lands. */
+.card[data-fx~='pin'] {
+  animation: press var(--motion-press-card) var(--ease-out) calc(var(--motion-duration-slide) / 2);
+}
+
+.card[data-fx~='pin'] .pin {
+  animation: pin-drop var(--motion-duration-slide) var(--motion-spring) both;
+}
+
+/* ⑤ Done: the check pops. */
+.card[data-fx~='done'] .meta > :first-child {
+  animation: pop var(--motion-duration-slide) var(--motion-spring) both;
+}
+
+@keyframes land {
+  from {
+    opacity: 0;
+    transform: scale(1.06) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes shadow-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-out {
+  from {
+    opacity: 0;
+    transform: translateX(-24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes leave {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes give {
+  40% {
+    transform: scale(0.96);
+  }
+}
+
+@keyframes press {
+  40% {
+    translate: 0 1px;
+  }
+}
+
+@keyframes pin-drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -14px) scale(1.3);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.6);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: every one of them becomes a fade of at most 120 ms; nothing moves, tilts or lifts. */
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition:
+      background-color var(--motion-reduced) linear,
+      opacity var(--motion-reduced) linear;
+  }
+
+  .card[data-dragging='true'] {
+    --lift: 1;
+    transition: none;
+  }
+
+  .card[data-fx~='land'],
+  .card[data-fx~='slide'],
+  .card[data-fx~='pin'] .pin {
+    animation: fade-in var(--motion-reduced) linear both;
+  }
+
+  .card[data-fx~='pin'] {
+    animation: none;
+  }
+
+  .card[data-fx~='land']::after,
+  .card[data-fx~='cancel'],
+  .card[data-fx~='done'] .meta > :first-child {
+    animation: none;
+  }
+
+  .card[data-fx~='leave'] {
+    animation: fade-out var(--motion-reduced) linear both;
+  }
+}

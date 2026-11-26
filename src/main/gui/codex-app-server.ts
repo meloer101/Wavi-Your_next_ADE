@@ -3,7 +3,7 @@
 // for our response. Pure: the session host owns the process and the JSON-RPC ids.
 
 import { effortLabel, fastOption, permissionOption, type GuiAnswer, type GuiConfigOption, type GuiEvent, type GuiPermission, type GuiPermissionOption, type GuiPrompt } from '@shared/gui-chat'
-import { addedFile, CHAT_LIMITS, fileDiffs, hunksOfUnifiedDiff, inlineOfDataUrl, keptImages, rel, todosArg, todosOf, type ChatItem, type FileDiff, type InlineImage, type KeepImage } from '@shared/transcript-chat'
+import { addedFile, CHAT_LIMITS, fileDiffs, hunksOfUnifiedDiff, imageFileOf, inlineOfDataUrl, keptImages, keptImagesOfContent, rel, todosArg, todosOf, type ChatItem, type FileDiff, type InlineImage, type KeepImage } from '@shared/transcript-chat'
 import { defineMessages, localized, pick } from '@shared/i18n'
 import { guiPermissionLevels } from '@shared/gui-agents'
 
@@ -205,7 +205,21 @@ export function createCodexNormalizer(cwd: string, now: () => number = Date.now,
         const failed = str(item.status) === 'failed' || item.success === false
         const state: ToolItem['state'] = !done ? 'running' : failed ? 'error' : 'ok'
         const output = done ? toolCallOutput(item) : ''
-        return [put(id, { kind: 'tool', id, at, name, arg: clip(str(item.server) ?? '', CHAT_LIMITS.arg), state, ...(output ? { output: tail(output, CHAT_LIMITS.output) } : {}) })]
+        // MCP content blocks `{ type: 'image', data, mimeType }`, a dynamic tool's `{ type: 'inputImage', imageUrl }`.
+        const images = done ? keptImagesOfContent(isRec(item.result) && Array.isArray(item.result.content) ? item.result.content : item.contentItems, keep) : undefined
+        return [put(id, { kind: 'tool', id, at, name, arg: clip(str(item.server) ?? '', CHAT_LIMITS.arg), state, ...(output ? { output: tail(output, CHAT_LIMITS.output) } : {}), ...(images ? { images } : {}) })]
+      }
+      case 'imageView': {
+        // The agent looked at a picture file: `{ id, path }` (codex 0.167 schema, v2/ThreadItem).
+        const file = imageFileOf(item.path)
+        return [put(id, { kind: 'tool', id, at, name: 'ViewImage', arg: clip(rel(str(item.path) ?? '', cwd), CHAT_LIMITS.arg), state: done ? 'ok' : 'running', ...(file ? { images: [file] } : {}) })]
+      }
+      case 'imageGeneration': {
+        // `savedPath`: where Codex saved the picture it generated; `revisedPrompt`: what it was drawn from.
+        const file = done ? imageFileOf(item.savedPath) : undefined
+        const failed = done && (item.failure != null || str(item.status) === 'failed')
+        const prompt = (str(item.revisedPrompt) ?? '').replace(/\s+/g, ' ').trim()
+        return [put(id, { kind: 'tool', id, at, name: 'ImageGeneration', arg: clip(prompt, CHAT_LIMITS.arg), state: !done ? 'running' : failed ? 'error' : 'ok', ...(file ? { images: [file] } : {}) })]
       }
       case 'collabAgentToolCall': {
         // Figma 59J: a call to another agent (spawnAgent, sendInput, wait …) is one 子 agent row; that agent works in

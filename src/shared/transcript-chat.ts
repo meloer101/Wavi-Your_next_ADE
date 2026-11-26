@@ -69,6 +69,8 @@ export type ChatItem =
       text: string
       /** A subagent's words: the id of the Agent / Task call that started it (Figma 59J; the live Claude stream only). */
       parent?: string
+      /** Pictures the agent sent with these words, as local files, at most CHAT_LIMITS.images (Figma 112F). Not on the phone. */
+      images?: string[]
     }
   | { kind: 'thinking'; id: string; at: number; text: string; ms?: number; parent?: string }
   | {
@@ -97,6 +99,8 @@ export type ChatItem =
       ms?: number
       /** A web search's results, in order (Claude WebSearch; Figma 90B): http(s) only, at most CHAT_LIMITS.links. */
       links?: ChatLink[]
+      /** Pictures the call returned (a read image, a screenshot, a generated image), as local files (Figma 112F). Not on the phone. */
+      images?: string[]
     }
   | { kind: 'system'; id: string; at: number; text: string }
   | { kind: 'unknown'; id: string; at: number; type: string }
@@ -109,6 +113,8 @@ export interface ChatLink {
 
 export const CHAT_LIMITS = {
   links: 20,
+  /** Pictures kept per tool or text item. */
+  images: 8,
   text: 20_000,
   thinking: 4_000,
   output: 2_000,
@@ -469,6 +475,49 @@ export function inlineOfDataUrl(url: unknown): InlineImage | null {
   return match ? { mediaType: match[1]!, data: url.slice(match[0].length) } : null
 }
 
+/**
+ * One picture block as the agents write it: Claude `{ type: 'image', source: { type: 'base64', media_type, data } }`,
+ * MCP / Pi / ACP `{ type: 'image', data, mimeType }`, a Codex rollout `{ type: 'input_image', image_url: 'data:…' }`,
+ * a Codex dynamic tool `{ type: 'inputImage', imageUrl: 'data:…' }`. Null for anything else (a remote URL is not fetched).
+ */
+export function inlineOfBlock(block: unknown): InlineImage | null {
+  if (!isRec(block)) return null
+  if (block.type === 'image') {
+    if (isRec(block.source)) {
+      return block.source.type === 'base64' && typeof block.source.media_type === 'string' && typeof block.source.data === 'string'
+        ? { mediaType: block.source.media_type, data: block.source.data }
+        : null
+    }
+    return typeof block.mimeType === 'string' && typeof block.data === 'string' ? { mediaType: block.mimeType, data: block.data } : null
+  }
+  if (block.type === 'input_image') return inlineOfDataUrl(block.image_url)
+  if (block.type === 'inputImage') return inlineOfDataUrl(block.imageUrl)
+  return null
+}
+
+/** The files of a content array's pictures (any shape `inlineOfBlock` reads), in order, at most CHAT_LIMITS.images; undefined when none was kept. */
+export function keptImagesOfContent(content: unknown, keep: KeepImage | undefined): string[] | undefined {
+  if (!Array.isArray(content)) return undefined
+  const inline = content.map(inlineOfBlock).filter((i): i is InlineImage => i !== null)
+  return keptImages(inline.slice(0, CHAT_LIMITS.images), keep)
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i
+
+/** A picture file the agent names itself (Codex's image view / generation items): the path when it is a picture we draw, else undefined. */
+export function imageFileOf(path: unknown): string | undefined {
+  return typeof path === 'string' && path.startsWith('/') && path.length <= 4096 && IMAGE_FILE.test(path) ? path : undefined
+}
+
+/** The media type of base64 picture data from its first bytes (Codex's generated images carry no type); undefined for a type the chat does not draw. */
+export function mediaTypeOfBase64(data: string): string | undefined {
+  if (data.startsWith('iVBOR')) return 'image/png'
+  if (data.startsWith('/9j/')) return 'image/jpeg'
+  if (data.startsWith('R0lGOD')) return 'image/gif'
+  if (data.startsWith('UklGR')) return 'image/webp'
+  return undefined
+}
+
 /** A parser for one session's transcript. `agent` picks the format; `keep` keeps its inline pictures. */
 export function createChatParser(agent: ClaudeOrCodex, now: () => number = Date.now, keep?: KeepImage): ChatParser {
   return agent === 'claude' ? claudeParser(now, keep) : codexParser(now, keep)
@@ -520,10 +569,22 @@ function claudeParser(now: () => number, keep: KeepImage | undefined): ChatParse
 
     if (type === 'assistant' && message) {
       const content = Array.isArray(message.content) ? message.content : []
+      // The text item of this message a picture block goes under (the picture follows its words).
+      let lastText: number | undefined
       for (const block of content) {
         if (!isRec(block)) continue
         if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '') {
-          changed.push(add({ kind: 'text', id: nextId('t'), at, text: clip(block.text, CHAT_LIMITS.text), ...under }))
+          lastText = add({ kind: 'text', id: nextId('t'), at, text: clip(block.text, CHAT_LIMITS.text), ...under })
+          changed.push(lastText)
+        } else if (block.type === 'image') {
+          const images = keptImagesOfContent([block], keep)
+          if (!images) continue
+          const last = lastText === undefined ? undefined : items[lastText]
+          if (lastText !== undefined && last?.kind === 'text') items[lastText] = { ...last, images: [...(last.images ?? []), ...images].slice(0, CHAT_LIMITS.images) }
+          else {
+            lastText = add({ kind: 'text', id: nextId('t'), at, text: '', images, ...under })
+            changed.push(lastText)
+          }
         } else if (block.type === 'thinking' && typeof block.thinking === 'string' && block.thinking.trim() !== '') {
           // A signature-only block (display omitted, the default on current models) has nothing to show.
           const ms = typeof line.thinkingDurationMs === 'number' ? line.thinkingDurationMs : undefined
@@ -564,13 +625,15 @@ function claudeParser(now: () => number, keep: KeepImage | undefined): ChatParse
           const diff = item.name === 'Edit' || item.name === 'MultiEdit' || item.name === 'Write' ? diffOf(result, cwd) : undefined
           const ms = (item.name === 'Agent' || item.name === 'Task') && typeof result?.totalDurationMs === 'number' ? result.totalDurationMs : undefined
           const links = item.name === 'WebSearch' ? webLinksOf(result, block) : undefined
+          const images = keptImagesOfContent(block.content, keep)
           items[index!] = {
             ...item,
             state: block.is_error === true ? 'error' : 'ok',
             ...(output ? { output } : {}),
             ...(diff ? { diff } : {}),
             ...(ms !== undefined ? { ms } : {}),
-            ...(links ? { links } : {})
+            ...(links ? { links } : {}),
+            ...(images ? { images } : {})
           }
           changed.push(index!)
         }
@@ -721,8 +784,17 @@ function codexParser(now: () => number, keep: KeepImage | undefined): ChatParser
         if (!item || item.kind !== 'tool') return []
         const out = typeof p.output === 'string' ? p.output : textOfOutput(p.output)
         const { failed, exit } = codexOutcome(out)
-        items[index!] = { ...item, state: failed ? 'error' : 'ok', ...(out ? { output: tail(out, CHAT_LIMITS.output) } : {}), ...(exit !== undefined ? { exit } : {}) }
+        const images = keptImagesOfContent(p.output, keep)
+        items[index!] = { ...item, state: failed ? 'error' : 'ok', ...(out ? { output: tail(out, CHAT_LIMITS.output) } : {}), ...(exit !== undefined ? { exit } : {}), ...(images ? { images } : {}) }
         return [index!]
+      }
+      case 'image_generation_call': {
+        // A generated picture: base64 in `result` (a PNG as measured by Codex's own schema; the type is read from its bytes).
+        const data = str(p.result) ?? ''
+        const mediaType = mediaTypeOfBase64(data)
+        const images = mediaType ? keptImages([{ mediaType, data }], keep) : undefined
+        const prompt = (str(p.revised_prompt) ?? '').replace(/\s+/g, ' ').trim()
+        return [add({ kind: 'tool', id: str(p.id) ?? nextId('u'), at, name: 'ImageGeneration', arg: clip(prompt, CHAT_LIMITS.arg), state: p.status === 'failed' ? 'error' : 'ok', ...(images ? { images } : {}) })]
       }
       default:
         return []

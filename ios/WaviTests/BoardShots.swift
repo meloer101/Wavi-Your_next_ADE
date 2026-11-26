@@ -28,7 +28,7 @@ private func session(_ id: String, _ title: String, _ status: SessionStatus, pro
 }
 
 /// 103′B's board: two things waiting, one error, one finished turn, two running, two idle.
-private let sessions = RemoteSessionList(projects: projects, sessions: [
+private let plainSessions = RemoteSessionList(projects: projects, sessions: [
   session("s1", "移除 localStorage 读写", .needsYou, branch: "jacob/drop-local-storage", activity: now - 2 * minute,
     since: now - 2 * minute, action: "等你确认：运行 pnpm lint", stat: RemoteStat(added: 61, removed: 4)),
   session("s2", "侧栏状态聚合", .needsYou, project: "p2", branch: "sidebar-agg", activity: now - 6 * minute,
@@ -48,6 +48,40 @@ private let sessions = RemoteSessionList(projects: projects, sessions: [
   session("s8", "请你给我一段用…", .idle, project: "p2", branch: "graph-layout", activity: now - 26 * hour,
     reply: "已回复：可以先从这一版开始")
 ])
+
+private func member(_ id: String, _ kind: RemoteMember.Kind, _ title: String, _ status: SessionStatus, meta: String? = nil) -> RemoteMember {
+  RemoteMember(id: id, kind: kind, title: title, status: status, meta: meta)
+}
+
+/// 111′A–D: 「Cookie 会话迁移」 dispatched three sessions (two with a subagent each) and runs two subagents of its own —
+/// seven members, one needing the user, five running, one done.
+private let sessions: RemoteSessionList = {
+  var list = plainSessions
+  for i in list.sessions.indices {
+    switch list.sessions[i].id {
+    case "s1":
+      list.sessions[i].parentId = "s6"
+      list.sessions[i].group = RemoteGroup(total: 1, counts: [.init(status: .running, count: 1)],
+        members: [member("a-scan", .subagent, "扫描 localStorage 的读写点", .running, meta: "Opus 5.5")])
+    case "s5":
+      list.sessions[i].parentId = "s6"
+      list.sessions[i].group = RemoteGroup(total: 1, counts: [.init(status: .running, count: 1)],
+        members: [member("a-review", .subagent, "审阅刷新新逻辑", .running, meta: "40s")])
+    case "s4": list.sessions[i].parentId = "s6"
+    case "s6":
+      list.sessions[i].group = RemoteGroup(total: 7,
+        counts: [.init(status: .needsYou, count: 1), .init(status: .running, count: 5), .init(status: .doneUnread, count: 1)],
+        members: [
+          member("s1", .session, "移除 localStorage 读写", .needsYou), member("s5", .session, "会话过期自动续期", .running),
+          member("s4", .session, "登录接口测试", .doneUnread),
+          member("a-auth", .subagent, "梳理 auth 中间件的调用点", .running, meta: "Fable 5.1"),
+          member("a-samesite", .subagent, "查 SameSite 在 Safari 的行为", .running, meta: "Opus 5.5")
+        ])
+    default: break
+    }
+  }
+  return list
+}()
 
 private let repo = GitHubRepo(host: "github.com", owner: "acme", name: "web")
 
@@ -178,10 +212,10 @@ private struct ShotsStack: View {
   }
 }
 
-@MainActor private func model() async -> AppModel {
+@MainActor private func model(_ list: RemoteSessionList = sessions) async -> AppModel {
   let cache = PhoneCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("wavi-board-shots", isDirectory: true))
   let scope = PhoneCache.scope(pairing)
-  cache.saveSessions(sessions, heardAt: now, scope: scope)
+  cache.saveSessions(list, heardAt: now, scope: scope)
   await cache.flush()
   return AppModel(pairing: pairing, cache: cache, connects: false)
 }
@@ -194,7 +228,7 @@ private func shotFolder() -> URL {
 }
 
 @MainActor
-private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name: String, size: CGSize = CGSize(width: 402, height: 874)) async throws {
+private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name: String, size: CGSize = CGSize(width: 402, height: 874), prefix: String = "board") async throws {
   let model = await model()
   guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
     Issue.record("\(name): no window scene to draw in")
@@ -214,7 +248,7 @@ private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name:
     // Not `layer.render`: iOS 26 draws a scroll view under its glass tab bar in layers that call misses.
     window.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
   }
-  let path = shotFolder().appendingPathComponent("board-\(name).png")
+  let path = shotFolder().appendingPathComponent("\(prefix)-\(name).png")
   try image.pngData()?.write(to: path)
   print("SHOT \(name): \(path.path) \(Int(size.width))x\(Int(size.height))")
   window.isHidden = true
@@ -240,6 +274,32 @@ private func shot<V: View>(_ view: V, _ style: UIUserInterfaceStyle, named name:
       var offline = BoardFixture(sessions: sessions)
       offline.connected = false
       try await shot(ShotsTabs { BoardView(page: .constant(.github), fixture: offline) }, style, named: "github-offline-\(name)")
+    }
+  }
+}
+
+
+/// 111′A–D (PRD v1.243): the session list and the board card with the fold shut and open, `group-fold-*.png`.
+@Suite @MainActor struct GroupFoldShots {
+  private struct ShotsList: View {
+    var body: some View {
+      TabView(selection: .constant(RootTab.sessions)) {
+        Tab(value: RootTab.sessions) { NavigationStack { SessionsView() } } label: { Label("会话", image: "Icons/message-square") }
+        Tab(value: RootTab.board) { Color.bgApp } label: { Label("看板", image: "Icons/layout-list") }
+      }
+    }
+  }
+
+  @Test func listAndCard() async throws {
+    defer { UserDefaults.standard.removeObject(forKey: FoldOpen.key) }
+    // Taller than a phone, so the whole open fold is in one picture.
+    let tall = CGSize(width: 402, height: 1500)
+    for (open, state) in [("", "folded"), ("s6\ns1\ns5", "expanded")] {
+      UserDefaults.standard.set(open, forKey: FoldOpen.key)
+      for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
+        try await shot(ShotsList(), style, named: "list-\(state)-\(name)", size: tall, prefix: "group-fold")
+        try await shot(ShotsTabs { BoardView(page: .constant(.progress), fixture: fixture) }, style, named: "card-\(state)-\(name)", size: tall, prefix: "group-fold")
+      }
     }
   }
 }

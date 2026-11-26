@@ -1,0 +1,52 @@
+/* Figma 117D: each picker as wide as its text. Nothing is cut off: the row wraps, and only a name wider than the whole
+   row breaks onto a second line inside its picker. */
+.picker {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 24px;
+  max-width: 100%;
+  padding: 0 var(--space-4) 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--text-caption);
+  text-align: left;
+  cursor: default;
+}
+
+.plain {
+  padding-left: 0;
+}
+
+.picker:hover,
+.picker[aria-expanded='true'] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.picker:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.picker > svg {
+  flex: none;
+}
+
+.text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.noMark {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.menuHost {
+  display: contents;
+}

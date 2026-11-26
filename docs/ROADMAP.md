@@ -1,6 +1,6 @@
 # Wavi 路线图与进度
 
-> 最后更新：2026-11-25
+> 最后更新：2026-11-26
 > 本文只记**做到哪了**：已完成什么、正在做什么、还没做什么。产品最终长什么样写在 [PRD](PRD.md)。
 > 维护规则：完成、新增、取消一项时直接改这里（勾选、移动或划掉），更新顶部日期；不要另建任务单、验收记录或计划文档。验收结论写进对应里程碑下面，几行即可。
 
@@ -8,6 +8,14 @@
 
 ## 当前位置
 
+- 2026-11-26：修复 issue #8：GUI 对话区窄于「对话宽度 + 两侧边栏」时，agent 头像贴左边框、用户头像离右边框 4px 被滚动条压住。两侧边栏 `--gutter` 加上 12 到卡片边缘（`gui/Chat.module.css`，38 + 12 + 12 = 62），窄时 agent 头像离左边 12、用户头像离右边 16；宽时列宽不变。e2e `gui-session.spec.ts`「reads like a chat」加全宽列下的边距断言。没在作者的 Mac 上看过。
+- 2026-11-26：任务看板补全（PRD v1.252，Figma 117 `2005:544`）已做完，2026-11-26 合进 main（`34f653e`，合并后 `npm run check` 通过）：卡片和画布右键菜单与快捷键、框选和多选（整组拖动、删除）、新建框 厂商 · 模型 · effort（任何装了的 CLI agent 都能当主理人；effort 参数 Claude / Codex / Pi / Grok）、右键或详情「派给主理人…」和失败原因写在卡上、详情里改标题正文与取消 / 恢复、删除后 ⌘Z 撤销（`tasks.restore`）、手动加子卡。同日第二轮：撤销用 main 返回的被删卡、最多依次撤销 20 次、恢复失败可重试；打字送卡片失败写「主理人没收到卡片」，绑定失败不启动会话；出错行折两行、厂商菜单「装了的 · 暂不派发 · 没装的」且不出窗口。相关单测和 `tasks-board` / `tasks-dispatch` / `new-session` / `schedules` e2e 通过（假 agent）。未做：真实 agent 带 `--effort` 等参数实跑；Codex 的 effort 档位是固定的 低–更高（探测到的模型列表不带每个模型的档位）。
+- 2026-11-25：任务看板（PRD v1.249，Figma 115A4）开工：设计定稿；共享契约 `src/shared/task-board.ts`、`TrApi.tasks`（`TaskApi`，preload 已接）已提交，纯逻辑 19 个单测通过；基线 `npm run check` 改动前通过（304 个测试文件、4089 个用例）。下面「进行中：任务看板」是剩下的步骤。
+- 2026-11-25：GUI 对话显示 agent 回传的图片、所有缩略图点开预览（PRD v1.246，Figma 112F–112H）已做完：Claude / Codex（app-server 与 rollout）/ Pi / ACP 的工具结果和消息里的图片存成 `sent-<哈希>` 文件，`tool` / `text` 条目多 `images`（`src/shared/transcript-chat.ts`，手机不发）；工具行下方 120 高缩略图（折叠时也显示）、正文 markdown 本地图片；预览层 `src/renderer/gui/ImagePreview.tsx`（本会话图片一组，缩放平移、在 Finder 中显示、复制图片 `ui.copyImage`，⎋ 只关预览）。已验证：单测、typecheck、lint、`e2e/gui-session.spec.ts` 新增用例；未验证：真机按 ⌘= 时 View 菜单的字号加速键是否抢先于预览。
+- 2026-11-25：GUI 的 Claude 会话恢复任务清单（PRD v1.244，`src/main/gui/launch.ts` 的 `guiEnv`）已做完：启动时设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`、`CLAUDE_CODE_ENABLE_TASKS=0`，Claude 用 TodoWrite。已做完：任务清单和提问卡片改成贴在输入框上的托盘（PRD v1.245，Figma 113A / 113D′，`src/renderer/gui/Todos.tsx`、`Cards.tsx`、`ChatPane.tsx`）。
+- 2026-11-25：全屏且侧栏折叠时，会话头的折叠按钮图标对齐终端文字（PRD v1.248，`session-header/SessionHeader.*`）已做完。真实 app 里还没看过。
+- 2026-11-25：侧栏会话行固定两行（标题行 + 分支行），行距 4px，时间不写 ago / 前，`needs_you` 改给分支行上色（PRD v1.247，`sidebar/SessionRow.*`、`format-elapsed.ts`）已做完。真实 app 里还没看过。
+- 2026-11-25：协作队伍默认折叠（PRD v1.243，Figma 111 / 111′）三步都做完：侧栏（`src/shared/session-group.ts`、`sidebar/FoldRow.tsx`，选中底色罩住整组，`expandedGroups`）、看板卡片的成员摘要（`overview/CardMembers.tsx`）、手机（`RemoteSession.parentId` / `group`，会话列表和看板）。手机端只在测试宿主里看过截图，没连着真 Mac 用过；`e2e/overview.spec.ts` 的 :78 / :175 在机器负载高时会失败（改动前后都一样），没有处理。
 - 2026-11-25：发布 v0.23.0（F26 自动领取 GitHub issue、界面字体 Google Sans 并大一号、GUI 对话表格列宽、运行时阻止 Mac 睡眠，以及手机设置页）。
 - 2026-11-24：手机设置页重做（PRD v1.241，Figma 110D / 110E，`ios/Wavi/Views/AppSettingsView.swift`、`ios/Wavi/Model/Format.swift` 的 `connectionStatusText` / `linkDot`）已做完：顶部是头像加 Mac 名字加连接状态行，取消配对放到最后一块，分组改用 fill/subtle 加 hairline、圆角 22。已验证：`xcodebuild test` 通过，顶部和滚到底的深浅色截图对过 110D / 110E；未验证：真机上链路通时的状态行（截图宿主的链路不会是通的，状态行单独出了图）。
 - 2026-11-24：手机设置页的选择 sheet 改成玻璃分段控件（PRD v1.240，Figma 110C，`ios/Wavi/Views/AppSettingsView.swift` 的 `PickSheet`）已做完：标题加一个 56 高的分段控件，点一段改值并在约 0.25 秒后关闭，取代 v1.239 的行列表。已验证：`xcodebuild test` 通过，主题 sheet 对过 110C 深浅色；未验证：系统 sheet 的真实玻璃和高度（窗口截图画不出系统的 sheet）。
@@ -310,6 +318,10 @@ PR 闭环（2026-10-21 定，PRD F16 / F13 v1.63；排在第三批之前；外�
   - [x] 数据、命令和启动参数（2026-11-13）：workspace.json 的 `leaderSessions`、设置 `dispatch.leader`（默认关）、`wavi ls --all` / `wavi adopt` / `wavi tell`、`wavi ls` 分开写等权限和等回答、leader 能读本项目任一会话、接管走确认条、leader 的子会话简报写「有问题写在回复里」、报告叫醒的一轮不提醒；Claude 加 `--permission-mode default --disallowedTools Edit Write NotebookEdit MultiEdit`，Codex 加只读权限 profile（`$CODEX_HOME/config.toml` 有 `sandbox_mode` 时 `leaderCheck` 报出来）；单元测试 `dispatch.test.ts`、`handler.test.ts`、`reports.test.ts`、`bridge.test.ts`、`workspace-model.test.ts`、`workspace-file.test.ts`、`saved-runs.test.ts`、`typing.test.ts`、`controller.test.ts`、`src/main/dispatch/leader.test.ts`、`validate.test.ts`
   - [x] 界面（Figma 81，2026-11-13）：设置 · 自动化 · 派活的「leader 会话」开关、新建会话面板「作为 leader」（当前目录、只 CLI、智能体菜单只列能当 leader 的，不能选的写 `<版本> · <原因>`）、项目 ⋯「新建 leader…」、侧栏第三行 `leader · <分支>`、确认条的「接管」行和 `想开 N 个会话 · 接管 M 个`、会话头 `leader · 本小时叫醒 N 次`、总览 tell 的「等你回答」、派出的会话的 Split 图标改 text-primary；e2e `dispatch.spec.ts`「leader 会话」一组，截图在 `test-results/dispatch/leader-*`
   - [ ] 真 agent 跑一次（Claude、Codex 各一次 leader）
+- [x] 协作队伍默认折叠（PRD v1.243，Figma 111G / 111H / 111I · 111E / 111F · 111′A–D，2026-11-25 定）：主对话的成员（子会话、subagent、队友、workflow）收成一行折叠行，点开展开一层，选中底色罩住整组
+  - [x] ① `src/shared/session-group.ts` + 桌面侧栏（折叠行、整组选中、⌘J 展开、`expandedGroups` 持久化）
+  - [x] ② 看板 · 进度：主对话卡片的成员摘要和展开列表（`src/renderer/overview/CardMembers.tsx`、`members.ts`，折叠状态与侧栏共用 `expandedGroups`）
+  - [x] ③ 手机（2026-11-25）：`RemoteSession.parentId` / `group`（`src/shared/remote.ts`，加字段，旧手机忽略、旧 Mac 不发）由 `remoteGroups`（`src/renderer/remote/model.ts`，用侧栏的 `groupsOf`）算好；会话列表和看板卡片折叠，展开状态按设备记（`@AppStorage` `group.expanded`）。手机端只在测试宿主里渲染截图核对过，没在连着 Mac 的真会话里看过
 - [ ] agent 自带的 subagent 只显示、不接管（PRD F21 v1.66 改，v1.109 改为读文件）：在所在会话下列出 subagent 的任务、模型和状态，不变成 Wavi 会话；状态来自 hook 的 `agent_id` / `SubagentStop`，名字、类型、模型、上一级读 agent 自己的 `subagents/agent-<id>.meta.json`（做法参照 yetone/magpie @ d714c42 `internal/sessions/subagents.go`）
   - [x] 实测 Claude 2.1.316 的 subagent 文件（2026-10-31，PRD §6.14 v1.109）
   - [ ] 实测 Codex 0.165 `spawn_agent` 的 rollout（`thread_spawn.parent_thread_id`）：2026-10-31 服务商对 `gpt-6-sol` 返回 503，阻塞
@@ -495,6 +507,21 @@ iPhone 上用 GUI 操作 Mac 上 Wavi 里的会话（PRD F22 v1.112）。作者 
   - [x] Mac 端和线格式（2026-11-22）：`RemoteSession` 的 `checks` / `stat` / `github`，`github-board` / `github-detail` / `github-start`，`new-session` 的 `task`；Swift 只加线格式。`src/shared/remote.ts`、`src/shared/github-board.ts`（新增 `startBranch` / `BoardStart`）、`src/main/remote/index.ts`、`src/main/remote/github-start.ts`、`src/renderer/remote/*`、`src/renderer/new-session/hand-task.ts`、`src/shared/remote-wire-samples.json`、`ios/Wavi/Model/Wire.swift`、`ios/WaviTests/WireTests.swift`；e2e `remote-github.spec.ts`。手机界面还没做
   - [x] 手机端：标签栏、进度（竖屏分段、横屏五列）、GitHub 列表 / 详情 / 交给 agent、gh 没登录和离线（2026-11-22）：`ios/Wavi/App/WaviApp.swift`（标签栏、两个栈、记住的页签）、`App/Orientation.swift`（只有进度能横屏）、`Model/Board.swift`（分组和卡片色、检查行、横屏第三行、GitHub 列表和详情、旧 Mac）、`Views/BoardView.swift`、`Views/GitHubItemView.swift`、`Views/NewSessionView.swift`（任务模式）、`Views/Theme.swift`（`card-*`、卡片圆角）、`Model/AppModel.swift`（每次请求的超时）、`project.yml`（横屏）；`src/main/remote/phone-assets.test.ts` 加 15 个 `card-*` 颜色和 7 个图标，重生成 `ios/Wavi/Resources/Shared.json` 和 `ios/Wavi/Assets.xcassets/Icons`。单测 `WaviTests/BoardTests.swift`（分组顺序、颜色、横屏第三行、旧 Mac、GitHub 列表和详情），截图 `WaviTests/BoardShots.swift` → `test-results/board/`（进度竖排 / 横排、GitHub 列表、issue / PR 详情、交给 agent、gh 没登录、离线，深浅各一）。真机上还没看过
 - [ ] 下一版（v1.220 ⑥）：会话行的 todo / workflow / 派活子会话 / context 占用；输入框「/」菜单、复制消息；手机上的提交 / 同步 / 拉取、「合并 PR #N…」面板、CI 状态
+
+## 进行中：任务看板（2026-11-25 定，PRD v1.249）
+
+- [x] 设计：Figma 第 114 / 115 节，定稿 115A4；PRD v1.246
+- [x] 共享契约：`src/shared/task-board.ts`（类型、`taskState`、树、校验、文件解析）、`TrApi.tasks`、preload
+- [x] main：`src/main/tasks/`（唯一的写者，JSON 存储，`registerTaskHandlers`，单测）
+- [x] `wavi task add | update | ls | show`、`wavi run --task`、`wavi --skill` 的「A card from the board」、卡片送给 leader（`src/shared/dispatch.ts`、`src/renderer/dispatch/task-commands.ts`、`task-deliver.ts`）；单测
+- [x] 画布和页签：`src/renderer/tasks/`（平移缩放、便利贴、曲线、点阵加微光（带过渡）、动态、工具条、缩放），`overview/` 加第三个页签；深浅色 100% / 50% 截图对过 115A4 / 115A4′ / 115A4b
+- [x] 卡片的「停止」「取消任务」「删除」（详情浮层，`src/renderer/tasks/Detail.tsx`）；项目标签的「设置…」接到已有的「新建 leader…」（设置里「leader 会话」关着时打开 设置 · 自动化）
+- ~~卡片「交给主理人」：待派发的根卡在 leader 设好之后手动送出~~（v1.250 改为每张根卡贴上时自己选主理人、新开会话，不再送给项目 leader）
+- [x] v1.250（Figma Screens 2 第 116 节）：去掉项目标签；便利贴自由拖动（`Task.pos`，子树跟着走，重启还在）；新建框多行输入 + 主理人菜单（Claude Code / Codex / 暂不派发），贴上时新开会话绑定根卡并送去卡片消息（`src/renderer/dispatch/task-deliver.ts` 的 `startCardLeader`，不再送给项目 leader）；动效（贴上、派发、连线、拖动、状态变化、删除，减少动态效果时只淡入淡出；`motion.ts`、`dot-field.ts` 的涟漪）。主理人没能起来时（不是 git 仓库、项目没了、建不出 worktree、会话没加上、没绑到卡上）在「动态」写一行「#号 没有派发：原因」，卡停在待派发；记着的 agent 现在不可用时新建框回到「暂不派发」（不改记着的选择）。未做：贴上时新建框朝新卡的位置缩小（只原地缩小淡出，新卡的位置在贴上那一刻还不知道）
+- [ ] 主理人菜单（Figma 114C：换 agent 和模型、「打开主理人会话」、「不再由它派发」、派发依据一行）；详情浮层的「最近活动」多行和「派发依据」
+- [x] e2e：`e2e/tasks-board.spec.ts`（16 条，真实 handler：含拖动、新建框、动效）、`e2e/tasks-dispatch.spec.ts`（5 条：贴卡带 agent 新开会话并只送一次、暂不派发不开会话、`wavi task add`、`wavi run --task` 绑定、`--done` / `--note`）；点阵帧率：执行者实测 e2e 构建下约 60 fps（约 9,968 个点，100%，持续移动鼠标），我没有复测
+- [x] v1.251：主理人会话把卡片当启动命令里的第一条消息（`setLaunch`，同 `wavi run`），贴上即开工；之前在真实 Claude 上卡片被挂在终端下等「送进去」
+- 已验证（2026-11-25，v1.250 分支）：`npm run check` 通过；两个任务 e2e 共 23 条通过（假 `claude`，只验证了 Claude Code 的主理人会话；e2e 里 Codex 没装，菜单里是灰的「没装」）。未验证：真实 Wavi 里让真 agent 走一遍整条链（贴卡 → 主理人拆分 → `wavi run --task`）；Codex 当主理人；动效的观感只看了截图、没有录屏对过；触控板双指平移和捏合缩放（只测了 ⌘ 滚轮）；点阵在真机上的帧率
 
 ## 进行中：F26 自动领取 GitHub issue（2026-11-20 定）
 

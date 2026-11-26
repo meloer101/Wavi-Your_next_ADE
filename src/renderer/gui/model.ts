@@ -50,6 +50,8 @@ const M = defineMessages({
       Think: '思考',
       Fetch: '读取',
       Mode: '切换模式',
+      ViewImage: '查看图片',
+      ImageGeneration: '生成图片',
       Tool: '工具'
     },
     group: {
@@ -114,6 +116,8 @@ const M = defineMessages({
       Think: 'Think',
       Fetch: 'Fetch',
       Mode: 'Switch mode',
+      ViewImage: 'View image',
+      ImageGeneration: 'Generate image',
       Tool: 'Tool'
     },
     group: {
@@ -523,7 +527,7 @@ export function thinkingLabel(ms: number | undefined): string {
 const SUMMARY_SKIP: ReadonlySet<string> = new Set(['Read', 'Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'TodoWrite', 'Plan', 'WebSearch'])
 
 /** A tool row's icon, by name; Feed draws it (the model stays free of React). */
-export type ToolIcon = 'file-text' | 'file-plus' | 'pencil' | 'terminal' | 'square' | 'search' | 'folder-search' | 'globe' | 'bot' | 'list-todo' | 'sparkles' | 'clipboard-list' | 'trash' | 'move-right' | 'brain' | 'toggle' | 'wrench'
+export type ToolIcon = 'file-text' | 'file-plus' | 'pencil' | 'terminal' | 'square' | 'search' | 'folder-search' | 'globe' | 'bot' | 'list-todo' | 'sparkles' | 'clipboard-list' | 'trash' | 'move-right' | 'brain' | 'toggle' | 'image' | 'wrench'
 
 /**
  * Figma 59J: what a tool row says — its icon and a Chinese verb, by the tool's name. Claude's tools; Codex's shell,
@@ -558,6 +562,9 @@ const TOOL_ICONS: Readonly<Record<keyof (typeof M)['zh']['verbs'], ToolIcon>> = 
   Think: 'brain',
   Fetch: 'globe',
   Mode: 'toggle',
+  // Codex's image view and image generation items (codex-app-server.ts).
+  ViewImage: 'image',
+  ImageGeneration: 'image',
   Tool: 'wrench'
 }
 
@@ -1149,4 +1156,110 @@ export function wheelSteps(rest: number, deltaY: number, per = 40): { steps: num
   const total = rest + deltaY
   const steps = Math.trunc(total / per)
   return { steps, rest: total - steps * per }
+}
+
+// --- the pictures of a session (the preview's gallery, Figma 112F / 112G) ----------------------------------------------
+
+/** One picture of the session as the preview lists it: `key` names where it is drawn (see `ImageThumb`), `title` is its source. */
+export interface GalleryImage {
+  key: string
+  path: string
+  title: string
+}
+
+/** The key of the picture `n` of an item's own pictures (a user's attachments, a tool's or a text's `images`). */
+export const imageKey = (itemId: string, n: number): string => `${itemId}:${n}`
+/** The key of a picture the agent's Markdown wrote, by the file it names (`markdownImagePath`): the renderer's `src` is percent-encoded, the text's is not, the path is the same. */
+export const markdownImageKey = (itemId: string, path: string): string => `${itemId}:md:${path}`
+
+const PICTURE_FILE = /\.(png|jpe?g|gif|webp)$/i
+const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
+
+/** `a/./b/../c` → `a/c`; an absolute path stays absolute. */
+function normalizePath(path: string): string {
+  const out: string[] = []
+  for (const part of path.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  return `/${out.join('/')}`
+}
+
+const decoded = (text: string): string => {
+  try {
+    return decodeURIComponent(text)
+  } catch {
+    return text
+  }
+}
+
+/**
+ * The file a Markdown picture (`![](src)`) names: an absolute path, a `file://` URL, or a path relative to the session's
+ * folder, of a type the chat draws. Null for anything else (a remote or data URL, another type, a relative path with
+ * no folder to read it against): those show as their alt text, nothing is loaded from the network.
+ */
+export function markdownImagePath(src: string, cwd: string | undefined): string | null {
+  let path: string
+  if (/^file:\/\//i.test(src)) {
+    try {
+      path = decoded(new URL(src).pathname)
+    } catch {
+      return null
+    }
+  } else if (/^[a-z][a-z0-9+.-]*:/i.test(src)) return null
+  else {
+    const plain = decoded(src.split(/[?#]/, 1)[0] ?? '')
+    if (plain.startsWith('/')) path = plain
+    else if (cwd && plain) path = `${cwd.replace(/\/$/, '')}/${plain}`
+    else return null
+  }
+  const normal = normalizePath(path)
+  return PICTURE_FILE.test(normal) ? normal : null
+}
+
+/** The `![alt](src)` pictures of a Markdown text, outside code blocks, each `src` once. */
+export function markdownImageSources(text: string): string[] {
+  const prose = text.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, '')
+  const found: string[] = []
+  for (const match of prose.matchAll(/!\[[^\]]*\]\(\s*(<[^>]*>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g)) {
+    const src = match[1]!.replace(/^<|>$/g, '')
+    if (!found.includes(src)) found.push(src)
+  }
+  return found
+}
+
+/**
+ * Figma 112G: every picture of the session in feed order, for the preview. A tool's are titled as its row reads (verb ·
+ * target), your own and the agent's message pictures by file name, a Markdown picture by the path as written. Markdown
+ * pictures of a text come before its own `images`, as they are drawn.
+ */
+export function galleryOf(items: readonly ChatItem[], cwd: string | undefined): GalleryImage[] {
+  const out: GalleryImage[] = []
+  // Only files the chat draws; `n` stays the picture's place in its item, as its thumbnail counts it.
+  const own = (item: ChatItem, paths: readonly string[], title?: string): void => {
+    paths.forEach((path, i) => {
+      if (thumbnailUrl(path) !== null) out.push({ key: imageKey(item.id, i), path, title: title ?? fileName(path) })
+    })
+  }
+  for (const item of items) {
+    if (item.kind === 'user') own(item, item.attachments ?? [])
+    else if (item.kind === 'tool') {
+      if (!item.images) continue
+      const view = toolView(item, false)
+      own(item, item.images, [view.verb, view.arg].filter(Boolean).join(' · '))
+    } else if (item.kind === 'text') {
+      const seen = new Set<string>()
+      if (item.text.includes('![')) {
+        for (const src of markdownImageSources(item.text)) {
+          const path = markdownImagePath(src, cwd)
+          if (!path || seen.has(path)) continue
+          seen.add(path)
+          out.push({ key: markdownImageKey(item.id, path), path, title: src })
+        }
+      }
+      own(item, item.images ?? [])
+    }
+  }
+  return out
 }

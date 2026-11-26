@@ -67,10 +67,12 @@ export function takeConfirms(callIds: readonly string[]): PendingStart[] {
   return taken
 }
 
-/** A new session's first launch: its first message, model and 权限 for a CLI's launch flag (a 定时任务's, PRD F24; its dispatcher's, F21 v1.209). */
+/** A new session's first launch: its first message, model, effort and 权限 for a CLI's launch flag (a 定时任务's, PRD F24; its dispatcher's, F21 v1.209). */
 export interface DispatchLaunch {
   initialPrompt: string
   model?: string
+  /** A card leader's reasoning effort (PRD F9 v1.252). */
+  effort?: string
   permission?: CliPermission
 }
 

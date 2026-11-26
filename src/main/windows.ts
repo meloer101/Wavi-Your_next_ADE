@@ -1,5 +1,5 @@
 // Window factory and the app menu.
-import { app, BrowserWindow, Menu, shell, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron'
+import { app, BaseWindow, BrowserWindow, Menu, shell, type BrowserWindowConstructorOptions, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { defineMessages, pick } from '@shared/i18n'
 import { IPC } from '@shared/ipc'
@@ -12,6 +12,7 @@ import { releaseSessionsOf } from './pty'
 import { isQuitting, quitEndingSessions } from './quit'
 import { adoptSecondaryWindow, closeSecondaryWindowsOf, secondaryKeyOf, secondaryWindowOptions } from './secondary-windows'
 import { getSettings, updateSettings } from './settings'
+import { routeToImagePreview } from './ui'
 import { isDeveloperBuild } from './source-checkout'
 import { restoreBounds, saveBounds } from './window-state'
 
@@ -264,7 +265,10 @@ function command(name: MenuCommand): Pick<MenuItemConstructorOptions, 'click'> {
   }
 }
 
-function stepFont(step: FontSizeStep): void {
+/** The View menu's font size items: the chat's image preview, while it is open in the page, takes them as its zoom keys. */
+function stepFont(step: FontSizeStep, window: BaseWindow | undefined): void {
+  const page = window instanceof BrowserWindow && isAppWindow(window) ? rendererOf(window) : getMainWindow()?.webContents
+  if (routeToImagePreview(page, step)) return
   void updateSettings({ appearance: { fontSize: stepFontSize(getSettings().appearance.fontSize, step) } })
 }
 
@@ -352,11 +356,11 @@ export function installAppMenu(): void {
         { label: m.paneDown, accelerator: SHORTCUTS['focus-pane-down'], ...command('focus-pane-down') },
         { label: m.paneToWindow, ...command('pane-to-window') },
         { type: 'separator' },
-        { label: m.bigger, accelerator: SHORTCUTS['font-bigger'], click: () => stepFont('bigger') },
+        { label: m.bigger, accelerator: SHORTCUTS['font-bigger'], click: (_item, window) => stepFont('bigger', window) },
         // ⌘= is the unshifted key under ⌘+; it does the same, without a second visible item.
-        { label: m.bigger, accelerator: 'CmdOrCtrl+=', visible: false, acceleratorWorksWhenHidden: true, click: () => stepFont('bigger') },
-        { label: m.smaller, accelerator: SHORTCUTS['font-smaller'], click: () => stepFont('smaller') },
-        { label: m.actualSize, accelerator: SHORTCUTS['font-reset'], click: () => stepFont('reset') },
+        { label: m.bigger, accelerator: 'CmdOrCtrl+=', visible: false, acceleratorWorksWhenHidden: true, click: (_item, window) => stepFont('bigger', window) },
+        { label: m.smaller, accelerator: SHORTCUTS['font-smaller'], click: (_item, window) => stepFont('smaller', window) },
+        { label: m.actualSize, accelerator: SHORTCUTS['font-reset'], click: (_item, window) => stepFont('reset', window) },
         { type: 'separator' },
         { role: 'togglefullscreen', label: m.fullscreen },
         ...(devItems.length > 0 ? [{ type: 'separator' } as const, ...devItems] : [])

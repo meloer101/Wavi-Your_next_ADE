@@ -62,6 +62,11 @@ describe('guiArgv', () => {
     expect(guiArgv({ agent: 'crush', realCwd: '/r', launch: {} })).toBeNull()
     expect(guiEnv('droid')).toMatchObject({ DROID_DISABLE_AUTO_UPDATE: 'true' })
   })
+
+  it('asks Claude for TodoWrite, which current models lack by default (Figma 59J task list)', () => {
+    expect(guiEnv('claude')).toMatchObject({ CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', CLAUDE_CODE_ENABLE_TASKS: '0' })
+    expect(guiEnv('codex')).not.toHaveProperty('CLAUDE_CODE_ENABLE_TODO_TOOLS')
+  })
 })
 
 describe('guiArgv · Pi (PRD F23 v1.160)', () => {

@@ -58,9 +58,11 @@ function createDrops(root: HTMLElement, list: HTMLElement): Drops {
   let raf = 0
   let last = 0
 
+  // A session with members is selected as a whole (PRD v1.243): its block covers the group box, main row to last member.
   const boxFor = (id: string): RowBox | null => {
-    const row = list.querySelector<HTMLElement>(`[data-session-id="${CSS.escape(id)}"]`)
-    return row ? boxOf(row) : null
+    const key = CSS.escape(id)
+    const el = list.querySelector<HTMLElement>(`[data-group-of="${key}"]`) ?? list.querySelector<HTMLElement>(`[data-session-id="${key}"]`)
+    return el ? boxOf(el) : null
   }
   const make = (id: string, state: DropState | null): Block => {
     const el = document.createElement('div')

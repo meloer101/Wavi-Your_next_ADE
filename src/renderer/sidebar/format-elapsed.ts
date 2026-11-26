@@ -29,12 +29,13 @@ type TimedSession = Pick<Session, 'startedAt' | 'lastActivityAt' | 'statusSince'
 
 /**
  * The time column, whose meaning follows the status (PRD F10): running shows this turn's time, `needs_you`
- * how long it has waited ("已等 3m"), everything else how long ago it got there ("5m 前"; idle and
+ * how long it has waited ("已等 3m"), everything else how long ago it got there (the sidebar writes a bare "5m"; the board passes `withAgo` for "5m 前"; idle and
  * done_unread count from when the last turn finished).
  */
-export function sessionTime(session: TimedSession, status: SessionStatus, now: number): SessionTime {
+export function sessionTime(session: TimedSession, status: SessionStatus, now: number, withAgo = false): SessionTime {
   const since = session.statusSince ?? session.lastActivityAt
   const m = pick(M)
+  const past = (ms: number): string => (withAgo ? m.ago(formatElapsed(ms)) : formatElapsed(ms))
   switch (status) {
     case 'running':
       return { text: formatElapsed(now - (session.turnStartedAt ?? session.startedAt)), emphasis: false }
@@ -42,9 +43,9 @@ export function sessionTime(session: TimedSession, status: SessionStatus, now: n
       return { text: m.waiting(formatElapsed(now - since)), emphasis: now - since >= LONG_WAIT_MS }
     case 'idle':
     case 'done_unread':
-      return { text: m.ago(formatElapsed(now - (session.finishedAt ?? since))), emphasis: false }
+      return { text: past(now - (session.finishedAt ?? since)), emphasis: false }
     default:
-      return { text: m.ago(formatElapsed(now - since)), emphasis: false }
+      return { text: past(now - since), emphasis: false }
   }
 }
 

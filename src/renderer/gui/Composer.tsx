@@ -19,6 +19,7 @@ import { AgentIcon } from '../ui/AgentIcon'
 import { Toggle } from '../ui/Toggle'
 import { ComposerEditor, insertNewline, type CaretContext } from './ComposerEditor'
 import { ContextButton } from './ContextButton'
+import { GALLERY_KEY_ATTRIBUTE, useOpenImage } from './ImagePreview'
 import {
   composerKey,
   guiAgentMenu,
@@ -53,6 +54,7 @@ const M = defineMessages({
     send: '发送',
     sendTitle: '发送 ↵',
     remove: (path: string) => `移除 ${path}`,
+    preview: (name: string) => `预览图片 ${name}`,
     commands: '命令',
     mode: '模式',
     model: '模型',
@@ -74,6 +76,7 @@ const M = defineMessages({
     send: 'Send',
     sendTitle: 'Send ↵',
     remove: (path: string) => `Remove ${path}`,
+    preview: (name: string) => `Preview image ${name}`,
     commands: 'Commands',
     mode: 'Mode',
     model: 'Model',
@@ -370,8 +373,9 @@ function switchMark(category: GuiConfigOption['category'], on: boolean): ReactNo
  * 50C: a picture as a 64 px thumbnail (× on hover), any other file — or a picture that cannot be read — as its name.
  * 71A / 71D: the same over a sent message's bubble, without ×.
  */
-export function Attachment({ path, remove }: { path: string; remove?: () => void }) {
+export function Attachment({ path, remove, galleryKey }: { path: string; remove?: () => void; galleryKey?: string }) {
   const m = useMessages(M)
+  const open = useOpenImage()
   const [broken, setBroken] = useState(false)
   const url = broken ? null : thumbnailUrl(path)
   const name = path.slice(path.lastIndexOf('/') + 1)
@@ -384,6 +388,10 @@ export function Attachment({ path, remove }: { path: string; remove?: () => void
     return (
       <li className={styles.thumb} title={path}>
         <img src={url} alt={name} draggable={false} onError={() => setBroken(true)} />
+        {/* Figma 112F: a sent message's picture opens the preview (the composer's own, with ×, does not). */}
+        {!remove && open && galleryKey && (
+          <button type="button" className={styles.thumbButton} aria-label={m.preview(name)} {...{ [GALLERY_KEY_ATTRIBUTE]: galleryKey }} onClick={() => open(galleryKey)} />
+        )}
         {button}
       </li>
     )

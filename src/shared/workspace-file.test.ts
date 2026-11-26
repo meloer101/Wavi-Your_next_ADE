@@ -285,6 +285,14 @@ describe('sanitizeWorkspaceFile', () => {
     expect(file.recentProjects).toBeUndefined()
   })
 
+  it('keeps the open collaboration groups of sessions that exist, and loads files that have none (PRD v1.243)', () => {
+    const file = sanitizeWorkspaceFile({ ...valid, expandedGroups: ['s1', 'gone', 7, 's1', 's2'] }, 0)!
+    expect(file.expandedGroups).toEqual(['s1', 's2'])
+    expect(sanitizeWorkspaceFile(valid, 0)).not.toHaveProperty('expandedGroups')
+    expect(sanitizeWorkspaceFile({ ...valid, expandedGroups: 's1' }, 0)).not.toHaveProperty('expandedGroups')
+    expect(sanitizeWorkspaceFile({ ...valid, expandedGroups: ['gone'] }, 0)).not.toHaveProperty('expandedGroups')
+  })
+
   it('keeps the sidebar grouping and its folded status groups, dropping anything else (PRD §3.3)', () => {
     const file = sanitizeWorkspaceFile({ ...valid, sidebarGroupBy: 'status', collapsedStatusGroups: ['exited', 'bogus', 'needs_you', 'exited'] }, 0)!
     expect(file.sidebarGroupBy).toBe('status')
